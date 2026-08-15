@@ -87,6 +87,18 @@ def get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 # ── Student Portal endpoints ────────────────────────────────────────
 
+_sp_manual_cookies: dict[str, str] = {}
+
+
+@router.post("/sp/set-cookies")
+def sp_set_cookies(body: dict):
+    cookie_str = body.get("cookie", "")
+    if not cookie_str:
+        return {"success": False, "message": "cookie required"}
+    _sp_manual_cookies["session"] = cookie_str
+    return {"success": True, "message": "Cookies stored", "length": len(cookie_str)}
+
+
 @router.post("/sp/login")
 def sp_login(body: dict):
     username = body.get("username", "")
@@ -109,10 +121,17 @@ def sp_logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
     return sp_auth_service.logout(x_csrf_token)
 
 
+def _get_sp_cookie(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")) -> str:
+    return x_csrf_token or _sp_manual_cookies.get("session", "")
+
+
 @router.get("/sp/attendance")
-def sp_attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def sp_attendance(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        scraper = StudentPortalScraper(cookie=cookie)
         return scraper.attendance().model_dump()
     except Exception as e:
         import traceback
@@ -121,9 +140,12 @@ def sp_attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 
 @router.get("/sp/marks")
-def sp_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def sp_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        scraper = StudentPortalScraper(cookie=cookie)
         return scraper.marks().model_dump()
     except Exception as e:
         import traceback
@@ -132,9 +154,12 @@ def sp_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 
 @router.get("/sp/grades")
-def sp_grades(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def sp_grades(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        scraper = StudentPortalScraper(cookie=cookie)
         return scraper.grades()
     except Exception as e:
         import traceback
@@ -143,9 +168,12 @@ def sp_grades(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 
 @router.get("/sp/internal-marks")
-def sp_internal_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def sp_internal_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        scraper = StudentPortalScraper(cookie=cookie)
         return {"internal_marks": scraper.internal_marks()}
     except Exception as e:
         import traceback
@@ -154,9 +182,12 @@ def sp_internal_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 
 @router.get("/sp/get")
-def sp_get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def sp_get_all(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        scraper = StudentPortalScraper(cookie=cookie)
         return scraper.all_data()
     except Exception as e:
         import traceback
