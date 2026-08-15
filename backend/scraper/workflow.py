@@ -27,6 +27,8 @@ class AcademiaScraper:
 
     def attendance(self) -> AttendanceResponse:
         html = self._fetch_page(settings.attendance_url)
+        print(f"[SCRAPER] Attendance page length: {len(html)}")
+        print(f"[SCRAPER] Attendance page preview: {html[:2000]}")
         return self.parser.parse_attendance(html)
 
     def marks(self) -> MarksResponse:
