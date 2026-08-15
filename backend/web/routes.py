@@ -5,6 +5,7 @@ from core.schemas.models import LoginResponse
 from scraper.auth import AuthService
 from scraper.workflow import AcademiaScraper
 from scraper.student_portal.auth import StudentPortalAuth
+from scraper.student_portal import browser_login
 from scraper.student_portal.workflow import StudentPortalScraper
 
 router = APIRouter()
@@ -122,7 +123,7 @@ def sp_login_init(body: dict):
     if not username:
         return {"success": False, "status": 400, "message": "username required"}
     try:
-        return sp_auth_service.start_login(username)
+        return browser_login.start_login(username)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -138,7 +139,7 @@ def sp_login_verify(body: dict):
     if not all([session_id, username, password, captcha]):
         return {"success": False, "status": 400, "message": "All fields required (session_id, username, password, captcha)"}
     try:
-        result = sp_auth_service.finish_login(session_id, username, password, captcha)
+        result = browser_login.finish_login(session_id, username, password, captcha)
         return result.model_dump()
     except Exception as e:
         import traceback
