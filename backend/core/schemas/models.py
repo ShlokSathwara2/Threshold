@@ -128,3 +128,5 @@ class LoginResponse(BaseModel):
     message: str = ""
     cookies: str | None = None
     captcha: CaptchaData | None = None
+    debug_screenshot_base64: str | None = None
+    debug_errors: list[str] | None = None

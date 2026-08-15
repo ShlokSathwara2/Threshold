@@ -175,7 +175,52 @@ async def finish_login(session_id: str, username: str, password: str, captcha_an
                 error_msg = "Too many login attempts"
 
             print(f"[SP-LOGIN-VERIFY] Login failed: {error_msg}")
-            return LoginResponse(success=False, status=401, message=error_msg)
+
+            # --- Diagnostics: screenshot + error elements + page snippet ---
+            try:
+                ss_bytes = await page.screenshot(full_page=True)
+                debug_ss = base64.b64encode(ss_bytes).decode()
+                print(f"[SP-LOGIN-VERIFY] Debug screenshot captured: {len(debug_ss)} chars")
+            except Exception as ss_err:
+                print(f"[SP-LOGIN-VERIFY] Screenshot failed: {ss_err}")
+                debug_ss = None
+
+            debug_errors: list[str] = []
+            try:
+                error_els = page.locator(
+                    ".error, .alert, [class*='error'], [id*='error'], "
+                    "[class*='alert'], [role='alert'], .text-danger, "
+                    "[class*='warning'], [id*='alert']"
+                )
+                count = await error_els.count()
+                for i in range(min(count, 10)):
+                    txt = (await error_els.nth(i).inner_text()).strip()
+                    if txt:
+                        debug_errors.append(txt)
+                        print(f"[SP-LOGIN-VERIFY] Page error element [{i}]: {txt}")
+            except Exception as el_err:
+                print(f"[SP-LOGIN-VERIFY] Error element extraction failed: {el_err}")
+
+            # Log a larger slice of page content around the form
+            try:
+                full_html = await page.content()
+                form_idx = full_html.lower().find("login_form")
+                if form_idx >= 0:
+                    start = max(0, form_idx - 2500)
+                    end = min(len(full_html), form_idx + 2500)
+                    print(f"[SP-LOGIN-VERIFY] Page HTML around login_form ({start}-{end}):\n{full_html[start:end]}")
+                else:
+                    print(f"[SP-LOGIN-VERIFY] Full page HTML (first 5000 chars):\n{full_html[:5000]}")
+            except Exception as html_err:
+                print(f"[SP-LOGIN-VERBOSE] HTML extraction failed: {html_err}")
+
+            return LoginResponse(
+                success=False,
+                status=401,
+                message=error_msg,
+                debug_screenshot_base64=debug_ss,
+                debug_errors=debug_errors or None,
+            )
 
         cookies = await context.cookies()
         cookie_header = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
@@ -189,7 +234,21 @@ async def finish_login(session_id: str, username: str, password: str, captcha_an
 
     except Exception as e:
         print(f"[SP-LOGIN-VERIFY] Error: {e}")
-        return LoginResponse(success=False, status=500, message=f"Login error: {e}")
+
+        debug_ss = None
+        try:
+            ss_bytes = await page.screenshot(full_page=True)
+            debug_ss = base64.b64encode(ss_bytes).decode()
+            print(f"[SP-LOGIN-VERIFY] Error screenshot captured: {len(debug_ss)} chars")
+        except Exception:
+            pass
+
+        return LoginResponse(
+            success=False,
+            status=500,
+            message=f"Login error: {e}",
+            debug_screenshot_base64=debug_ss,
+        )
 
     finally:
         for closer in (page.close, context.close, browser.close):
