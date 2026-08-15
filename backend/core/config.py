@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     @property
     def sp_attendance_url(self) -> str:
-        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentAttendanceDetails.jsp"
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentAttendanceDetails.jsp"
 
     @property
     def sp_attendance_detail_url(self) -> str:
@@ -66,11 +66,11 @@ class Settings(BaseSettings):
 
     @property
     def sp_grades_url(self) -> str:
-        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentGradeDetails.jsp"
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentGradeDetails.jsp"
 
     @property
     def sp_internal_marks_url(self) -> str:
-        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentInternalMarkDetails.jsp"
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentInternalMarkDetails.jsp"
 
     @property
     def sp_internal_marks_detail_url(self) -> str:

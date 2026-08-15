@@ -106,14 +106,11 @@ class StudentPortalAuth:
             })
             fp_token = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-            # Build form data
+            # Build form data — minimal fields only
             form_data: dict[str, str] = {
                 "username": netid,
                 "password": password,
                 "captcha": captcha_text,
-                "fpPayload": fp_payload,
-                "fpToken": fp_token,
-                "telemetryPayload": self._compute_telemetry_payload(),
             }
             if domain_field:
                 form_data[domain_field] = domain_token
