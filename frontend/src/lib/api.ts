@@ -70,6 +70,33 @@ export async function setSpCookies(cookie: string) {
   });
 }
 
+export async function spLoginInit(username: string) {
+  return apiFetch<{
+    success: boolean;
+    session_id?: string;
+    captcha_image_base64?: string;
+    message?: string;
+    status?: number;
+  }>('/sp/login-init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  });
+}
+
+export async function spLoginVerify(sessionId: string, username: string, password: string, captcha: string) {
+  return apiFetch<{
+    success: boolean;
+    cookies?: string;
+    message?: string;
+    status?: number;
+  }>('/sp/login-verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, username, password, captcha }),
+  });
+}
+
 export async function logout() {
   try {
     await apiFetch('/sp/logout', { method: 'DELETE' });
