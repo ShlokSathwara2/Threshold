@@ -66,7 +66,7 @@ class Settings(BaseSettings):
 
     @property
     def sp_grades_url(self) -> str:
-        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentGradeDetails.jsp"
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentMarksCredits.jsp"
 
     @property
     def sp_internal_marks_url(self) -> str:
