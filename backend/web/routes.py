@@ -69,7 +69,7 @@ def get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
     return scraper.all_data()
 
 
-@router.get("/")
+@router.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"status": "ok"}
 
