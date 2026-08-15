@@ -82,19 +82,33 @@ class StudentPortalAuth:
             )
 
             print(f"[SP-LOGIN] POST status: {response.status_code}")
+            print(f"[SP-LOGIN] Final URL: {response.url}")
             print(f"[SP-LOGIN] Cookies: {dict(client.cookies)}")
 
-            # Check for login failure — look for error indicators in response
-            resp_text = response.text.lower()
-            if "invalid" in resp_text and ("password" in resp_text or "userid" in resp_text):
+            # Login success = redirected away from login page to dashboard/HRDSystem
+            final_url = str(response.url).lower()
+            resp_html = response.text.lower()
+
+            is_on_login_page = "youlogin" in final_url or "login" in final_url
+            has_login_form = 'id="login_form"' in resp_html
+
+            if is_on_login_page and has_login_form:
+                # Still on login page — check for specific error messages
+                # Look for error text inside error divs (not CSS class names)
+                if 'class="alert' in resp_html and ("invalid" in resp_html or "incorrect" in resp_html):
+                    return LoginResponse(
+                        success=False, status=401,
+                        message="Invalid NetID or password"
+                    )
+                if "captcha" in resp_html and "mismatch" in resp_html:
+                    return LoginResponse(
+                        success=False, status=401,
+                        message="CAPTCHA verification failed"
+                    )
+                # Still on login page but no specific error — could be any issue
                 return LoginResponse(
                     success=False, status=401,
-                    message="Invalid NetID or password"
-                )
-            if "captcha" in resp_text and "invalid" in resp_text:
-                return LoginResponse(
-                    success=False, status=401,
-                    message="CAPTCHA verification failed"
+                    message="Login failed — still on login page"
                 )
 
             # Build cookie header from httpx's cookie jar
