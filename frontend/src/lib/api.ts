@@ -25,6 +25,11 @@ export function isLoggedIn(): boolean {
   return getSession() !== null;
 }
 
+export function isSpLoggedIn(): boolean {
+  const session = getSession();
+  return session !== null && !!session.cookies;
+}
+
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -96,6 +101,8 @@ export interface AttendanceResponse {
 export async function fetchAttendance(): Promise<AttendanceResponse> {
   return apiFetch('/sp/attendance');
 }
+
+export const fetchSpAttendance = fetchAttendance;
 
 export interface MarksDetail {
   scored: string;

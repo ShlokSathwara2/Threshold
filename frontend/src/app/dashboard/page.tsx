@@ -3,16 +3,18 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn } from '@/lib/api';
+import { isSpLoggedIn } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
+import GradesSummary from '@/components/grades/GradesSummary';
+import InternalMarks from '@/components/grades/InternalMarks';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { subjects, overall, loading } = useAttendance();
 
   useEffect(() => {
-    if (!isLoggedIn()) {
-      router.push('/login');
+    if (!isSpLoggedIn()) {
+      router.push('/sp-login');
     }
   }, [router]);
 
@@ -256,6 +258,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* Grades & Internal Marks */}
+      <GradesSummary />
+      <InternalMarks />
 
     </div>
   );

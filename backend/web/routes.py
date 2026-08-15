@@ -116,6 +116,36 @@ def sp_login(body: dict):
         return {"success": False, "status": 500, "message": str(e)}
 
 
+@router.post("/sp/login-init")
+def sp_login_init(body: dict):
+    username = body.get("username", "")
+    if not username:
+        return {"success": False, "status": 400, "message": "username required"}
+    try:
+        return sp_auth_service.start_login(username)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
+
+
+@router.post("/sp/login-verify")
+def sp_login_verify(body: dict):
+    session_id = body.get("session_id", "")
+    username = body.get("username", "")
+    password = body.get("password", "")
+    captcha = body.get("captcha", "")
+    if not all([session_id, username, password, captcha]):
+        return {"success": False, "status": 400, "message": "All fields required (session_id, username, password, captcha)"}
+    try:
+        result = sp_auth_service.finish_login(session_id, username, password, captcha)
+        return result.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
+
+
 @router.delete("/sp/logout")
 def sp_logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
     return sp_auth_service.logout(x_csrf_token)

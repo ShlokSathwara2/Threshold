@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { isLoggedIn, clearSession, getSession } from '@/lib/api';
+import { isSpLoggedIn, clearSession, getSession } from '@/lib/api';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: '◈' },
@@ -20,8 +20,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (!isLoggedIn()) {
-      router.push('/login');
+    if (!isSpLoggedIn()) {
+      router.push('/sp-login');
       return;
     }
     const session = getSession();
@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleLogout = () => {
     clearSession();
-    router.push('/login');
+    router.push('/sp-login');
   };
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAttendance, type Attendance, type AttendanceResponse } from '@/lib/api';
+import { fetchSpAttendance, type Attendance, type AttendanceResponse } from '@/lib/api';
 import { calculateAllSubjects, calculateOverallStats, type SubjectAttendance, type OverallStats } from '@/lib/attendance-calculator';
 
 export interface UseAttendanceResult {
@@ -33,7 +33,7 @@ export function useAttendance(): UseAttendanceResult {
     setLoading(true);
     setError(null);
     try {
-      const res: AttendanceResponse = await fetchAttendance();
+      const res: AttendanceResponse = await fetchSpAttendance();
       if (res.error) {
         setError(res.error);
         return;

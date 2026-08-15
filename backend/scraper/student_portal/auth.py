@@ -4,12 +4,32 @@ import base64
 import json
 import re
 import time
+import uuid
+from dataclasses import dataclass, field
 
 import httpx
 from bs4 import BeautifulSoup
 
 from core.config import settings
 from core.schemas.models import LoginResponse
+
+_SESSION_TTL = 300  # seconds
+
+
+@dataclass
+class _LoginSessionState:
+    client_cookies: dict[str, str]
+    domain_field: str | None
+    captcha_field: str | None
+    nonce: str | None
+    honeypot_name: str | None
+    challenge_id: str | None
+    fp_nonce: str | None
+    captcha_answer: str  # SECURE_CONFIG captchaText (server-side answer, for debug)
+    created_at: float = field(default_factory=time.time)
+
+
+_pending_logins: dict[str, _LoginSessionState] = {}
 
 
 class StudentPortalAuth:
@@ -26,6 +46,174 @@ class StudentPortalAuth:
             import traceback
             traceback.print_exc()
             raise
+
+    # ── Two-step login (CAPTCHA flow) ────────────────────────────────
+
+    def start_login(self, username: str) -> dict:
+        """Step A: load login page, download CAPTCHA image, store state."""
+        netid = username.split("@")[0] if "@" in username else username
+        print(f"[SP-LOGIN-INIT] Starting login for NetID: {netid}")
+
+        # Evict expired sessions
+        now = time.time()
+        expired = [k for k, v in _pending_logins.items() if now - v.created_at > _SESSION_TTL]
+        for k in expired:
+            _pending_logins.pop(k, None)
+
+        with httpx.Client(timeout=30, follow_redirects=True, verify=False) as client:
+            login_page = client.get(
+                settings.sp_login_page_url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/138.0.0.0 Safari/537.36"
+                    ),
+                },
+            )
+            if login_page.status_code != 200:
+                return {"success": False, "status": login_page.status_code,
+                        "message": "Failed to load Student Portal login page"}
+
+            html = login_page.text
+            soup = BeautifulSoup(html, "lxml")
+
+            config = self._extract_secure_config(html)
+            print(f"[SP-LOGIN-INIT] SECURE_CONFIG: {config}")
+
+            captcha_text = config.get("captchaText")
+            if not captcha_text:
+                return {"success": False, "status": 500,
+                        "message": "Could not extract CAPTCHA from login page"}
+
+            domain_field = config.get("domainFieldName")
+            captcha_field = config.get("captchaFieldName")
+            nonce = config.get("nonce")
+            honeypot_name = self._extract_honeypot_name(soup)
+            challenge_id = self._extract_hidden_value(soup, "challengeId")
+            fp_nonce = self._extract_hidden_value(soup, "fpNonce")
+
+            # Download CAPTCHA image
+            captcha_img_url = self._extract_captcha_image_url(soup)
+            captcha_b64 = ""
+            if captcha_img_url:
+                print(f"[SP-LOGIN-INIT] Loading CAPTCHA image: {captcha_img_url}")
+                img_resp = client.get(captcha_img_url, headers={"User-Agent": "Mozilla/5.0"})
+                print(f"[SP-LOGIN-INIT] CAPTCHA image status: {img_resp.status_code}")
+                if img_resp.status_code == 200:
+                    captcha_b64 = base64.b64encode(img_resp.content).decode()
+
+            # Snapshot cookies from the GET response
+            cookies_snapshot = dict(client.cookies.items())
+
+        session_id = uuid.uuid4().hex
+        _pending_logins[session_id] = _LoginSessionState(
+            client_cookies=cookies_snapshot,
+            domain_field=domain_field,
+            captcha_field=captcha_field,
+            nonce=nonce,
+            honeypot_name=honeypot_name,
+            challenge_id=challenge_id,
+            fp_nonce=fp_nonce,
+            captcha_answer=captcha_text,
+        )
+
+        print(f"[SP-LOGIN-INIT] Session {session_id} stored, CAPTCHA image length={len(captcha_b64)}")
+        return {"success": True, "session_id": session_id, "captcha_image_base64": captcha_b64}
+
+    def finish_login(self, session_id: str, username: str, password: str, captcha_answer: str) -> LoginResponse:
+        """Step B: resume login with user-supplied CAPTCHA answer."""
+        state = _pending_logins.pop(session_id, None)
+        if state is None:
+            return LoginResponse(success=False, status=400, message="Session expired or invalid. Restart login.")
+        if time.time() - state.created_at > _SESSION_TTL:
+            return LoginResponse(success=False, status=400, message="Session expired. Restart login.")
+
+        netid = username.split("@")[0] if "@" in username else username
+        print(f"[SP-LOGIN-VERIFY] Resuming login for NetID: {netid}, session {session_id}")
+
+        with httpx.Client(timeout=30, follow_redirects=True, verify=False) as client:
+            # Replay saved cookies
+            for k, v in state.client_cookies.items():
+                client.cookies.set(k, v)
+
+            # Compute security tokens
+            hostname = "sp.srmist.edu.in"
+            domain_token = base64.b64encode(hostname[::-1].encode()).decode()
+
+            time_elapsed = 2
+            interact_count = 1
+            captcha_token_raw = f"{time_elapsed}{state.nonce or ''}{interact_count}"
+            captcha_token = base64.b64encode(captcha_token_raw.encode()).decode()
+
+            # Build form data — use the user's captcha_answer
+            form_data: dict[str, str] = {
+                "username": netid,
+                "password": password,
+                "captcha": captcha_answer,
+            }
+            if state.domain_field:
+                form_data[state.domain_field] = domain_token
+            if state.captcha_field:
+                form_data[state.captcha_field] = captcha_token
+            if state.honeypot_name:
+                form_data[state.honeypot_name] = ""
+            if state.challenge_id:
+                form_data["challengeId"] = state.challenge_id
+            if state.fp_nonce:
+                form_data["fpNonce"] = state.fp_nonce
+
+            print(f"[SP-LOGIN-VERIFY] Form fields: {list(form_data.keys())}")
+
+            response = client.post(
+                settings.sp_login_url,
+                data=form_data,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/138.0.0.0 Safari/537.36"
+                    ),
+                    "Origin": settings.sp_base_url,
+                    "Referer": settings.sp_login_page_url,
+                },
+                follow_redirects=True,
+            )
+
+            print(f"[SP-LOGIN-VERIFY] POST status: {response.status_code}")
+            print(f"[SP-LOGIN-VERIFY] Final URL: {response.url}")
+
+            final_url = str(response.url).lower()
+            resp_html = response.text.lower()
+            is_on_login_page = "youlogin" in final_url or (
+                "login" in final_url and "template" not in final_url
+            )
+            has_login_form = 'id="login_form"' in resp_html
+
+            if is_on_login_page and has_login_form:
+                body = response.text
+                error_msg = "Login failed"
+                if "invalid" in body.lower() and ("password" in body.lower() or "netid" in body.lower()):
+                    error_msg = "Invalid NetID or password"
+                elif "captcha" in body.lower() and ("mismatch" in body.lower() or "invalid" in body.lower()):
+                    error_msg = "CAPTCHA verification failed"
+                elif "too many" in body.lower():
+                    error_msg = "Too many login attempts"
+
+                resp_snippet = response.text[:1000].replace("\n", " ")
+                return LoginResponse(
+                    success=False, status=401,
+                    message=f"{error_msg} | url={str(response.url)} | resp_snippet={resp_snippet}",
+                )
+
+            cookie_header = "; ".join(f"{k}={v}" for k, v in client.cookies.items())
+
+            if not cookie_header:
+                return LoginResponse(success=False, status=401, message="No session cookies established")
+
+            print(f"[SP-LOGIN-VERIFY] Success! Cookie length: {len(cookie_header)}")
+            return LoginResponse(success=True, status=200, message="Success", cookies=cookie_header)
 
     def _do_login(self, netid: str, password: str) -> LoginResponse:
         with httpx.Client(timeout=30, follow_redirects=True, verify=False) as client:
