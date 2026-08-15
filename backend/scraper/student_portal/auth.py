@@ -76,6 +76,13 @@ class StudentPortalAuth:
             print(f"[SP-LOGIN] nonce: {nonce}")
             print(f"[SP-LOGIN] honeypot: {honeypot_name}")
 
+            # Step 1b: Load the CAPTCHA image (server requires it to be loaded)
+            captcha_img_url = self._extract_captcha_image_url(soup)
+            if captcha_img_url:
+                print(f"[SP-LOGIN] Loading CAPTCHA image: {captcha_img_url}")
+                img_resp = client.get(captcha_img_url, headers={"User-Agent": "Mozilla/5.0"})
+                print(f"[SP-LOGIN] CAPTCHA image status: {img_resp.status_code}")
+
             # Compute security tokens (replicating guardlogin.js)
             hostname = "sp.srmist.edu.in"
             domain_token = base64.b64encode(hostname[::-1].encode()).decode()
@@ -106,6 +113,7 @@ class StudentPortalAuth:
                 "captcha": captcha_text,
                 "fpPayload": fp_payload,
                 "fpToken": fp_token,
+                "telemetryPayload": self._compute_telemetry_payload(),
             }
             if domain_field:
                 form_data[domain_field] = domain_token
@@ -234,6 +242,34 @@ class StudentPortalAuth:
     def _extract_hidden_value(self, soup: BeautifulSoup, field_id: str) -> str | None:
         inp = soup.find("input", attrs={"id": field_id})
         return inp.get("value") if inp else None
+
+    def _extract_captcha_image_url(self, soup: BeautifulSoup) -> str | None:
+        """Extract CAPTCHA image URL from data-src attribute."""
+        img = soup.find("img", attrs={"id": "secure_captcha"})
+        if img and img.get("data-src"):
+            data_src = img["data-src"]
+            if data_src.startswith("/"):
+                return f"{settings.sp_base_url}{data_src}"
+            return data_src
+        return None
+
+    def _compute_telemetry_payload(self) -> str:
+        """Compute telemetryPayload (from secure2.js attachTelemetryToForm)."""
+        import hashlib
+        telemetry = json.dumps({
+            "E": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/138.0.0.0 Safari/537.36"
+            ),
+            "D": 1920, "C": 1080, "B": -330,
+            "z": 3, "y": 5, "x": 1, "w": 1500,
+            "v": False,
+            "u": hashlib.sha256(b"canvas-fingerprint").hexdigest(),
+            "timeOnPageMs": 2000,
+            "submitTime": int(time.time() * 1000),
+        }, separators=(",", ":"))
+        return base64.b64encode(telemetry.encode()).decode()
 
     def logout(self, cookie: str) -> dict:
         with httpx.Client(timeout=30, follow_redirects=True, verify=False) as client:
