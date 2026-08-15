@@ -69,6 +69,11 @@ def get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
     return scraper.all_data()
 
 
+@router.get("/")
+def root():
+    return {"status": "ok"}
+
+
 @router.get("/hello")
 def hello():
     return {"message": "Threshold backend is running"}
