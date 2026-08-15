@@ -58,7 +58,7 @@ class AuthService:
     ) -> LoginResponse:
         if retry_count > 2:
             return LoginResponse(
-                False, status=401, message="Too many retries after concurrent session termination"
+                success=False, status=401, message="Too many retries after concurrent session termination"
             )
 
         form = {
@@ -103,13 +103,13 @@ class AuthService:
             payload = response.json()
         except Exception:
             return LoginResponse(
-                False, status=response.status_code, message="Unexpected response from server"
+                success=False, status=response.status_code, message="Unexpected response from server"
             )
 
         # Handle errors
         error = payload.get("error")
         if isinstance(error, dict):
-            return LoginResponse(False, status=401, message=error.get("msg", ""))
+            return LoginResponse(success=False, status=401, message=error.get("msg", ""))
 
         # Handle captcha requirement
         if payload.get("status") == "fail" and payload.get("code") in {
@@ -122,20 +122,20 @@ class AuthService:
                     cdigest=payload["cdigest"],
                 )
             return LoginResponse(
-                False, status=401, message=payload.get("message"), captcha=captcha_data
+                success=False, status=401, message=payload.get("message"), captcha=captcha_data
             )
 
         # Extract access token and follow redirect to establish session
         inner = payload.get("data")
         if not isinstance(inner, dict):
             return LoginResponse(
-                False, status=401, message=payload.get("message", "Invalid credentials")
+                success=False, status=401, message=payload.get("message", "Invalid credentials")
             )
 
         access_token = inner.get("access_token")
         redirect_url = inner.get("oauthorize_uri")
         if not access_token or not redirect_url:
-            return LoginResponse(False, status=401, message="Missing tokens in response")
+            return LoginResponse(success=False, status=401, message="Missing tokens in response")
 
         # Follow the redirect to establish JSESSIONID
         jar = CookieJar()
@@ -149,10 +149,10 @@ class AuthService:
         cookie_header = jar.header()
 
         if "JSESSIONID" not in cookie_header:
-            return LoginResponse(False, status=401, message="Session failed: JSESSIONID not established")
+            return LoginResponse(success=False, status=401, message="Session failed: JSESSIONID not established")
 
         return LoginResponse(
-            True,
+            success=True,
             status=200,
             message="Success",
             cookies=cookie_header,
