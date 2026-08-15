@@ -76,7 +76,7 @@ All data endpoints are loaded via **jQuery AJAX** from `HRDSystem.jsp`. The SPA 
 ### 1. Attendance
 
 ```
-GET https://sp.srmist.edu.in/srmiststudentportal/students/template/studentAttendanceDetails.jsp
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/studentAttendanceDetails.jsp
 ```
 
 **Auth:** Session cookies
@@ -128,7 +128,7 @@ Content-Type: application/x-www-form-urlencoded
 ### 3. Grade / Mark & Credit
 
 ```
-GET https://sp.srmist.edu.in/srmiststudentportal/students/template/studentGradeDetails.jsp
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/studentMarksCredits.jsp
 ```
 
 **Auth:** Session cookies
@@ -182,7 +182,7 @@ GET https://sp.srmist.edu.in/srmiststudentportal/students/template/studentGradeD
 ### 4. Internal Mark Details
 
 ```
-GET https://sp.srmist.edu.in/srmiststudentportal/students/template/studentInternalMarkDetails.jsp
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/studentInternalMarkDetails.jsp
 ```
 
 **Auth:** Session cookies
