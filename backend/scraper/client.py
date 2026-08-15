@@ -17,6 +17,13 @@ class AcademiaClient:
             headers={"User-Agent": "Mozilla/5.0"},
             verify=False,
         )
+        # Load cookies into the httpx cookie jar
+        if cookie:
+            for pair in cookie.split(";"):
+                pair = pair.strip()
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    self._client.cookies.set(k.strip(), v.strip())
 
     def close(self) -> None:
         self._client.close()
@@ -28,10 +35,7 @@ class AcademiaClient:
         self.close()
 
     def get(self, url: str, headers: dict | None = None) -> httpx.Response:
-        merged = dict(headers or {})
-        if self.cookie:
-            merged.setdefault("Cookie", self.cookie)
-        return self._client.get(url, headers=merged)
+        return self._client.get(url, headers=headers or {})
 
     def post(
         self,
@@ -40,18 +44,12 @@ class AcademiaClient:
         headers: dict | None = None,
         follow_redirects: bool = True,
     ) -> httpx.Response:
-        merged = dict(headers or {})
-        if self.cookie:
-            merged.setdefault("Cookie", self.cookie)
         return self._client.post(
-            url, data=data, headers=merged, follow_redirects=follow_redirects
+            url, data=data, headers=headers or {}, follow_redirects=follow_redirects
         )
 
     def delete(self, url: str, headers: dict | None = None) -> httpx.Response:
-        merged = dict(headers or {})
-        if self.cookie:
-            merged.setdefault("Cookie", self.cookie)
-        return self._client.delete(url, headers=merged)
+        return self._client.delete(url, headers=headers or {})
 
     def fetch_page(self, url: str) -> str:
         """Fetch an Academia data page with browser-like headers."""

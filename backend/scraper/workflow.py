@@ -27,8 +27,6 @@ class AcademiaScraper:
 
     def attendance(self) -> AttendanceResponse:
         html = self._fetch_page(settings.attendance_url)
-        print(f"[SCRAPER] Attendance page length: {len(html)}")
-        print(f"[SCRAPER] Attendance page preview: {html[:2000]}")
         return self.parser.parse_attendance(html)
 
     def marks(self) -> MarksResponse:
@@ -60,9 +58,7 @@ class AcademiaScraper:
         )
 
     def calendar(self) -> CalendarResponse:
-        # Calendar needs special cookies
-        calendar_cookie = f"ZCNEWUIPUBLICPORTAL=true; cli_rgn=IN; {self.cookie}"
-        with AcademiaClient(cookie=calendar_cookie) as client:
+        with AcademiaClient(cookie=self.cookie) as client:
             response = client.get(
                 settings.calendar_url,
                 headers={
