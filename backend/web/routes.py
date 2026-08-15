@@ -35,8 +35,13 @@ def logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
 
 @router.get("/attendance")
 def attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
-    return scraper.attendance().model_dump()
+    try:
+        scraper = AcademiaScraper(cookie=x_csrf_token)
+        return scraper.attendance().model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
 
 
 @router.get("/marks")

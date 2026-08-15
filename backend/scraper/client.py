@@ -15,6 +15,7 @@ class AcademiaClient:
             timeout=30,
             follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0"},
+            verify=False,
         )
 
     def close(self) -> None:
@@ -55,5 +56,7 @@ class AcademiaClient:
     def fetch_page(self, url: str) -> str:
         """Fetch an Academia data page with browser-like headers."""
         response = self.get(url, headers=BROWSER_HEADERS)
-        response.raise_for_status()
+        print(f"[SCRAPER] Fetched {url} - status {response.status_code}")
+        if response.status_code != 200:
+            print(f"[SCRAPER] Response body: {response.text[:500]}")
         return response.text
