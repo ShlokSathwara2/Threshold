@@ -1,0 +1,72 @@
+.go-back-btn {
+  background: white;
+  text-align: center;
+  width: 192px;
+  border-radius: 16px;
+  height: 56px;
+  position: relative;
+  color: black;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.go-back-btn__bg {
+  background: #4ade80;
+  border-radius: 12px;
+  height: 48px;
+  width: 25%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  z-index: 10;
+  transition: width 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.go-back-btn:hover .go-back-btn__bg {
+  width: calc(100% - 8px);
+}
+
+.go-back-btn__text {
+  transform: translateX(8px);
+}
+
+.submit-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+.submit-btn__icon {
+  transition: transform 0.3s ease;
+}
+
+.submit-btn:hover .submit-btn__icon {
+  transform: translateX(4px);
+}

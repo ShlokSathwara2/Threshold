@@ -1,0 +1,319 @@
+@import "tailwindcss";
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #09090f;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  min-height: 100dvh;
+}
+
+/* Safe area padding for notched phones */
+body {
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: white;
+}
+
+input, button, textarea {
+  font-family: inherit;
+}
+
+input:focus, button:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* Prevent rubber-banding on iOS */
+@supports (-webkit-touch-callout: none) {
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+  #root, #__next {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Get Started sliding arrow button */
+.get-started-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 48px 16px 20px;
+  border: none;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.5px;
+  cursor: none;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.35);
+  transition: box-shadow 0.4s ease;
+}
+
+.get-started-btn:hover {
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.55);
+}
+
+.get-started-btn__slider {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 1;
+}
+
+.get-started-btn:hover .get-started-btn__slider {
+  left: calc(100% - 48px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.get-started-btn__text {
+  position: relative;
+  z-index: 2;
+  margin-left: 42px;
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.get-started-btn:hover .get-started-btn__text {
+  transform: translateX(-20px);
+}
+
+/* Arrow button — reusable for Back / Sign In */
+.arrow-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow 0.4s ease;
+}
+
+.arrow-btn__slider {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 1;
+}
+
+.arrow-btn:hover .arrow-btn__slider {
+  left: calc(100% - 36px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.arrow-btn__text {
+  position: relative;
+  z-index: 2;
+  margin-left: 32px;
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn:hover .arrow-btn__text {
+  transform: translateX(-10px);
+}
+
+/* Back variant — green expanding pill */
+.arrow-btn--back {
+  background: rgba(255,255,255,0.9);
+  color: black;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  height: 40px;
+  width: 40px;
+  padding: 0;
+  border-radius: 12px;
+}
+
+.arrow-btn--back .arrow-btn__slider {
+  left: 4px;
+  top: 4px;
+  right: auto;
+  transform: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #22c55e;
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 2;
+}
+
+.arrow-btn--back:hover .arrow-btn__slider {
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  border-radius: 10px;
+  background: #22c55e;
+}
+
+.arrow-btn--back .arrow-btn__text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.arrow-btn--back:hover .arrow-btn__text {
+  opacity: 0;
+}
+
+/* Sign In animated button */
+.arrow-btn--primary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 16px 36px;
+  border: 4px solid transparent;
+  border-radius: 100px;
+  background: transparent;
+  box-shadow: 0 0 0 2px #8b5cf6;
+  color: #a78bfa;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn--primary:hover {
+  box-shadow: 0 0 0 12px transparent;
+  color: #ffffff;
+  border-radius: 12px;
+}
+
+.arrow-btn--primary:active {
+  scale: 0.95;
+  box-shadow: 0 0 0 4px #8b5cf6;
+}
+
+.arrow-btn--primary .arrow-btn__slider {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6366f1;
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn--primary:hover .arrow-btn__slider {
+  width: 220px;
+  height: 220px;
+  opacity: 1;
+}
+
+.arrow-btn--primary .arrow-btn__svg--arr1 {
+  position: absolute;
+  width: 20px;
+  fill: #a78bfa;
+  right: 16px;
+  z-index: 9;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn--primary:hover .arrow-btn__svg--arr1 {
+  right: -25%;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary .arrow-btn__svg--arr2 {
+  position: absolute;
+  width: 20px;
+  fill: #a78bfa;
+  left: -25%;
+  z-index: 9;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn--primary:hover .arrow-btn__svg--arr2 {
+  left: 16px;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary .arrow-btn__text {
+  position: relative;
+  z-index: 1;
+  margin-left: 0;
+  transform: translateX(-12px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.arrow-btn--primary:hover .arrow-btn__text {
+  transform: translateX(12px);
+  color: #ffffff;
+}
+
+.arrow-btn--primary:disabled {
+  background: rgba(139, 92, 246, 0.4);
+  box-shadow: none;
+  cursor: not-allowed;
+}
