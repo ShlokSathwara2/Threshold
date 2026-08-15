@@ -163,7 +163,7 @@ export default function WelcomePage() {
           >
             <button
               className="get-started-btn"
-              onClick={() => router.push('/login')}
+              onClick={() => router.push('/sp-login')}
             >
               <div className="get-started-btn__slider">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
