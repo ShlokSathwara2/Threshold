@@ -20,6 +20,15 @@
 - Deploy to Render/Fly.io free tier.
 - **Deliverable:** You can `curl` your own backend with your own credentials and get back real attendance/marks/timetable data.
 
+## Phase 1.5 — Student Portal (Fallback + Extra Data)
+**Goal:** Second data source from `sp.srmist.edu.in` — works when Academia is down, has data Academia doesn't (internal marks, SGPA/CGPA, exam results).
+- Reverse-engineer Student Portal login flow (JSP + CAPTCHA auto-solve + honeypot + fingerprinting).
+- Build parallel scraper: login, attendance, grades, internal marks, credits.
+- CAPTCHA auto-solvable (answer embedded in `SECURE_CONFIG` in HTML).
+- Wire as fallback: if Academia fails (403/timeout), try Student Portal automatically.
+- Timetable remains Academia-only (not available on Student Portal) — cache after first fetch.
+- **Deliverable:** Two working backends for attendance/marks — Academia + Student Portal, with auto-fallback.
+
 ## Phase 2 — Welcome, Onboarding & App Auth Layer
 **Goal:** First-run experience before the login flow, then wire the frontend to the backend's login flow, safely, per-student.
 - Welcome/onboarding screen(s): shown on first launch (or when logged out) — brief intro to what the app does, before the student ever sees a login form. Sets the visual tone (glass system) from the very first screen.
@@ -174,6 +183,6 @@
 ---
 
 ### Suggested order of attack
-Phase 0 → 1 → 2 (welcome + login) → 3 (get attendance fully working end-to-end first, since that's your priority) → then loop back for 4–7 → 7.5 (subject metadata registry — do this before or alongside Timetable/Marks so every screen can pull from it) → 7.6 (summary & analytics — needs 3/4/7.5's data to already exist) → 8 (polish) → 8.5 (PWA/installability) → 9 (all 24 signature differentiators, in the listed order) → 10 → 11.
+Phase 0 → 1 → 1.5 (Student Portal fallback) → 2 (welcome + login) → 3 (get attendance fully working end-to-end first, since that's your priority) → then loop back for 4–7 → 7.5 (subject metadata registry — do this before or alongside Timetable/Marks so every screen can pull from it) → 7.6 (summary & analytics — needs 3/4/7.5's data to already exist) → 8 (polish) → 8.5 (PWA/installability) → 9 (all 24 signature differentiators, in the listed order) → 10 → 11.
 
 All features across every phase now run on free-tier infrastructure only (no paid APIs, no LLM dependency) — everything is deterministic calculation over data you already scrape.

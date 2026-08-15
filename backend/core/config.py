@@ -44,5 +44,37 @@ class Settings(BaseSettings):
     def calendar_url(self) -> str:
         return f"{self.academia_base_url}/srm_university/academia-academic-services/page/{self.calendar_page_name}"
 
+    # Student Portal settings
+    sp_base_url: str = "https://sp.srmist.edu.in"
+    sp_context_path: str = "/srmiststudentportal"
+
+    @property
+    def sp_login_page_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/loginManager/youLogin.jsp"
+
+    @property
+    def sp_login_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/LoginServlet"
+
+    @property
+    def sp_attendance_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentAttendanceDetails.jsp"
+
+    @property
+    def sp_attendance_detail_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentAttendanceDetailsInner.jsp"
+
+    @property
+    def sp_grades_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentGradeDetails.jsp"
+
+    @property
+    def sp_internal_marks_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/template/studentInternalMarkDetails.jsp"
+
+    @property
+    def sp_internal_marks_detail_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentInternalMarkDetailsInner.jsp"
+
 
 settings = Settings()

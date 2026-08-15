@@ -4,10 +4,15 @@ from fastapi.responses import JSONResponse
 from core.schemas.models import LoginResponse
 from scraper.auth import AuthService
 from scraper.workflow import AcademiaScraper
+from scraper.student_portal.auth import StudentPortalAuth
+from scraper.student_portal.workflow import StudentPortalScraper
 
 router = APIRouter()
 auth_service = AuthService()
+sp_auth_service = StudentPortalAuth()
 
+
+# ── Academia endpoints ──────────────────────────────────────────────
 
 @router.post("/login")
 def login(body: dict):
@@ -79,6 +84,116 @@ def get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
     scraper = AcademiaScraper(cookie=x_csrf_token)
     return scraper.all_data()
 
+
+# ── Student Portal endpoints ────────────────────────────────────────
+
+@router.post("/sp/login")
+def sp_login(body: dict):
+    username = body.get("username", "")
+    password = body.get("password", "")
+
+    if not username or not password:
+        return {"success": False, "status": 400, "message": "Username and password required"}
+
+    try:
+        result = sp_auth_service.login(username, password)
+        return result.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
+
+
+@router.delete("/sp/logout")
+def sp_logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
+    return sp_auth_service.logout(x_csrf_token)
+
+
+@router.get("/sp/attendance")
+def sp_attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    try:
+        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        return scraper.attendance().model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/marks")
+def sp_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    try:
+        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        return scraper.marks().model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/grades")
+def sp_grades(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    try:
+        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        return scraper.grades()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/internal-marks")
+def sp_internal_marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    try:
+        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        return {"internal_marks": scraper.internal_marks()}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/get")
+def sp_get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    try:
+        scraper = StudentPortalScraper(cookie=x_csrf_token)
+        return scraper.all_data()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+# ── Fallback endpoint (tries Academia, falls back to Student Portal) ──
+
+@router.get("/get-smart")
+def get_smart(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+    """Try Academia first, fall back to Student Portal if it fails."""
+    # Try Academia
+    try:
+        scraper = AcademiaScraper(cookie=x_csrf_token)
+        attendance = scraper.attendance()
+        if attendance.status == 200 and attendance.attendance:
+            return {
+                "source": "academia",
+                "attendance": attendance.model_dump(),
+            }
+    except Exception:
+        pass
+
+    # Fallback to Student Portal
+    try:
+        sp_scraper = StudentPortalScraper(cookie=x_csrf_token)
+        attendance = sp_scraper.attendance()
+        return {
+            "source": "student_portal",
+            "attendance": attendance.model_dump(),
+        }
+    except Exception as e:
+        return {"error": f"Both sources failed: {e}", "status": 503}
+
+
+# ── Health / utility ────────────────────────────────────────────────
 
 @router.api_route("/", methods=["GET", "HEAD"])
 def root():
