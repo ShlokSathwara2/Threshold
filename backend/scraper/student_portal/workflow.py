@@ -40,10 +40,18 @@ class StudentPortalScraper:
                 client.cookies.set(k.strip(), v.strip())
         return client
 
+    def _init_session(self, client: httpx.Client) -> bool:
+        """Load the main dashboard to initialize the SPA session."""
+        url = f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp"
+        response = client.post(url, data="")
+        print(f"[SP-SCRAPER] Init session status: {response.status_code}, url: {response.url}")
+        return response.status_code == 200
+
     def attendance(self) -> AttendanceResponse:
         """Fetch and parse attendance data from Student Portal."""
         url = settings.sp_attendance_url
         with self._get_client() as client:
+            self._init_session(client)
             response = client.post(url, data="")
             print(f"[SP-SCRAPER] Attendance URL: {url}")
             print(f"[SP-SCRAPER] Attendance status: {response.status_code}")
@@ -63,6 +71,7 @@ class StudentPortalScraper:
         """Fetch and parse marks/grades from Student Portal."""
         url = settings.sp_grades_url
         with self._get_client() as client:
+            self._init_session(client)
             response = client.post(url, data="")
             print(f"[SP-SCRAPER] Grades URL: {url}")
             print(f"[SP-SCRAPER] Grades status: {response.status_code}")
@@ -82,6 +91,7 @@ class StudentPortalScraper:
         """Fetch and parse detailed grades (with SGPA/CGPA)."""
         url = settings.sp_grades_url
         with self._get_client() as client:
+            self._init_session(client)
             response = client.post(url, data="")
             print(f"[SP-SCRAPER] Grades URL: {url}")
             print(f"[SP-SCRAPER] Grades status: {response.status_code}")
@@ -96,6 +106,7 @@ class StudentPortalScraper:
         """Fetch and parse internal marks from Student Portal."""
         url = settings.sp_internal_marks_url
         with self._get_client() as client:
+            self._init_session(client)
             response = client.post(url, data="")
             print(f"[SP-SCRAPER] Internal marks URL: {url}")
             print(f"[SP-SCRAPER] Internal marks status: {response.status_code}")
