@@ -51,8 +51,15 @@ class AcademiaClient:
     def delete(self, url: str, headers: dict | None = None) -> httpx.Response:
         return self._client.delete(url, headers=headers or {})
 
+    def _init_session(self) -> None:
+        """Visit the main portal page to establish the Zoho Creator session context."""
+        init_url = f"{settings.academia_base_url}/srm_university/academia-academic-services/"
+        response = self.get(init_url, headers=BROWSER_HEADERS)
+        print(f"[SCRAPER] Session init: {response.status_code} from {init_url}")
+
     def fetch_page(self, url: str) -> str:
         """Fetch an Academia data page with browser-like headers."""
+        self._init_session()
         response = self.get(url, headers=BROWSER_HEADERS)
         print(f"[SCRAPER] Fetched {url} - status {response.status_code}")
         if response.status_code != 200:

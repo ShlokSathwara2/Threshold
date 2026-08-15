@@ -10,7 +10,11 @@ app = FastAPI(
     version="0.1.0",
 )
 
-origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+origins = [
+    o.strip()
+    for o in settings.cors_origins.split(",")
+    if o.strip() and o.strip().startswith("http")
+]
 print(f"[CORS] Allowed origins: {origins}")
 
 app.add_middleware(
