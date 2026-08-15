@@ -36,7 +36,7 @@ export default function LoginPage() {
   const onAnimationComplete = useCallback(async () => {
     setActiveAnimation(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/login`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/sp/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

@@ -58,8 +58,7 @@ export async function login(username: string, password: string) {
     success: boolean;
     cookies?: string;
     message?: string;
-    captcha?: { image: string; cdigest: string };
-  }>('/login', {
+  }>('/sp/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -68,7 +67,7 @@ export async function login(username: string, password: string) {
 
 export async function logout() {
   try {
-    await apiFetch('/logout', { method: 'DELETE' });
+    await apiFetch('/sp/logout', { method: 'DELETE' });
   } finally {
     clearSession();
   }
@@ -95,7 +94,7 @@ export interface AttendanceResponse {
 }
 
 export async function fetchAttendance(): Promise<AttendanceResponse> {
-  return apiFetch('/attendance');
+  return apiFetch('/sp/attendance');
 }
 
 export interface MarksDetail {
@@ -124,7 +123,7 @@ export interface MarksResponse {
 }
 
 export async function fetchMarks(): Promise<MarksResponse> {
-  return apiFetch('/marks');
+  return apiFetch('/sp/marks');
 }
 
 export interface Course {
@@ -150,6 +149,44 @@ export interface CourseResponse {
 
 export async function fetchCourses(): Promise<CourseResponse> {
   return apiFetch('/courses');
+}
+
+// ── Student Portal: Grades & Internal Marks ──────────────────────────
+
+export interface SemesterGrade {
+  code: string;
+  description: string;
+  credit: string;
+  grade: string;
+}
+
+export interface SemesterGrades {
+  semester: number;
+  sgpa: number | null;
+  grades: SemesterGrade[];
+}
+
+export interface GradesResponse {
+  semesters: SemesterGrades[];
+  cgpa: number | null;
+  credits_registered: number | null;
+  credits_earned: number | null;
+  credits_required: number | null;
+}
+
+export async function fetchSpGrades(): Promise<GradesResponse> {
+  return apiFetch('/sp/grades');
+}
+
+export interface InternalMark {
+  code: string;
+  description: string;
+  scored: string;
+  maxMark: string;
+}
+
+export async function fetchSpInternalMarks(): Promise<InternalMark[]> {
+  return apiFetch('/sp/internal-marks');
 }
 
 export interface User {
