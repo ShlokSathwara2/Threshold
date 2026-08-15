@@ -51,7 +51,16 @@ class AcademiaClient:
         return self._client.delete(url, headers=headers or {})
 
     def fetch_page(self, url: str) -> str:
-        """Fetch an Academia data page with browser-like headers."""
+        """Fetch an Academia data page with browser-like headers.
+
+        Note: we deliberately do NOT re-visit the portal root page here.
+        The login flow (AuthService) already establishes full session
+        context (JSESSIONID + portal-root visit) once at login time.
+        Re-hitting the portal root before every data fetch was causing
+        Zoho Creator to reject the specific page (403 "Page is not
+        accessible") even though the broader session was still valid.
+        """
+        print(f"[SCRAPER] Cookies before fetch: {list(self._client.cookies.keys())}")
         response = self.get(url, headers=BROWSER_HEADERS)
         print(f"[SCRAPER] Fetched {url} - status {response.status_code}")
         if response.status_code != 200:
