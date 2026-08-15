@@ -149,10 +149,37 @@ class StudentPortalAuth:
             )
             has_login_form = 'id="login_form"' in resp_html
 
+            # Build cookie header
+            cookie_header = "; ".join(
+                f"{k}={v}" for k, v in client.cookies.items()
+            )
+
             if is_on_login_page and has_login_form:
+                # Check for specific error messages
+                body = response.text
+                error_msg = "Login failed"
+                if "invalid" in body.lower() and ("password" in body.lower() or "netid" in body.lower()):
+                    error_msg = "Invalid NetID or password"
+                elif "captcha" in body.lower() and ("mismatch" in body.lower() or "invalid" in body.lower()):
+                    error_msg = "CAPTCHA verification failed"
+                elif "too many" in body.lower():
+                    error_msg = "Too many login attempts"
+
+                # Include debug info in error response
+                resp_snippet = response.text[:1000].replace("\n", " ")
                 return LoginResponse(
                     success=False, status=401,
-                    message="Login failed — check credentials or portal is down",
+                    message=(
+                        f"{error_msg} | "
+                        f"url={str(response.url)} | "
+                        f"captcha={captcha_text} | "
+                        f"domain_field={domain_field}={domain_token if domain_field else 'N/A'} | "
+                        f"captcha_field={captcha_field}={captcha_token if captcha_field else 'N/A'} | "
+                        f"nonce={nonce} | "
+                        f"honeypot={honeypot_name} | "
+                        f"fields={list(form_data.keys())} | "
+                        f"resp_snippet={resp_snippet}"
+                    ),
                 )
 
             # Build cookie header
@@ -178,19 +205,22 @@ class StudentPortalAuth:
         """Extract all values from SECURE_CONFIG in the HTML."""
         result: dict[str, str] = {}
 
-        # Pattern 1: window.SECURE_CONFIG = { key: 'value', ... }
-        # This handles the initial object literal
-        for match in re.finditer(
-            r"SECURE_CONFIG\s*[.{]\s*(\w+)\s*[:=]\s*['\"]([^'\"]+)['\"]", html
-        ):
-            result[match.group(1)] = match.group(2)
-
-        # Pattern 2: window.SECURE_CONFIG.key = 'value'
-        # This handles property assignments
+        # Pattern 1: SECURE_CONFIG.key = 'value' (property assignments)
         for match in re.finditer(
             r"SECURE_CONFIG\.(\w+)\s*=\s*['\"]([^'\"]+)['\"]", html
         ):
             result[match.group(1)] = match.group(2)
+
+        # Pattern 2: Inside object literal: key: 'value' (after SECURE_CONFIG = {)
+        obj_match = re.search(
+            r"SECURE_CONFIG\s*=\s*\{([^}]+)\}", html, re.DOTALL
+        )
+        if obj_match:
+            obj_body = obj_match.group(1)
+            for match in re.finditer(
+                r"(\w+)\s*:\s*['\"]([^'\"]+)['\"]", obj_body
+            ):
+                result[match.group(1)] = match.group(2)
 
         return result
 
