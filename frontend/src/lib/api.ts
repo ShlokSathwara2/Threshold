@@ -53,15 +53,15 @@ async function apiFetch<T>(
 
 // ── Auth ───────────────────────────────────────────────────────────
 
-export async function login(username: string, password: string) {
+export async function setSpCookies(cookie: string) {
   return apiFetch<{
     success: boolean;
-    cookies?: string;
     message?: string;
-  }>('/sp/login', {
+    length?: number;
+  }>('/sp/set-cookies', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ cookie }),
   });
 }
 

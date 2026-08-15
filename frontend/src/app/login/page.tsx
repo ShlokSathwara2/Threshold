@@ -15,49 +15,48 @@ type AnimType = typeof animations[number];
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [cookie, setCookie] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeAnimation, setActiveAnimation] = useState<AnimType | null>(null);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      setError('Please enter both NetID and password');
+    if (!cookie.trim()) {
+      setError('Please paste your Student Portal session cookie');
       return;
     }
     setError('');
     setLoading(true);
     const randomAnim = animations[Math.floor(Math.random() * animations.length)];
     setActiveAnimation(randomAnim);
-  }, [username, password]);
+  }, [cookie]);
 
   const onAnimationComplete = useCallback(async () => {
     setActiveAnimation(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/sp/login`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/sp/set-cookies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ cookie: cookie.trim() }),
       });
       const data = await res.json();
-      if (data.success && data.cookies) {
+      if (data.success) {
         localStorage.setItem('threshold_session', JSON.stringify({
-          cookies: data.cookies,
-          user: username,
+          cookies: cookie.trim(),
+          user: 'student',
           timestamp: Date.now(),
         }));
         router.push('/dashboard');
       } else {
-        setError(data.message || 'Login failed');
+        setError(data.message || 'Failed to set cookies');
       }
     } catch {
       setError('Failed to connect to server');
     } finally {
       setLoading(false);
     }
-  }, [username, password, router]);
+  }, [cookie, router]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -66,11 +65,12 @@ export default function LoginPage() {
     border: '1px solid rgba(255,255,255,0.1)',
     background: 'rgba(255,255,255,0.05)',
     color: 'white',
-    fontSize: '16px',
+    fontSize: '14px',
     outline: 'none',
     transition: 'border-color 0.3s',
     boxSizing: 'border-box',
     WebkitAppearance: 'none' as const,
+    fontFamily: 'monospace',
   };
 
   return (
@@ -117,7 +117,7 @@ export default function LoginPage() {
         paddingTop: 'calc(60px + env(safe-area-inset-top, 0px))',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}>
-        {/* Go Back Button — top-left, compact */}
+        {/* Go Back Button */}
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -170,43 +170,36 @@ export default function LoginPage() {
             marginBottom: '28px',
             fontSize: '0.85rem',
           }}>
-            Sign in to access your academic data
+            Paste your Student Portal session cookie
           </p>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
-                NetID
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. ss1516"
-                autoComplete="username"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                style={inputStyle}
-                onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-              />
-            </div>
-
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
-                Password
+                Session Cookie
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your SRM password"
-                autoComplete="current-password"
-                style={inputStyle}
+              <textarea
+                value={cookie}
+                onChange={(e) => setCookie(e.target.value)}
+                placeholder="JSESSIONID=...; other cookies..."
+                rows={3}
+                spellCheck={false}
+                style={{
+                  ...inputStyle,
+                  resize: 'vertical',
+                  lineHeight: 1.4,
+                }}
                 onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
                 onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
+              <p style={{
+                color: 'rgba(255,255,255,0.3)',
+                fontSize: '0.7rem',
+                marginTop: '6px',
+                lineHeight: 1.4,
+              }}>
+                Log into sp.srmist.edu.in, open DevTools (F12) → Network → any request → copy the Cookie header value.
+              </p>
             </div>
 
             <AnimatePresence>
@@ -246,19 +239,9 @@ export default function LoginPage() {
               <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
-              <span className="arrow-btn__text">{loading ? 'Signing in...' : 'Sign In'}</span>
+              <span className="arrow-btn__text">{loading ? 'Connecting...' : 'Connect'}</span>
             </motion.button>
           </form>
-
-          <p style={{
-            color: 'rgba(255,255,255,0.25)',
-            textAlign: 'center',
-            marginTop: '16px',
-            fontSize: '0.72rem',
-            lineHeight: 1.4,
-          }}>
-            Your password is sent directly to SRM servers. We never store it.
-          </p>
         </motion.div>
 
         {/* Footer */}
