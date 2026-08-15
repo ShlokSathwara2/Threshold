@@ -10,16 +10,22 @@ auth_service = AuthService()
 
 
 @router.post("/login")
-def login(body: dict) -> LoginResponse:
+def login(body: dict):
     username = body.get("username", "")
     password = body.get("password", "")
     cdigest = body.get("cdigest")
     captcha = body.get("captcha")
 
     if not username or not password:
-        return LoginResponse(False, status=400, message="Username and password required")
+        return {"success": False, "status": 400, "message": "Username and password required"}
 
-    return auth_service.login(username, password, cdigest, captcha)
+    try:
+        result = auth_service.login(username, password, cdigest, captcha)
+        return result.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
 
 
 @router.delete("/logout")

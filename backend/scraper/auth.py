@@ -18,11 +18,20 @@ class AuthService:
         captcha: str | None = None,
     ) -> LoginResponse:
         full_username = username if "@" in username else f"{username}@srmist.edu.in"
+        print(f"[LOGIN] Attempting login for {full_username}")
 
-        with AcademiaClient() as client:
-            return self._login_with_retry(
-                client, full_username, password, cdigest, captcha, retry_count=0
-            )
+        try:
+            with AcademiaClient() as client:
+                result = self._login_with_retry(
+                    client, full_username, password, cdigest, captcha, retry_count=0
+                )
+                print(f"[LOGIN] Result: success={result.success}, status={result.status}, message={result.message}")
+                return result
+        except Exception as e:
+            print(f"[LOGIN] Exception: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def logout(self, cookie: str) -> dict:
         with AcademiaClient(cookie=cookie) as client:
