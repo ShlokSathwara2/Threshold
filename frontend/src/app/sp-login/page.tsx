@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { spLoginInit, spLoginVerify } from '@/lib/api';
+import { spLogin } from '@/lib/api';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
 const PortalRift = dynamic(() => import('@/components/animations/PortalRift'), { ssr: false });
@@ -14,22 +14,15 @@ const LiquidMetalMerge = dynamic(() => import('@/components/animations/LiquidMet
 const animations = ['portal', 'circuit', 'liquid'] as const;
 type AnimType = typeof animations[number];
 
-type Step = 'credentials' | 'captcha' | 'submitting';
-
 export default function SpLoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('credentials');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [captcha, setCaptcha] = useState('');
-  const [captchaImage, setCaptchaImage] = useState('');
-  const [sessionId, setSessionId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeAnimation, setActiveAnimation] = useState<AnimType | null>(null);
-  const captchaInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCredentialsSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setError('Please enter both NetID and password');
@@ -37,39 +30,14 @@ export default function SpLoginPage() {
     }
     setError('');
     setLoading(true);
-    try {
-      const data = await spLoginInit(username.trim());
-      if (data.success && data.session_id && data.captcha_image_base64) {
-        setSessionId(data.session_id);
-        setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
-        setStep('captcha');
-        setTimeout(() => captchaInputRef.current?.focus(), 100);
-      } else {
-        setError(data.message || 'Failed to load CAPTCHA');
-      }
-    } catch {
-      setError('Failed to connect to server');
-    } finally {
-      setLoading(false);
-    }
-  }, [username, password]);
-
-  const handleCaptchaSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!captcha.trim()) {
-      setError('Please enter the CAPTCHA');
-      return;
-    }
-    setError('');
-    setStep('submitting');
     const randomAnim = animations[Math.floor(Math.random() * animations.length)];
     setActiveAnimation(randomAnim);
-  }, [captcha]);
+  }, [username, password]);
 
   const onAnimationComplete = useCallback(async () => {
     setActiveAnimation(null);
     try {
-      const data = await spLoginVerify(sessionId, username.trim(), password, captcha.trim());
+      const data = await spLogin(username.trim(), password);
       if (data.success && data.cookies) {
         localStorage.setItem('threshold_session', JSON.stringify({
           cookies: data.cookies,
@@ -78,23 +46,14 @@ export default function SpLoginPage() {
         }));
         router.push('/dashboard');
       } else {
-        setError(data.message || 'Login failed');
-        setStep('captcha');
-        setCaptcha('');
-        // Refresh CAPTCHA
-        try {
-          const refresh = await spLoginInit(username.trim());
-          if (refresh.success && refresh.session_id && refresh.captcha_image_base64) {
-            setSessionId(refresh.session_id);
-            setCaptchaImage(`data:image/png;base64,${refresh.captcha_image_base64}`);
-          }
-        } catch { /* ignore refresh failure */ }
+        setError(data.message || 'Login failed — check your NetID and password');
       }
     } catch {
       setError('Failed to connect to server');
-      setStep('captcha');
+    } finally {
+      setLoading(false);
     }
-  }, [sessionId, username, password, captcha, router]);
+  }, [username, password, router]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -108,13 +67,6 @@ export default function SpLoginPage() {
     transition: 'border-color 0.3s',
     boxSizing: 'border-box',
     WebkitAppearance: 'none' as const,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: '0.8rem',
-    marginBottom: '6px',
   };
 
   return (
@@ -210,223 +162,81 @@ export default function SpLoginPage() {
             marginBottom: '28px',
             fontSize: '0.85rem',
           }}>
-            {step === 'credentials' ? 'Log in with your SRM NetID' : step === 'captcha' ? 'Enter the CAPTCHA below' : 'Connecting...'}
+            Log in with your SRM credentials
           </p>
 
-          {/* Step 1: Credentials */}
-          {step === 'credentials' && (
-            <form onSubmit={handleCredentialsSubmit}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={labelStyle}>NetID</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. ra2311003010"
-                  autoCapitalize="none"
-                  autoComplete="username"
-                  style={inputStyle}
-                  onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                />
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your SRM password"
-                  autoComplete="current-password"
-                  style={inputStyle}
-                  onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                />
-              </div>
-
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      color: '#fca5a5',
-                      fontSize: '0.8rem',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    {error}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <motion.button
-                type="submit"
-                disabled={loading}
-                whileTap={{ scale: 0.95 }}
-                className={`arrow-btn arrow-btn--primary${loading ? ' arrow-btn--disabled' : ''}`}
-                style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
-              >
-                <div className="arrow-btn__slider" />
-                <svg className="arrow-btn__svg--arr1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-                <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-                <span className="arrow-btn__text">{loading ? 'Loading CAPTCHA...' : 'Next'}</span>
-              </motion.button>
-            </form>
-          )}
-
-          {/* Step 2: CAPTCHA */}
-          {step === 'captcha' && (
-            <form onSubmit={handleCaptchaSubmit}>
-              {captchaImage && (
-                <div style={{
-                  marginBottom: '16px',
-                  textAlign: 'center',
-                  padding: '12px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}>
-                  <img
-                    src={captchaImage}
-                    alt="CAPTCHA"
-                    style={{
-                      maxWidth: '100%',
-                      height: 'auto',
-                      maxHeight: '80px',
-                      borderRadius: '8px',
-                      imageRendering: 'pixelated',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const refresh = await spLoginInit(username.trim());
-                        if (refresh.success && refresh.session_id && refresh.captcha_image_base64) {
-                          setSessionId(refresh.session_id);
-                          setCaptchaImage(`data:image/png;base64,${refresh.captcha_image_base64}`);
-                          setCaptcha('');
-                        }
-                      } catch { /* ignore */ }
-                    }}
-                    style={{
-                      display: 'block',
-                      margin: '8px auto 0',
-                      background: 'none',
-                      border: 'none',
-                      color: '#8b5cf6',
-                      fontSize: '0.72rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Can&apos;t read it? Get a new one
-                  </button>
-                </div>
-              )}
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Type the CAPTCHA</label>
-                <input
-                  ref={captchaInputRef}
-                  type="text"
-                  value={captcha}
-                  onChange={(e) => setCaptcha(e.target.value)}
-                  placeholder="Enter the text you see above"
-                  autoCapitalize="none"
-                  autoComplete="off"
-                  style={{
-                    ...inputStyle,
-                    fontFamily: 'monospace',
-                    letterSpacing: '2px',
-                    textAlign: 'center',
-                    fontSize: '16px',
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                />
-              </div>
-
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      color: '#fca5a5',
-                      fontSize: '0.8rem',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    {error}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep('credentials');
-                    setCaptcha('');
-                    setCaptchaImage('');
-                    setError('');
-                  }}
-                  style={{
-                    flex: '0 0 auto',
-                    padding: '14px 20px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Back
-                </button>
-                <motion.button
-                  type="submit"
-                  whileTap={{ scale: 0.95 }}
-                  className="arrow-btn arrow-btn--primary"
-                  style={{ flex: 1, cursor: 'pointer' }}
-                >
-                  <div className="arrow-btn__slider" />
-                  <svg className="arrow-btn__svg--arr1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                  <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                  <span className="arrow-btn__text">Log In</span>
-                </motion.button>
-              </div>
-            </form>
-          )}
-
-          {/* Step 3: Submitting (animation plays, then onAnimationComplete fires) */}
-          {step === 'submitting' && (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
-                Verifying credentials...
-              </p>
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                NetID
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g. ra2311003010"
+                autoCapitalize="none"
+                autoComplete="username"
+                style={inputStyle}
+                onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
+                onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+              />
             </div>
-          )}
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your SRM password"
+                autoComplete="current-password"
+                style={inputStyle}
+                onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
+                onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+              />
+            </div>
+
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#fca5a5',
+                    fontSize: '0.8rem',
+                    marginBottom: '16px',
+                  }}
+                >
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <motion.button
+              type="submit"
+              disabled={loading || activeAnimation !== null}
+              whileTap={{ scale: 0.95 }}
+              className={`arrow-btn arrow-btn--primary${loading ? ' arrow-btn--disabled' : ''}`}
+              style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
+            >
+              <div className="arrow-btn__slider" />
+              <svg className="arrow-btn__svg--arr1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              <span className="arrow-btn__text">{loading ? 'Logging in...' : 'Log In'}</span>
+            </motion.button>
+          </form>
         </motion.div>
 
         <p style={{

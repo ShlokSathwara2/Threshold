@@ -97,6 +97,19 @@ export async function spLoginVerify(sessionId: string, username: string, passwor
   });
 }
 
+export async function spLogin(username: string, password: string) {
+  return apiFetch<{
+    success: boolean;
+    cookies?: string;
+    message?: string;
+    status?: number;
+  }>('/sp/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
 export async function logout() {
   try {
     await apiFetch('/sp/logout', { method: 'DELETE' });
