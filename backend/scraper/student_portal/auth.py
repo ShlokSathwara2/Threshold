@@ -146,11 +146,11 @@ class StudentPortalAuth:
             captcha_token_raw = f"{time_elapsed}{state.nonce or ''}{interact_count}"
             captcha_token = base64.b64encode(captcha_token_raw.encode()).decode()
 
-            # Build form data — use the user's captcha_answer
+            # Build form data — use state.captcha_answer (the real answer leaked in SECURE_CONFIG)
             form_data: dict[str, str] = {
                 "username": netid,
                 "password": password,
-                "captcha": captcha_answer,
+                "captcha": state.captcha_answer,
             }
             if state.domain_field:
                 form_data[state.domain_field] = domain_token
