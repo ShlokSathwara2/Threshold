@@ -146,6 +146,30 @@ class AcademiaParser:
 
         return CourseResponse(courses=courses, status=200)
 
+    def _parse_course_row(self, cells) -> Course | None:
+        if len(cells) < 11:
+            return None
+
+        values = [cell.get_text(strip=True) for cell in cells]
+        room = values[9] or "N/A"
+        if room != "N/A":
+            room = room[:1].upper() + room[1:]
+        slot = values[8].removesuffix("-")
+
+        return Course(
+            code=values[1],
+            title=values[2].split(" \u2013")[0],
+            credit=values[3] or "N/A",
+            category=values[4],
+            courseCategory=values[5],
+            type=values[6] or "N/A",
+            slotType="Practical" if "P" in slot else "Theory",
+            faculty=values[7] or "N/A",
+            slot=slot,
+            room=room,
+            academicYear=values[10],
+        )
+
     def parse_user(self, page_html: str) -> User:
         soup = BeautifulSoup(page_html, "lxml")
         text = soup.get_text(" ", strip=True)
