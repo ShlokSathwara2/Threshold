@@ -216,6 +216,80 @@ class StudentPortalParser:
 
         return marks_list
 
+    def parse_attendance_detail(self, html: str) -> list[dict[str, str]]:
+        """Parse attendance detail (absent drill-down) HTML into date records."""
+        soup = BeautifulSoup(html, "lxml")
+        records: list[dict[str, str]] = []
+
+        tables = soup.find_all("table")
+        for table in tables:
+            rows = table.find_all("tr")
+            if len(rows) < 2:
+                continue
+
+            header_row = rows[0]
+            headers = [th.get_text(strip=True).lower() for th in header_row.find_all(["th", "td"])]
+
+            if any("date" in h for h in headers) and any("hour" in h for h in headers):
+                for row in rows[1:]:
+                    cells = row.find_all("td")
+                    if len(cells) < 3:
+                        continue
+
+                    date = cells[0].get_text(strip=True)
+                    hour = cells[1].get_text(strip=True)
+                    status = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+
+                    if date:
+                        records.append({
+                            "date": date,
+                            "hour": hour,
+                            "status": status,
+                        })
+
+        return records
+
+    def parse_internal_marks_detail(self, html: str) -> list[dict[str, str]]:
+        """Parse internal marks detail (component breakdown) HTML."""
+        soup = BeautifulSoup(html, "lxml")
+        components: list[dict[str, str]] = []
+
+        tables = soup.find_all("table")
+        for table in tables:
+            rows = table.find_all("tr")
+            if len(rows) < 2:
+                continue
+
+            header_row = rows[0]
+            headers = [th.get_text(strip=True).lower() for th in header_row.find_all(["th", "td"])]
+
+            if any("component" in h or "test" in h or "mark" in h for h in headers):
+                for row in rows[1:]:
+                    cells = row.find_all("td")
+                    if len(cells) < 2:
+                        continue
+
+                    component = cells[0].get_text(strip=True)
+                    mark_text = cells[1].get_text(strip=True)
+
+                    # Parse "45/50" format
+                    if "/" in mark_text:
+                        parts = mark_text.split("/")
+                        scored = parts[0].strip()
+                        max_mark = parts[1].strip()
+                    else:
+                        scored = mark_text
+                        max_mark = ""
+
+                    if component:
+                        components.append({
+                            "component": component,
+                            "scored": scored,
+                            "maxMark": max_mark,
+                        })
+
+        return components
+
     def parse_marks_for_academia(self, html: str) -> MarksResponse:
         """Parse grades into MarksResponse format for API compatibility."""
         grades = self.parse_grades(html)

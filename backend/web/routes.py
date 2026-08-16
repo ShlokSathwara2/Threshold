@@ -7,6 +7,13 @@ from scraper.workflow import AcademiaScraper
 from scraper.student_portal.auth import StudentPortalAuth
 from scraper.student_portal import browser_login
 from scraper.student_portal.workflow import StudentPortalScraper
+from scraper.student_portal.data import (
+    fetch_attendance,
+    fetch_attendance_detail,
+    fetch_marks_credits,
+    fetch_internal_marks,
+    fetch_internal_marks_detail,
+)
 
 router = APIRouter()
 auth_service = AuthService()
@@ -220,6 +227,69 @@ def sp_get_all(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
     try:
         scraper = StudentPortalScraper(cookie=cookie)
         return scraper.all_data()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+# ── Student Portal data-fetching (POST, via data.py) ──────────────
+
+@router.post("/sp/attendance")
+def sp_attendance_data(body: dict, x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = x_csrf_token or body.get("cookie", "") or _sp_manual_cookies.get("session", "")
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_attendance(cookie).model_dump()
+
+
+@router.post("/sp/attendance-detail")
+def sp_attendance_detail(body: dict, x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = x_csrf_token or body.get("cookie", "") or _sp_manual_cookies.get("session", "")
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    subject_id = body.get("subject_id", "")
+    month = body.get("month", 0)
+    year = body.get("year", 0)
+    if not subject_id:
+        return {"error": "subject_id required", "status": 400}
+    try:
+        records = fetch_attendance_detail(cookie, subject_id, int(month), int(year))
+        return {"records": records}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.post("/sp/marks")
+def sp_marks_data(body: dict, x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = x_csrf_token or body.get("cookie", "") or _sp_manual_cookies.get("session", "")
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_marks_credits(cookie)
+
+
+@router.post("/sp/internal-marks")
+def sp_internal_marks_data(body: dict, x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = x_csrf_token or body.get("cookie", "") or _sp_manual_cookies.get("session", "")
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return {"internal_marks": fetch_internal_marks(cookie)}
+
+
+@router.post("/sp/internal-marks-detail")
+def sp_internal_marks_detail(body: dict, x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = x_csrf_token or body.get("cookie", "") or _sp_manual_cookies.get("session", "")
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    subject_id = body.get("subject_id", "")
+    status = body.get("status", "")
+    if not subject_id:
+        return {"error": "subject_id required", "status": 400}
+    try:
+        components = fetch_internal_marks_detail(cookie, subject_id, status)
+        return {"components": components}
     except Exception as e:
         import traceback
         traceback.print_exc()
