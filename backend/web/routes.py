@@ -276,13 +276,28 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
     try:
         client = _build_client(cookie)
         _init_session(client)
-        resp = client.post(settings.sp_grades_url, data="")
-        links = sorted(set(re.findall(r"['\"]([^'\"]*\.(?:jsp|do)[^'\"]*)['\"]", resp.text)))
+        pages = {
+            "grades": client.post(settings.sp_grades_url, data=""),
+            "dashboard": client.post(
+                f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp",
+                data="",
+            ),
+        }
+        all_links: set[str] = set()
+        for name, resp in pages.items():
+            links = sorted(set(re.findall(r"['\"]([^'\"]*\.(?:jsp|do)[^'\"]*)['\"]", resp.text)))
+            all_links.update(links)
+            cal = re.findall(
+                r"(?i)[^\"']{0,80}(?:calendar|planner|day[\s-]*order)[^\"']{0,80}",
+                resp.text,
+            )
+            print(f"[PROBE] {name}: status={resp.status_code} links={len(links)} cal-matches={len(cal)}")
+            for c in cal[:20]:
+                print(f"[PROBE]   cal: {c.strip()[:160]}")
         return {
-            "status": resp.status_code,
-            "length": len(resp.text),
-            "links": links[:400],
-            "link_count": len(links),
+            "links": sorted(all_links)[:400],
+            "link_count": len(all_links),
+            "page_status": {k: v.status_code for k, v in pages.items()},
         }
     except Exception as e:
         return {"error": str(e), "status": 500}
