@@ -80,6 +80,8 @@ export default function CustomCursor() {
     let ringX = 0, ringY = 0;
     let glowX = 0, glowY = 0;
     let raf: number;
+    let lastTouch = 0;
+    const isTouch = 'ontouchstart' in window;
 
     const onMove = (e: MouseEvent) => {
       mouseX = e.clientX;
@@ -87,18 +89,45 @@ export default function CustomCursor() {
       if (!visible) setVisible(true);
     };
 
-    const onLeave = () => setVisible(false);
-    const onEnter = () => setVisible(true);
+    const onLeave = () => {
+      if (!isTouch) setVisible(false);
+    };
+    const onEnter = () => {
+      if (!isTouch) setVisible(true);
+    };
 
-    const onClick = (e: MouseEvent) => {
+    const pressAt = (x: number, y: number) => {
       colorIndexRef.current = (colorIndexRef.current + 1) % COLORS.length;
       const newColor = COLORS[colorIndexRef.current];
       setCurrentColor(newColor);
-      spawnParticles(e.clientX, e.clientY, newColor);
+      spawnParticles(x, y, newColor);
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (Date.now() - lastTouch < 600) return;
+      pressAt(e.clientX, e.clientY);
     };
 
     const onDown = () => setPressing(true);
     const onUp = () => setPressing(false);
+
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      lastTouch = Date.now();
+      mouseX = t.clientX;
+      mouseY = t.clientY;
+      setVisible(true);
+      setPressing(true);
+      pressAt(t.clientX, t.clientY);
+    };
+
+    // Don't chase the finger during drags — leaves scrolling untouched
+    const onTouchMove = (_e: TouchEvent) => {};
+
+    const onTouchEnd = () => {
+      setPressing(false);
+    };
 
     const checkHover = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -158,6 +187,9 @@ export default function CustomCursor() {
     window.addEventListener('click', onClick);
     window.addEventListener('mousedown', onDown);
     window.addEventListener('mouseup', onUp);
+window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
     raf = requestAnimationFrame(animate);
 
     return () => {
@@ -168,14 +200,15 @@ export default function CustomCursor() {
       window.removeEventListener('click', onClick);
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('mouseup', onUp);
+window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
       cancelAnimationFrame(raf);
       // Cleanup particles
       particlesRef.current.forEach(p => p.element.remove());
       particlesRef.current = [];
     };
   }, [spawnParticles, visible]);
-
-  if (typeof window !== 'undefined' && 'ontouchstart' in window) return null;
 
   const dotSize = pressing ? 6 : hovering ? 5 : 8;
   const ringSize = pressing ? 32 : hovering ? 44 : 36;

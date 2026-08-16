@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isLoggedIn } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
 
 export default function AttendancePage() {
   const router = useRouter();
   const { subjects, overall, loading, error, refetch } = useAttendance();
+
+  usePullToRefresh(refetch);
 
   useEffect(() => {
     if (!isLoggedIn()) {

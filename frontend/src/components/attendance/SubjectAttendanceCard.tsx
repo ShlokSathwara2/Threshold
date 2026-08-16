@@ -114,6 +114,35 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
           <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
             {subject.facultyName}
           </p>
+          <p style={{
+            fontSize: '0.66rem',
+            color: 'rgba(255,255,255,0.35)',
+            margin: '3px 0 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            flexWrap: 'wrap',
+          }}>
+            {[
+              subject.slot ? `Slot ${subject.slot}` : null,
+              subject.room && subject.room !== 'N/A' ? `Room ${subject.room}` : null,
+              subject.credit && subject.credit !== 'N/A' ? `${subject.credit} cr` : null,
+              subject.slotType || subject.courseType || null,
+            ].filter(Boolean).map((chip) => (
+              <span
+                key={chip}
+                style={{
+                  padding: '2px 7px',
+                  borderRadius: '6px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  fontWeight: 500,
+                }}
+              >
+                {chip}
+              </span>
+            ))}
+          </p>
         </div>
 
         {/* Percentage Badge */}
@@ -137,6 +166,11 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
         <StatPill label="Present" value={subject.present} color="#22c55e" />
         <StatPill label="Absent" value={subject.absent} color="#ef4444" />
         <StatPill label="Total" value={subject.total} />
+        <StatPill
+          label="Margin"
+          value={subject.isBelowThreshold ? `−${subject.mustAttend}` : `+${subject.canBunk}`}
+          color={subject.isBelowThreshold ? '#ef4444' : '#22c55e'}
+        />
       </div>
 
       {/* Expanded Details */}
@@ -182,14 +216,39 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
                 </div>
               )}
 
-              {/* Category & Slot */}
+              {/* Category & Slot & Timetable details */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
-                  {subject.category}
+                  {subject.category || 'Category —'}
                 </span>
                 <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
                   Slot: {subject.slot}
                 </span>
+                {subject.room && subject.room !== 'N/A' && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    Room: {subject.room}
+                  </span>
+                )}
+                {subject.credit && subject.credit !== 'N/A' && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    Credits: {subject.credit}
+                  </span>
+                )}
+                {subject.courseType && subject.courseType !== 'N/A' && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    Type: {subject.courseType}
+                  </span>
+                )}
+                {subject.courseCategory && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    {subject.courseCategory}
+                  </span>
+                )}
+                {subject.academicYear && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    {subject.academicYear}
+                  </span>
+                )}
               </div>
             </div>
           </motion.div>

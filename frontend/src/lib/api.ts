@@ -6,6 +6,37 @@ export interface Session {
   timestamp: number;
 }
 
+const ACADEMIA_KEY = 'threshold_academia_cookie';
+
+export function getAcademiaCookies(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(ACADEMIA_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAcademiaCookies(cookies: string) {
+  try {
+    localStorage.setItem(ACADEMIA_KEY, cookies);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAcademiaCookies() {
+  try {
+    localStorage.removeItem(ACADEMIA_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isAcademiaLoggedIn(): boolean {
+  return !!getAcademiaCookies();
+}
+
 export function getSession(): Session | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -39,8 +70,17 @@ async function apiFetch<T>(
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (session?.cookies) {
-    headers['X-CSRF-Token'] = session.cookies;
+  if (path.startsWith('/sp/')) {
+    if (session?.cookies) {
+      headers['X-CSRF-Token'] = session.cookies;
+    }
+  } else {
+    const academia = getAcademiaCookies();
+    if (academia) {
+      headers['X-Academia-Token'] = academia;
+    } else if (session?.cookies) {
+      headers['X-CSRF-Token'] = session.cookies;
+    }
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -110,6 +150,30 @@ export async function spLogin(username: string, password: string) {
   });
 }
 
+export interface AcademiaLoginResponse {
+  success: boolean;
+  cookies?: string;
+  captcha?: { image: string; cdigest: string };
+  message?: string;
+  status?: number;
+}
+
+export async function academiaLogin(
+  username: string,
+  password: string,
+  cdigest?: string,
+  captcha?: string
+): Promise<AcademiaLoginResponse> {
+  const body: Record<string, string> = { username, password };
+  if (cdigest) body.cdigest = cdigest;
+  if (captcha) body.captcha = captcha;
+  return apiFetch<AcademiaLoginResponse>('/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function logout() {
   try {
     await apiFetch('/sp/logout', { method: 'DELETE' });
@@ -173,6 +237,19 @@ export async function fetchMarks(): Promise<MarksResponse> {
   return apiFetch('/sp/marks');
 }
 
+export interface GradeCourse {
+  code: string;
+  description: string;
+  credit: string;
+  grade: string;
+}
+
+export interface SemesterResult {
+  semester: number;
+  sgpa: number | null;
+  grades: GradeCourse[];
+}
+
 export interface Course {
   code: string;
   title: string;
@@ -232,8 +309,29 @@ export interface InternalMark {
   maxMark: string;
 }
 
-export async function fetchSpInternalMarks(): Promise<InternalMark[]> {
+export interface InternalMarksResponse {
+  internal_marks: InternalMark[];
+  error?: string;
+}
+
+export async function fetchSpInternalMarks(): Promise<InternalMarksResponse> {
   return apiFetch('/sp/internal-marks');
+}
+
+export interface SpProfile {
+  name?: string;
+  reg_number?: string;
+  photo?: string;
+  semester?: number;
+}
+
+export interface SpProfileResponse {
+  profile?: SpProfile;
+  error?: string;
+}
+
+export async function fetchSpProfile(): Promise<SpProfileResponse> {
+  return apiFetch('/sp/profile');
 }
 
 export interface User {

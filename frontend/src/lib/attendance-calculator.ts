@@ -15,6 +15,12 @@ export interface SubjectAttendance {
   mustAttend: number;
   margin: number;
   isBelowThreshold: boolean;
+  credit?: string;
+  room?: string;
+  slotType?: string;
+  courseType?: string;
+  courseCategory?: string;
+  academicYear?: string;
 }
 
 export interface OverallStats {

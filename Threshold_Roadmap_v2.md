@@ -44,16 +44,18 @@
 - Welcome/onboarding screens — unchanged.
 - Login screen on Android uses the Phase 1.6 native WebView flow (not a credentials form).
 - Web login screen (credentials → Academia) stays implemented but is not the active launch target until Phase 1 unblocks.
-- Auto-logout on token/cookie expiry, re-prompt login.
-- "Switch account" support — unchanged.
+- **Persistent login** — once a student logs in, they stay logged in (session persists across app restarts) until they manually log out. No auto-logout on token/cookie expiry. If the portal session dies server-side, data fetches fail gracefully with a retry prompt rather than kicking the user out.
+- **Switch account** ✅ — "Switch Account" button in the dashboard header opens the login flow; a successful login replaces the stored session, cancelling leaves the current login intact.
 - **Deliverable:** Welcome → native login → working dashboard shell, Android-first.
 
 ## Phase 3 — Attendance Module ⏸️→▶️ Resumes now, sourced from Student Portal
 **Goal:** Unchanged feature scope (margin calculator, danger-zone sort, P/A/T pills) — now built and tested against Student Portal data via the Android app, since that's the provably-working source. No UI changes needed if Phase 1.5's schema normalization holds.
 - **Deliverable:** Fully working attendance screen on the Android app, real data, correct math.
 
-## Phase 4 — Marks & CGPA/SGPA
-*(unchanged — Student Portal actually has an advantage here: SGPA/CGPA come pre-calculated from `studentMarksCredits.jsp`, so less client-side computation needed than originally planned for Academia-only data)*
+## Phase 4 — Marks & CGPA/SGPA ✅ Done
+*(Student Portal advantage confirmed: SGPA/CGPA come pre-calculated from `studentMarksCredits.jsp`)*
+- **Marks & Results screen** (`/dashboard/marks`): CGPA hero card, credits row (registered/earned/required), per-semester cards with SGPA badge + course grades (color-coded), "current semester pending" note. Sourced from GET `/sp/grades` (live, verified: CGPA 9.44, 4 semesters).
+- **Internal Marks screen** (`/dashboard/internal-marks`) — kept as a **separate page** (distinct endpoint `studentInternalMarkDetails.jsp`): subject list with scored/max + percentage coloring; clean empty state now (nothing uploaded yet). Pathway verified end-to-end: live endpoint returns `{"internal_marks":[]}`, parser proven against the real page format (Code | Description | Mark/Max.Mark | View) via simulated upload — **marks auto-appear once faculty publishes them**. Drill-down to component-wise marks (`studentInternalMarkDetailsInner.jsp` via POST `/sp/internal-marks-detail`) exists in the backend for a future upgrade.
 
 ## Phases 5–7.6 — (unchanged from v1)
 

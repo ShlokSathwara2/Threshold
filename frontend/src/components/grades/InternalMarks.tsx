@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpInternalMarks, type InternalMark } from '@/lib/api';
 
-export default function InternalMarks() {
+export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number }) {
   const [marks, setMarks] = useState<InternalMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,9 +12,11 @@ export default function InternalMarks() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetchSpInternalMarks();
-        if (!cancelled) setMarks(res);
+        if (!cancelled) setMarks(res.internal_marks || []);
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load internal marks');
       } finally {
@@ -22,7 +24,7 @@ export default function InternalMarks() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshKey]);
 
   if (loading) {
     return (

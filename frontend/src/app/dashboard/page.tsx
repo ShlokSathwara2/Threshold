@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isSpLoggedIn } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { subjects, overall, loading } = useAttendance();
+  const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
+  const [gradesKey, setGradesKey] = useState(0);
+
+  usePullToRefresh(async () => {
+    await refetchAttendance();
+    setGradesKey((k) => k + 1);
+  });
 
   useEffect(() => {
     if (!isSpLoggedIn()) {
@@ -29,7 +36,7 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ marginBottom: '24px' }}
+        style={{ marginBottom: '16px', paddingTop: '4px' }}
       >
         <h1 style={{
           fontSize: '1.5rem',
@@ -259,8 +266,8 @@ export default function DashboardPage() {
       )}
 
       {/* Grades & Internal Marks */}
-      <GradesSummary />
-      <InternalMarks />
+      <GradesSummary refreshKey={gradesKey} />
+      <InternalMarks refreshKey={gradesKey} />
 
     </div>
   );

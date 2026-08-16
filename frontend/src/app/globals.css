@@ -14,17 +14,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  overscroll-behavior: none;
   min-height: 100dvh;
 }
 
-/* Safe area padding for notched phones */
+/* Safe area padding for notched phones — applied per-layout, not globally */
 body {
-  padding:
-    env(safe-area-inset-top, 0px)
-    env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px)
-    env(safe-area-inset-left, 0px);
+  overscroll-behavior: none;
 }
 
 a {
@@ -50,19 +45,7 @@ input:focus, button:focus-visible {
   outline-offset: 2px;
 }
 
-/* Prevent rubber-banding on iOS */
-@supports (-webkit-touch-callout: none) {
-  body {
-    position: fixed;
-    width: 100%;
-    height: 100%;
-  }
-  #root, #__next {
-    height: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
+/* Prevent rubber-banding — overscroll-behavior covers iOS/Android */
 
 /* Get Started sliding arrow button */
 .get-started-btn {
@@ -118,6 +101,23 @@ input:focus, button:focus-visible {
 }
 
 .get-started-btn:hover .get-started-btn__text {
+  transform: translateX(-20px);
+}
+
+/* Tap on mobile: run the same sweep to completion, then redirect */
+.get-started-btn:active .get-started-btn__slider {
+  left: calc(100% - 48px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.get-started-btn--animating .get-started-btn__slider {
+  left: calc(100% - 48px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.get-started-btn--animating .get-started-btn__text {
   transform: translateX(-20px);
 }
 
@@ -252,6 +252,36 @@ input:focus, button:focus-visible {
   box-shadow: 0 0 0 4px #8b5cf6;
 }
 
+/* Tap on mobile: instant press feedback while the submit animation plays */
+.arrow-btn--primary:active {
+  box-shadow: 0 0 0 6px #8b5cf6;
+  border-radius: 12px;
+  color: #ffffff;
+  scale: 0.97;
+}
+
+.arrow-btn--primary:active .arrow-btn__slider {
+  width: 220px;
+  height: 220px;
+  opacity: 1;
+  background: #6366f1;
+}
+
+.arrow-btn--primary:active .arrow-btn__svg--arr1 {
+  right: -25%;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary:active .arrow-btn__svg--arr2 {
+  left: 16px;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary:active .arrow-btn__text {
+  transform: translateX(12px);
+  color: #ffffff;
+}
+
 .arrow-btn--primary .arrow-btn__slider {
   position: absolute;
   top: 50%;
@@ -305,6 +335,40 @@ input:focus, button:focus-visible {
   margin-left: 0;
   transform: translateX(-12px);
   transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes ptr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.arrow-btn--primary.arrow-btn--animating {
+  box-shadow: 0 0 0 6px #8b5cf6;
+  border-radius: 12px;
+  color: #ffffff;
+  scale: 0.97;
+}
+
+.arrow-btn--primary.arrow-btn--animating .arrow-btn__slider {
+  width: 220px;
+  height: 220px;
+  opacity: 1;
+  background: #6366f1;
+}
+
+.arrow-btn--primary.arrow-btn--animating .arrow-btn__svg--arr1 {
+  right: -25%;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary.arrow-btn--animating .arrow-btn__svg--arr2 {
+  left: 16px;
+  fill: #ffffff;
+}
+
+.arrow-btn--primary.arrow-btn--animating .arrow-btn__text {
+  transform: translateX(12px);
+  color: #ffffff;
 }
 
 .arrow-btn--primary:hover .arrow-btn__text {

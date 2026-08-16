@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpGrades, type GradesResponse, type SemesterGrades } from '@/lib/api';
 
-export default function GradesSummary() {
+export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number }) {
   const [data, setData] = useState<GradesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -13,6 +13,8 @@ export default function GradesSummary() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetchSpGrades();
         if (!cancelled) setData(res);
@@ -23,7 +25,7 @@ export default function GradesSummary() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshKey]);
 
   if (loading) {
     return (

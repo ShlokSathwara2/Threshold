@@ -1,0 +1,235 @@
+"use client";
+
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import {
+  isSpLoggedIn,
+  fetchSpProfile,
+  fetchUser,
+  isAcademiaLoggedIn,
+  type SpProfile,
+  type User,
+} from '@/lib/api';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
+
+function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+  if (!value) return null;
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '12px 4px',
+      borderBottom: '1px solid rgba(255,255,255,0.05)',
+    }}>
+      <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{label}</span>
+      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white', textAlign: 'right' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<SpProfile | null>(null);
+  const [academia, setAcademia] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [spRes, acaRes] = await Promise.allSettled([
+        fetchSpProfile(),
+        isAcademiaLoggedIn()
+          ? fetchUser()
+          : Promise.resolve(null as User | null),
+      ]);
+      if (spRes.status === 'fulfilled' && spRes.value.profile) {
+        setProfile(spRes.value.profile);
+      }
+      if (acaRes.status === 'fulfilled' && acaRes.value) {
+        setAcademia(acaRes.value);
+      }
+      if (spRes.status === 'rejected' && acaRes.status === 'rejected') {
+        throw new Error('Could not load profile data');
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isSpLoggedIn()) {
+      router.push('/sp-login');
+      return;
+    }
+    load();
+  }, [router, load]);
+
+  usePullToRefresh(load);
+
+  const name = profile?.name || academia?.name;
+  const initials = (name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('') || '?';
+
+  return (
+    <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ marginBottom: '16px', paddingTop: '4px' }}
+      >
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+          Profile
+        </h1>
+        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          Your student details from the portal
+        </p>
+      </motion.div>
+
+      {loading ? (
+        <div style={{
+          padding: '24px',
+          borderRadius: '16px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          textAlign: 'center',
+        }}>
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+            Loading profile…
+          </p>
+        </div>
+      ) : error && !profile && !academia ? (
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          background: 'rgba(239, 68, 68, 0.06)',
+          border: '1px solid rgba(239, 68, 68, 0.15)',
+        }}>
+          <p style={{ color: '#fca5a5', fontSize: '0.78rem', margin: 0 }}>{error}</p>
+        </div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={{
+            borderRadius: '20px',
+            background: 'linear-gradient(160deg, rgba(139, 92, 246, 0.12), rgba(255,255,255,0.02))',
+            border: '1px solid rgba(139, 92, 246, 0.2)',
+            padding: '20px',
+            marginBottom: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {profile?.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.photo}
+                alt="Student"
+                style={{
+                  width: '72px',
+                  height: '72px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid rgba(139, 92, 246, 0.5)',
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #8b5cf6, #d946ef)',
+                fontSize: '1.4rem',
+                fontWeight: 800,
+                color: 'white',
+              }}>
+                {initials}
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{
+                fontSize: '1.15rem',
+                fontWeight: 800,
+                color: 'white',
+                margin: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
+                {name || 'Student'}
+              </h2>
+              {profile?.reg_number && (
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', margin: '4px 0 0' }}>
+                  {profile.reg_number}
+                </p>
+              )}
+              {profile?.semester && (
+                <span style={{
+                  display: 'inline-flex',
+                  marginTop: '8px',
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: '#c4b5fd',
+                }}>
+                  Semester {profile.semester}
+                </span>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {(profile || academia) && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          style={{
+            borderRadius: '18px',
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            padding: '6px 16px',
+          }}
+        >
+          <InfoRow label="Program" value={academia?.program} />
+          <InfoRow label="Department" value={academia?.department} />
+          <InfoRow label="Section" value={academia?.section} />
+          <InfoRow label="Batch" value={academia?.batch} />
+          <InfoRow label="Year" value={academia?.year} />
+          <InfoRow label="Mobile" value={academia?.mobile} />
+        </motion.div>
+      )}
+
+      <p style={{
+        color: 'rgba(255,255,255,0.25)',
+        fontSize: '0.72rem',
+        textAlign: 'center',
+        marginTop: '20px',
+      }}>
+        {isAcademiaLoggedIn()
+          ? 'Linked to academia — pull down to refresh.'
+          : 'Log into academia (timetable) to unlock program, department and more details.'}
+      </p>
+    </div>
+  );
+}

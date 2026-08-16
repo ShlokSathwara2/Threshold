@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 const ThresholdText = dynamic(() => import('@/components/effects/ThresholdText'), { ssr: false });
@@ -65,6 +66,13 @@ const FeatureIcon = ({ type, color }: { type: string; color: string }) => {
 
 export default function WelcomePage() {
   const router = useRouter();
+  const [starting, setStarting] = useState(false);
+
+  const handleGetStarted = () => {
+    if (starting) return;
+    setStarting(true);
+    window.setTimeout(() => router.push('/login'), 750);
+  };
 
   return (
     <div style={{ position: 'relative', minHeight: '100dvh', background: '#09090f' }}>
@@ -162,8 +170,9 @@ export default function WelcomePage() {
             style={{ marginTop: '36px' }}
           >
             <button
-              className="get-started-btn"
-              onClick={() => router.push('/sp-login')}
+              className={`get-started-btn${starting ? ' get-started-btn--animating' : ''}`}
+              disabled={starting}
+              onClick={handleGetStarted}
             >
               <div className="get-started-btn__slider">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
