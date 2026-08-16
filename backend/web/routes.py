@@ -13,6 +13,7 @@ from scraper.student_portal.data import (
     fetch_marks_credits,
     fetch_internal_marks,
     fetch_internal_marks_detail,
+    fetch_profile,
 )
 
 router = APIRouter()
@@ -213,6 +214,19 @@ def sp_internal_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token
     try:
         scraper = StudentPortalScraper(cookie=cookie)
         return {"internal_marks": scraper.internal_marks()}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/profile")
+def sp_profile(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    try:
+        return fetch_profile(cookie)
     except Exception as e:
         import traceback
         traceback.print_exc()

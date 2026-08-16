@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
+import re
 from typing import Any
 
 import httpx
+from bs4 import BeautifulSoup
 
 from core.config import settings
 from core.schemas.models import AttendanceResponse
@@ -127,6 +130,70 @@ def fetch_marks_credits(cookie: str) -> dict[str, Any]:
         return result
     except Exception as e:
         print(f"[SP-DATA] marks-credits exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_profile(cookie: str) -> dict[str, Any]:
+    """POST studentMarksCredits.jsp and extract student identity + photo."""
+    print("[SP-DATA] fetch_profile — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = client.post(settings.sp_grades_url, data="")
+        print(f"[SP-DATA] profile status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        html = response.text
+        soup = BeautifulSoup(html, "lxml")
+        profile: dict[str, Any] = {}
+
+        m = re.search(r"\bRA\d{9,15}\b", html)
+        if m:
+            profile["reg_number"] = m.group(0)
+
+        for sel in (
+            "span[id*='tudent'][id*='ame']",
+            "td[id*='tudent'][id*='ame']",
+            "span[id*='Name']",
+            "td[id*='Name']",
+            "td[class*='student']",
+        ):
+            el = soup.select_one(sel)
+            if el:
+                text = el.get_text(strip=True)
+                if text and len(text) > 2:
+                    profile["name"] = text
+                    break
+
+        photo_src = None
+        for img in soup.find_all("img"):
+            src = img.get("src") or img.get("data-src") or ""
+            low = src.lower()
+            if not src or "captcha" in low or "logo" in low:
+                continue
+            if "photo" in low or "student" in low or "profile" in low or low.startswith("data:"):
+                photo_src = src
+                break
+
+        if photo_src:
+            try:
+                url = photo_src if photo_src.startswith("http") else f"{settings.sp_base_url}{photo_src}"
+                img_resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                if img_resp.status_code == 200 and img_resp.content:
+                    profile["photo"] = (
+                        "data:image/jpeg;base64," + base64.b64encode(img_resp.content).decode()
+                    )
+            except Exception as e:
+                print(f"[SP-DATA] profile photo fetch failed: {e}")
+
+        return {"profile": profile}
+    except Exception as e:
+        print(f"[SP-DATA] fetch_profile exception: {e}")
         return {"error": str(e)}
     finally:
         client.close()
