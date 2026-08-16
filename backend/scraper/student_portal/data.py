@@ -156,6 +156,21 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
         if m:
             profile["reg_number"] = m.group(0)
 
+        semester = None
+        m = re.search(r"(?i)semester\s*:?\s*(\d{1,2})", html)
+        if m:
+            try:
+                semester = int(m.group(1))
+            except ValueError:
+                semester = None
+        if semester is None:
+            grades = StudentPortalParser().parse_grades(html)
+            semesters = grades.get("semesters") or []
+            if semesters:
+                semester = semesters[-1]["semester"] + 1
+        if semester is not None:
+            profile["semester"] = semester
+
         for sel in (
             "span[id*='tudent'][id*='ame']",
             "td[id*='tudent'][id*='ame']",
