@@ -135,6 +135,8 @@ class AcademiaParser:
         courses: list[Course] = []
         seen: set[str] = set()
 
+        reg_number = extract_reg_number(page_html)
+
         for row in rows:
             cells = row.find_all("td")
             if len(cells) < 11:
@@ -144,7 +146,7 @@ class AcademiaParser:
                 seen.add(course.code)
                 courses.append(course)
 
-        return CourseResponse(courses=courses, status=200)
+        return CourseResponse(regNumber=reg_number, courses=courses, status=200)
 
     def _parse_course_row(self, cells) -> Course | None:
         if len(cells) < 11:
