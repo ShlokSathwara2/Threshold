@@ -282,6 +282,14 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
                 f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp",
                 data="",
             ),
+            "profile": client.post(
+                f"{settings.sp_base_url}{settings.sp_context_path}/students/report/studentProfile.jsp",
+                data="",
+            ),
+            "home": client.post(
+                f"{settings.sp_base_url}{settings.sp_context_path}/students/loginManager/UserHomePage.jsp",
+                data="",
+            ),
         }
         all_links: set[str] = set()
         for name, resp in pages.items():
@@ -298,6 +306,10 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
             "links": sorted(all_links)[:400],
             "link_count": len(all_links),
             "page_status": {k: v.status_code for k, v in pages.items()},
+            "snippets": {
+                k: re.findall(r"(?i)(?:student\s*name|register\s*no|email\s*id|faculty\s*advisor)[^<]{0,120}", v.text)[:5]
+                for k, v in pages.items()
+            },
         }
     except Exception as e:
         return {"error": str(e), "status": 500}
