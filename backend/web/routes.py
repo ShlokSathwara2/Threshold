@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
 
+from core.config import settings
 from core.schemas.models import LoginResponse
 from scraper.auth import AuthService
 from scraper.workflow import AcademiaScraper
