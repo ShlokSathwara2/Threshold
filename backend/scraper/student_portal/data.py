@@ -198,8 +198,8 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
     try:
         _init_session(client)
 
-        # 1. Fetch the main dashboard page — has photo, name, reg number
-        dash_url = f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp"
+        # 1. Fetch the profile page — has name, reg, email, advisors
+        dash_url = f"{settings.sp_base_url}{settings.sp_context_path}/students/report/studentProfile.jsp"
         dash_resp = client.post(dash_url, data="")
         print(f"[SP-DATA] dashboard status: {dash_resp.status_code}")
 
@@ -213,7 +213,7 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
         grades_soup = BeautifulSoup(grades_html, "lxml") if grades_html else None
         print(f"[SP-DATA] grades status: {grades_resp.status_code}")
 
-        # ── Label/value rows from the dashboard table ────────────
+        # ── Label/value rows from the profile table ────────────
         fields = _extract_dashboard_fields(dash_soup)
         for key, value in fields.items():
             if key not in profile:

@@ -296,6 +296,7 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
             ),
         }
         all_links: set[str] = set()
+        cal_matches: dict[str, list[str]] = {}
         for name, resp in pages.items():
             links = sorted(set(re.findall(r"['\"]([^'\"]*\.(?:jsp|do)[^'\"]*)['\"]", resp.text)))
             all_links.update(links)
@@ -303,18 +304,18 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
                 r"(?i)[^\"']{0,80}(?:calendar|planner|day[\s-]*order)[^\"']{0,80}",
                 resp.text,
             )
+            cal_matches[name] = [c.strip()[:160] for c in cal[:20]]
             print(f"[PROBE] {name}: status={resp.status_code} links={len(links)} cal-matches={len(cal)}")
-            for c in cal[:20]:
-                print(f"[PROBE]   cal: {c.strip()[:160]}")
         return {
             "links": sorted(all_links)[:400],
             "link_count": len(all_links),
             "page_status": {k: v.status_code for k, v in pages.items()},
+            "cal_matches": cal_matches,
             "snippets": {
                 k: re.findall(r"(?i)(?:student\s*name|register\s*no|email\s*id|faculty\s*advisor)[^<]{0,120}", v.text)[:5]
                 for k, v in pages.items()
             },
-            "profile_inner_text": pages.get("profile_inner", None).text[:3000] if "profile_inner" in pages else None,
+            "home_text": pages.get("home", None).text[:4000] if "home" in pages else None,
             "profile_text": pages.get("profile", None).text[:6000] if "profile" in pages else None,
         }
     except Exception as e:
