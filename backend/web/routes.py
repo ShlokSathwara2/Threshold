@@ -13,6 +13,7 @@ from scraper.student_portal.workflow import StudentPortalScraper
 from scraper.student_portal.data import (
     _build_client,
     _init_session,
+    check_sp_session,
     fetch_attendance,
     fetch_attendance_detail,
     fetch_marks_credits,
@@ -193,6 +194,20 @@ async def sp_login_verify(body: dict):
 @router.delete("/sp/logout")
 def sp_logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
     return sp_auth_service.logout(x_csrf_token)
+
+
+@router.get("/sp/check")
+def sp_check(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Keepalive probe — is the SP session still valid?"""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"alive": False}
+    try:
+        return check_sp_session(cookie)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"alive": False, "error": str(e)}
 
 
 def _get_sp_cookie(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")) -> str:

@@ -16,6 +16,7 @@ type AnimType = typeof animations[number];
 
 export default function SpLoginPage() {
   const router = useRouter();
+  const [expired] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('expired') === '1');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [captcha, setCaptcha] = useState('');
@@ -209,6 +210,30 @@ export default function SpLoginPage() {
           }}>
             {step === 'credentials' ? 'Log in with your SRM credentials' : 'Solve the CAPTCHA below'}
           </p>
+
+          {expired && step === 'credentials' && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                padding: '11px 13px',
+                borderRadius: '12px',
+                background: 'rgba(245,158,11,0.12)',
+                border: '1px solid rgba(245,158,11,0.35)',
+                marginBottom: '16px',
+              }}
+            >
+              <p style={{
+                margin: 0,
+                color: '#fbbf24',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                lineHeight: 1.5,
+              }}>
+                Your session expired while you were away. Log in again to continue.
+              </p>
+            </motion.div>
+          )}
 
           {/* Step 1: NetID + Password */}
           {step === 'credentials' && (

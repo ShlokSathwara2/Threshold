@@ -41,6 +41,26 @@ def _init_session(client: httpx.Client) -> None:
     client.post(url, data="")
 
 
+def check_sp_session(cookie: str) -> dict:
+    """Cheap probe: is the SP session still valid (not bounced to login)?"""
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        resp = client.post(settings.sp_academic_calendar_url, data="")
+        html = resp.text
+        alive = (
+            resp.status_code == 200
+            and "youLogin" not in html
+            and "Please wait login screen" not in html
+        )
+        return {"alive": alive}
+    except Exception as e:
+        print(f"[SP-DATA] check_sp_session exception: {e}")
+        return {"alive": False, "error": str(e)}
+    finally:
+        client.close()
+
+
 def fetch_attendance(cookie: str) -> AttendanceResponse:
     """POST studentAttendanceDetails.jsp and parse into AttendanceResponse."""
     print("[SP-DATA] fetch_attendance — cookie present:", bool(cookie))

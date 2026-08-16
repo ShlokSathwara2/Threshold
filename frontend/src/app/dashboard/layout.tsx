@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { isSpLoggedIn, clearSession, getSession } from '@/lib/api';
+import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession } from '@/lib/api';
+import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
-import FluidGlassLens from '@/components/effects/FluidGlassLens';
+import BrandWord from '@/components/brand/BrandWord';
 
 const navItems = [
   { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
@@ -29,6 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isSpLoggedIn()) {
@@ -37,11 +39,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     const session = getSession();
     if (session?.user) setUser(session.user);
+    fetchSpProfile()
+      .then((res) => {
+        if (res.profile?.name) setUser(res.profile.name as string);
+      })
+      .catch(() => {
+        /* keep the username fallback */
+      });
+  }, [router]);
+
+  // Keepalive: probe the SP session periodically; when the cookie dies,
+  // log the user out so they re-enter credentials.
+  useEffect(() => {
+    if (!isSpLoggedIn()) return;
+    let destroyed = false;
+    const checkSession = async () => {
+      const { alive } = await checkSpSession();
+      if (!destroyed && !alive) {
+        clearSession();
+        router.push('/sp-login?expired=1');
+      }
+    };
+    const onVisible = () => {
+      if (!document.hidden) checkSession();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(checkSession, 3 * 60 * 1000);
+    checkSession();
+    return () => {
+      destroyed = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
   }, [router]);
 
   const handleLogout = () => {
     clearSession();
-    router.push('/sp-login');
+    router.push('/welcome');
   };
 
   const handleSwitchAccount = () => {
@@ -96,7 +130,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           }}>
-            {pageTitles[pathname] || 'Threshold'}
+            {pathname === '/dashboard' ? (
+              <BrandWord text="THRESHOLD" fontSize="1.2rem" />
+            ) : (
+              pageTitles[pathname] || 'Threshold'
+            )}
           </h1>
         </div>
 
@@ -229,21 +267,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       {/* Main Content */}
-      <main
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          padding: '10px 16px',
-          paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
-        }}
-      >
-        {children}
-      </main>
-
-      {/* True 3D fluid glass backdrop (pointer-events none) */}
-      <FluidGlassLens />
+      <PullRefresh mainRef={mainRef}>
+        <main
+          ref={mainRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            padding: '10px 16px',
+            paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
+          }}
+        >
+          {children}
+        </main>
+      </PullRefresh>
 
       {/* Bottom navigation */}
       <BottomNav />

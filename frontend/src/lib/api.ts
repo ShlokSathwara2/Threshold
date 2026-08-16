@@ -179,6 +179,7 @@ export async function logout() {
     await apiFetch('/sp/logout', { method: 'DELETE' });
   } finally {
     clearSession();
+    clearAcademiaCookies();
   }
 }
 
@@ -361,6 +362,7 @@ export async function fetchUser(): Promise<User> {
 export interface TimetableSlot {
   day: string;
   hour: number;
+  time: string;
   courseCode: string;
   courseTitle: string;
   slot: string;
@@ -382,26 +384,37 @@ export async function fetchTimetable(): Promise<TimetableResponse> {
 
 export interface CalendarDay {
   date: string;
-  day: number;
-  type: 'holiday' | 'working';
-  dayOfWeek: string;
+  day: string;
+  event: string;
+  dayOrder: string;
 }
 
 export interface CalendarMonth {
   month: string;
-  year: number;
+  year?: number;
   days: CalendarDay[];
 }
 
 export interface CalendarResponse {
   error?: boolean;
   message?: string;
+  today?: CalendarDay | null;
+  tomorrow?: CalendarDay | null;
+  index?: number;
   calendar: CalendarMonth[];
   status: number;
 }
 
 export async function fetchCalendar(): Promise<CalendarResponse> {
-  return apiFetch('/calendar');
+  return apiFetch('/sp/calendar');
+}
+
+export async function checkSpSession(): Promise<{ alive: boolean }> {
+  try {
+    return await apiFetch('/sp/check');
+  } catch {
+    return { alive: false };
+  }
 }
 
 export interface SmartResponse {
