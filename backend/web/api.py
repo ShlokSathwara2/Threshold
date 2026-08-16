@@ -19,7 +19,7 @@ print(f"[CORS] Allowed origins: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins + ["https://localhost", "capacitor://localhost"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

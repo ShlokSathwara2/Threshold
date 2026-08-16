@@ -9,7 +9,10 @@ class Settings(BaseSettings):
     course_page_name: str = "My_Time_Table_2023_24"
     calendar_page_name: str = "Academic_Planner_2025_26_EVEN"
     port: int = 8000
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:3000,https://localhost,capacitor://localhost,"
+        "https://threshold-jet.vercel.app"
+    )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
