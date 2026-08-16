@@ -17,7 +17,7 @@ from scraper.parser import AcademiaParser
 from scraper.timetable import TimetableBuilder
 
 
-DAY_NAMES = {1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri"}
+DAY_NAMES = {1: "DO-1", 2: "DO-2", 3: "DO-3", 4: "DO-4", 5: "DO-5"}
 
 
 class AcademiaScraper:
@@ -150,7 +150,7 @@ class AcademiaScraper:
                         )
 
             if schedule:
-                day_order = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4}
+                day_order = {"DO-1": 0, "DO-2": 1, "DO-3": 2, "DO-4": 3, "DO-5": 4}
                 schedule.sort(key=lambda s: (day_order.get(s.day, 99), s.hour))
                 return schedule
 
