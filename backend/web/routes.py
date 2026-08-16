@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
 
@@ -8,6 +10,8 @@ from scraper.student_portal.auth import StudentPortalAuth
 from scraper.student_portal import browser_login
 from scraper.student_portal.workflow import StudentPortalScraper
 from scraper.student_portal.data import (
+    _build_client,
+    _init_session,
     fetch_attendance,
     fetch_attendance_detail,
     fetch_marks_credits,
@@ -259,6 +263,30 @@ def sp_profile(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/probe-pages")
+def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """TEMP: discover portal page inventory from the main menu (Phase 6)."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    try:
+        client = _build_client(cookie)
+        _init_session(client)
+        resp = client.get(
+            f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp"
+        )
+        links = sorted(set(re.findall(r"['\"]([^'\"]*\.(?:jsp|do)[^'\"]*)['\"]", resp.text)))
+        menu = sorted(set(re.findall(r">([^<>]{3,60})<", resp.text)))
+        return {
+            "status": resp.status_code,
+            "length": len(resp.text),
+            "links": links[:300],
+            "link_count": len(links),
+        }
+    except Exception as e:
         return {"error": str(e), "status": 500}
 
 
