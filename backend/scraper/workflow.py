@@ -103,6 +103,7 @@ class AcademiaScraper:
                 parsed = {"grid": {}}
 
             grid = parsed.get("grid", {})
+            times = parsed.get("times", {})
             if not grid:
                 continue
 
@@ -141,6 +142,7 @@ class AcademiaScraper:
                             TimetableSlot(
                                 day=day_name,
                                 hour=hour,
+                                time=times.get(hour, ""),
                                 courseCode=course.code,
                                 courseTitle=course.title,
                                 slot=base_slot,

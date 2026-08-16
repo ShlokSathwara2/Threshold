@@ -70,3 +70,23 @@ def decode_hex_html(encoded: str) -> str:
         char = chr(int(hex_val, 16))
         decoded = decoded.replace(match.group(0), char)
     return decoded
+
+
+def decode_sanitize_html(page_html: str) -> str:
+    """Decode Zoho's `pageSanitizer.sanitize('<js-escaped html>')` wrapper.
+
+    Some academia pages embed the real content inside a JS string literal
+    (`\x22`, `\x27`, `\n`, `\/`, `\-`... escapes). When a wrapper is present
+    the escaped payload is unescaped; otherwise the input is returned as-is.
+    """
+    match = re.search(r"pageSanitizer\.sanitize\('(.*?)'\)", page_html, re.S)
+    if not match:
+        return page_html
+    blob = match.group(1)
+    blob = re.sub(r"\\x22", '"', blob)
+    blob = re.sub(r"\\x27", "'", blob)
+    blob = blob.replace(r"\n", "\n").replace(r"\t", "\t").replace(r"\r", "")
+    blob = blob.replace(r"\/", "/")
+    blob = blob.replace(r"\\", "\\")
+    blob = blob.replace(r"\-", "-")
+    return blob

@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 
 from core.constants import BROWSER_HEADERS
+from core.markup import decode_sanitize_html
 
 
 class AcademiaClient:
@@ -65,4 +66,4 @@ class AcademiaClient:
         print(f"[SCRAPER] Fetched {url} - status {response.status_code}")
         if response.status_code != 200:
             print(f"[SCRAPER] Response body: {response.text[:500]}")
-        return response.text
+        return decode_sanitize_html(response.text)

@@ -80,6 +80,7 @@ class User(BaseModel):
 class TimetableSlot(BaseModel):
     day: str
     hour: int
+    time: str = ""
     courseCode: str
     courseTitle: str
     slot: str

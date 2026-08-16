@@ -130,15 +130,31 @@ class AcademiaParser:
         )
 
     def parse_courses(self, page_html: str) -> CourseResponse:
-        soup = BeautifulSoup(page_html, "lxml")
-        rows = soup.select("table tr")
         courses: list[Course] = []
         seen: set[str] = set()
 
         reg_number = extract_reg_number(page_html)
 
-        for row in rows:
-            cells = row.find_all("td")
+        # The course table has malformed rows (missing <tr> openers), which
+        # BeautifulSoup silently drops — so operate on the raw HTML string.
+        # Locate the table that contains the "Course Code" header.
+        header_idx = re.search(r"Course\s*Code", page_html, re.I)
+        table_html = ""
+        if header_idx:
+            # Walk back to the nearest opening <table> tag
+            start = page_html.rfind("<table", 0, header_idx.start())
+            if start >= 0:
+                end = page_html.find("</table>", header_idx.start())
+                if end >= 0:
+                    table_html = page_html[start : end + len("</table>")]
+
+        if not table_html:
+            return CourseResponse(regNumber=reg_number, courses=[], status=200)
+        for chunk in re.split(r"</tr>", table_html):
+            cells = [
+                BeautifulSoup(m.group(1), "lxml").get_text(strip=True)
+                for m in re.finditer(r"<td[^>]*>(.*?)</td>", chunk, re.S)
+            ]
             if len(cells) < 11:
                 continue
             course = self._parse_course_row(cells)
@@ -152,14 +168,18 @@ class AcademiaParser:
         if len(cells) < 11:
             return None
 
-        values = [cell.get_text(strip=True) for cell in cells]
+        values = [c for c in cells]
+        code = values[1]
+        # Only accept real course codes (e.g. 21CSC302J) — skips header rows
+        if not re.fullmatch(r"\d{2}[A-Z]{2,}\d{3}[A-Z]?", code):
+            return None
         room = values[9] or "N/A"
         if room != "N/A":
             room = room[:1].upper() + room[1:]
         slot = values[8].removesuffix("-")
 
         return Course(
-            code=values[1],
+            code=code,
             title=values[2].split(" \u2013")[0],
             credit=values[3] or "N/A",
             category=values[4],
@@ -264,6 +284,7 @@ class AcademiaParser:
                 continue
 
             hour_labels = []
+            times: dict[int, str] = {}
             grid: dict[tuple[int, int], list[str]] = {}
             raw: list[tuple[int, int, str]] = []
             day_num = 0
@@ -276,13 +297,16 @@ class AcademiaParser:
 
                 first = texts[0].strip().lower()
 
+                # Time rows (FROM/TO): "FROM | 08:00 - 08:50 | ..."
+                if first in ("from", "to"):
+                    for hi, cell_text in enumerate(texts[1:]):
+                        if re.search(r"\d{1,2}:\d{2}", cell_text):
+                            times.setdefault(hi + 1, re.sub(r"\s+", " ", cell_text).strip())
+                    continue
+
                 # Hour order header row
                 if "hour" in first or "order" in first:
                     hour_labels = texts[1:]  # skip "Hour/Day Order"
-                    continue
-
-                # Time rows (FROM/TO) — skip
-                if first in ("from", "to"):
                     continue
 
                 # Day rows
@@ -303,9 +327,9 @@ class AcademiaParser:
                     continue
 
             if grid:
-                return {"grid": grid, "raw": raw}
+                return {"grid": grid, "raw": raw, "times": times, "hourLabels": hour_labels}
 
-        return {"grid": {}, "raw": []}
+        return {"grid": {}, "raw": [], "times": {}, "hourLabels": []}
 
 
 def extract_course_code(text: str) -> str:
