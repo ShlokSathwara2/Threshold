@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, useSpring } from 'framer-motion';
 
@@ -72,6 +72,7 @@ const ITEMS: NavItem[] = [
 
 const PILL_W = SLOT_W - 12;
 const PADDING = 5;
+const RADIUS = 22;
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -82,76 +83,31 @@ export default function BottomNav() {
     ITEMS.findIndex((i) => pathname === i.path)
   );
 
-  const pillX = useSpring(activeIndex * SLOT_W, { stiffness: 380, damping: 32 });
-  const [dragging, setDragging] = useState(false);
-  const [dragX, setDragX] = useState<number | null>(null);
+  const pillX = useSpring(activeIndex * SLOT_W, { stiffness: 320, damping: 30 });
   const [pulse, setPulse] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const startXRef = useRef(0);
-  const startPillRef = useRef(activeIndex * SLOT_W);
-  const movedRef = useRef(false);
-  const lastIndexRef = useRef(activeIndex);
 
   useEffect(() => {
-    lastIndexRef.current = activeIndex;
-    if (!dragging) {
-      pillX.set(activeIndex * SLOT_W);
-    }
-  }, [activeIndex, dragging, pillX]);
-
-  const navigate = useCallback((index: number) => {
-    const target = ITEMS[index];
-    if (!target) return;
+    pillX.set(activeIndex * SLOT_W);
     setPulse(true);
-    window.setTimeout(() => setPulse(false), 260);
-    pillX.set(index * SLOT_W);
-    lastIndexRef.current = index;
-    if (pathname !== target.path) {
-      window.setTimeout(() => router.push(target.path), 200);
-    }
-  }, [pathname, pillX, router]);
+    const t = window.setTimeout(() => setPulse(false), 280);
+    return () => window.clearTimeout(t);
+  }, [activeIndex, pillX]);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    startXRef.current = e.clientX;
-    startPillRef.current = lastIndexRef.current * SLOT_W;
-    movedRef.current = false;
-    setDragging(true);
-  }, []);
-
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging) return;
-    const dx = e.clientX - startXRef.current;
-    if (Math.abs(dx) > 6) movedRef.current = true;
-    if (!movedRef.current) return;
-    const max = (ITEMS.length - 1) * SLOT_W;
-    setDragX(Math.max(0, Math.min(max, startPillRef.current + dx)));
-  }, [dragging]);
-
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!dragging) return;
-    const dx = e.clientX - startXRef.current;
-    setDragging(false);
-    setDragX(null);
-    if (!movedRef.current && Math.abs(dx) < 6) {
-      // Tap: find item under finger
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const rel = e.clientX - rect.left - PADDING;
-        const idx = Math.round(rel / SLOT_W);
-        if (idx >= 0 && idx < ITEMS.length) {
-          navigate(idx);
-          return;
-        }
+  const navigate = useCallback(
+    (index: number) => {
+      const target = ITEMS[index];
+      if (!target) return;
+      if (pathname !== target.path) {
+        pillX.set(index * SLOT_W);
+        setPulse(true);
+        window.setTimeout(() => {
+          setPulse(false);
+          router.push(target.path);
+        }, 180);
       }
-    }
-    const idx = Math.round(
-      Math.max(0, Math.min((ITEMS.length - 1) * SLOT_W, startPillRef.current + dx)) / SLOT_W
-    );
-    navigate(idx);
-  }, [dragging, navigate]);
-
-  const x = dragging && dragX !== null ? dragX : pillX;
+    },
+    [pathname, pillX, router]
+  );
 
   return (
     <div
@@ -161,32 +117,26 @@ export default function BottomNav() {
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 70,
-        touchAction: 'none',
       }}
     >
       <div
-        ref={containerRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
         style={{
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
           gap: '2px',
           padding: `${PADDING}px`,
-          borderRadius: '999px',
+          borderRadius: RADIUS,
           background: 'rgba(16, 16, 28, 0.62)',
           backdropFilter: 'blur(26px) saturate(180%)',
           WebkitBackdropFilter: 'blur(26px) saturate(180%)',
           border: '1px solid rgba(255,255,255,0.12)',
           boxShadow: '0 12px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
-          cursor: 'grab',
           userSelect: 'none',
           WebkitUserSelect: 'none',
         }}
       >
-        {/* Sliding pill */}
+        {/* Static indicator pill — springs to the active item, expands on change */}
         <motion.div
           style={{
             position: 'absolute',
@@ -194,20 +144,23 @@ export default function BottomNav() {
             top: PADDING,
             width: PILL_W,
             height: `calc(100% - ${PADDING * 2}px)`,
-            borderRadius: '999px',
+            borderRadius: RADIUS - 2,
             background: 'linear-gradient(135deg, rgba(139,92,246,0.95), rgba(217,70,239,0.9))',
             boxShadow: '0 4px 22px rgba(139,92,246,0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
             border: '1px solid rgba(255,255,255,0.22)',
-            x,
-            scale: pulse ? 1.06 : 1,
+            x: pillX,
+            scale: pulse ? 1.09 : 1,
+            transition: 'scale 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         />
 
         {ITEMS.map((item, i) => {
-          const active = i === activeIndex && !dragging;
+          const active = i === activeIndex;
           return (
-            <div
+            <button
               key={item.key}
+              onClick={() => navigate(i)}
+              aria-label={item.label}
               style={{
                 position: 'relative',
                 zIndex: 1,
@@ -218,27 +171,25 @@ export default function BottomNav() {
                 justifyContent: 'center',
                 gap: '2px',
                 padding: '8px 0 7px',
-                pointerEvents: 'none',
-              }}
-            >
-              <div style={{
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
                 color: active ? 'white' : 'rgba(255,255,255,0.45)',
                 transition: 'color 0.2s',
-                transform: active ? 'scale(1.05)' : undefined,
-              }}>
+              }}
+            >
+              <div style={{ transform: active ? 'scale(1.05)' : undefined }}>
                 {item.icon}
               </div>
               <span style={{
                 fontSize: '0.52rem',
                 fontWeight: active ? 700 : 500,
-                color: active ? 'white' : 'rgba(255,255,255,0.35)',
                 letterSpacing: '0.2px',
-                transition: 'color 0.2s',
                 whiteSpace: 'nowrap',
               }}>
                 {item.label}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>

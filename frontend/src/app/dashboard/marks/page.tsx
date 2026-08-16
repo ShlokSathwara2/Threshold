@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import { isLoggedIn } from '@/lib/api';
 import { useResults } from '@/hooks/useResults';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
-import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import SubjectMarksCard from '@/components/marks/SubjectMarksCard';
 
 const GRADE_COLORS: Record<string, string> = {
@@ -98,10 +97,6 @@ export default function MarksPage() {
   const router = useRouter();
   const { semesters, cgpa, creditsRegistered, creditsEarned, creditsRequired, loading, error, refetch } = useResults();
   const { marks: subjectMarks, loading: marksLoading, error: marksError, semester, refetch: refetchMarks } = useSubjectMarks();
-
-  usePullToRefresh(async () => {
-    await Promise.all([refetch(), refetchMarks()]);
-  });
 
   useEffect(() => {
     if (!isLoggedIn()) {

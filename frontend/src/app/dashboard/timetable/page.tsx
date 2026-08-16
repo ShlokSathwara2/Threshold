@@ -13,7 +13,6 @@ import {
   type TimetableSlot,
   type TimetableResponse,
 } from '@/lib/api';
-import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const CACHE_KEY = 'threshold_timetable_cache';
 
@@ -106,11 +105,6 @@ export default function TimetablePage() {
       fetchLive();
     }
   }, [academiaReady, fetchLive]);
-
-  usePullToRefresh(() => {
-    if (isAcademiaLoggedIn()) return fetchLive();
-    return Promise.resolve();
-  });
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

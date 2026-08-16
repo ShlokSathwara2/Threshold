@@ -11,7 +11,6 @@ import {
   type SpProfile,
   type User,
 } from '@/lib/api';
-import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   if (!value) return null;
@@ -71,8 +70,6 @@ export default function ProfilePage() {
     }
     load();
   }, [router, load]);
-
-  usePullToRefresh(load);
 
   const name = profile?.name || academia?.name;
   const initials = (name || '?')

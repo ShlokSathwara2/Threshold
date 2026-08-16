@@ -5,13 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isLoggedIn } from '@/lib/api';
 import { useInternalMarks } from '@/hooks/useInternalMarks';
-import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 export default function InternalMarksPage() {
   const router = useRouter();
   const { marks, loading, error, refetch } = useInternalMarks();
-
-  usePullToRefresh(refetch);
 
   useEffect(() => {
     if (!isLoggedIn()) {

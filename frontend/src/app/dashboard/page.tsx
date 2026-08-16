@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isSpLoggedIn } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
-import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 
@@ -13,11 +12,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
   const [gradesKey, setGradesKey] = useState(0);
-
-  usePullToRefresh(async () => {
-    await refetchAttendance();
-    setGradesKey((k) => k + 1);
-  });
 
   useEffect(() => {
     if (!isSpLoggedIn()) {

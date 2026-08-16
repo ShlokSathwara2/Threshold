@@ -1,10 +1,9 @@
 "use client";
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { isSpLoggedIn, clearSession, getSession } from '@/lib/api';
-import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
 import FluidGlassLens from '@/components/effects/FluidGlassLens';
 
@@ -30,7 +29,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const mainRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isSpLoggedIn()) {
@@ -231,21 +229,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       {/* Main Content */}
-      <PullRefresh mainRef={mainRef}>
-        <main
-          ref={mainRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            padding: '10px 16px',
-            paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
-          }}
-        >
-          {children}
-        </main>
-      </PullRefresh>
+      <main
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          padding: '10px 16px',
+          paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
+        {children}
+      </main>
 
       {/* True 3D fluid glass backdrop (pointer-events none) */}
       <FluidGlassLens />
