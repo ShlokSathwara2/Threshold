@@ -136,76 +136,177 @@ def fetch_marks_credits(cookie: str) -> dict[str, Any]:
 
 
 def fetch_profile(cookie: str) -> dict[str, Any]:
-    """POST studentMarksCredits.jsp and extract student identity + photo."""
+    """Fetch the SP dashboard (HRDSystem.jsp) for photo + name + reg, then grades for semester."""
     print("[SP-DATA] fetch_profile — cookie present:", bool(cookie))
 
     client = _build_client(cookie)
     try:
         _init_session(client)
-        response = client.post(settings.sp_grades_url, data="")
-        print(f"[SP-DATA] profile status: {response.status_code}")
 
-        if response.status_code != 200:
-            return {"error": f"HTTP {response.status_code}"}
+        # 1. Fetch the main dashboard page — has photo, name, reg number
+        dash_url = f"{settings.sp_base_url}{settings.sp_context_path}/students/template/HRDSystem.jsp"
+        dash_resp = client.post(dash_url, data="")
+        print(f"[SP-DATA] dashboard status: {dash_resp.status_code}")
 
-        html = response.text
-        soup = BeautifulSoup(html, "lxml")
         profile: dict[str, Any] = {}
+        dash_html = dash_resp.text if dash_resp.status_code == 200 else ""
+        dash_soup = BeautifulSoup(dash_html, "lxml") if dash_html else None
 
-        m = re.search(r"\bRA\d{9,15}\b", html)
-        if m:
-            profile["reg_number"] = m.group(0)
+        # 2. Fetch grades page for semester + reg fallback
+        grades_resp = client.post(settings.sp_grades_url, data="")
+        grades_html = grades_resp.text if grades_resp.status_code == 200 else ""
+        grades_soup = BeautifulSoup(grades_html, "lxml") if grades_html else None
+        print(f"[SP-DATA] grades status: {grades_resp.status_code}")
 
+        # ── Reg number ──────────────────────────────────────────
+        for html_src in (dash_html, grades_html):
+            m = re.search(r"\bRA\d{9,15}\b", html_src)
+            if m:
+                profile["reg_number"] = m.group(0)
+                break
+
+        # ── Semester ────────────────────────────────────────────
         semester = None
-        m = re.search(r"(?i)semester\s*:?\s*(\d{1,2})", html)
-        if m:
-            try:
-                semester = int(m.group(1))
-            except ValueError:
-                semester = None
-        if semester is None:
-            grades = StudentPortalParser().parse_grades(html)
+        for html_src in (grades_html, dash_html):
+            m = re.search(r"(?i)semester\s*:?\s*(\d{1,2})", html_src)
+            if m:
+                try:
+                    semester = int(m.group(1))
+                except ValueError:
+                    semester = None
+                break
+        if semester is None and grades_html:
+            grades = StudentPortalParser().parse_grades(grades_html)
             semesters = grades.get("semesters") or []
             if semesters:
                 semester = semesters[-1]["semester"] + 1
         if semester is not None:
             profile["semester"] = semester
 
-        for sel in (
-            "span[id*='tudent'][id*='ame']",
-            "td[id*='tudent'][id*='ame']",
-            "span[id*='Name']",
-            "td[id*='Name']",
-            "td[class*='student']",
-        ):
-            el = soup.select_one(sel)
-            if el:
-                text = el.get_text(strip=True)
-                if text and len(text) > 2:
-                    profile["name"] = text
-                    break
+        # ── Name ────────────────────────────────────────────────
+        # Try dashboard first (it shows the student's name prominently)
+        if dash_soup:
+            for sel in (
+                "span[id*='tudent'][id*='ame']",
+                "td[id*='tudent'][id*='ame']",
+                "span[id*='Name']",
+                "td[id*='Name']",
+                "td[class*='student']",
+                "span[id*='name']",
+                "div[id*='name']",
+                "div[id*='Name']",
+                # Common SP dashboard selectors
+                "span[style*='font-weight']",
+                "b[id*='name']",
+                "b[id*='Name']",
+                "strong[id*='name']",
+                "label[id*='name']",
+                "label[id*='Name']",
+            ):
+                el = dash_soup.select_one(sel)
+                if el:
+                    text = el.get_text(strip=True)
+                    if text and len(text) > 2 and not any(
+                        skip in text.lower() for skip in ("welcome", "menu", "dashboard", "logout", "password", "home")
+                    ):
+                        profile["name"] = text
+                        break
 
-        photo_src = None
-        for img in soup.find_all("img"):
-            src = img.get("src") or img.get("data-src") or ""
-            low = src.lower()
-            if not src or "captcha" in low or "logo" in low:
+        # Fallback: regex for name patterns on dashboard
+        if "name" not in profile and dash_html:
+            for pattern in (
+                r"(?i)(?:student\s*name|name)\s*[:.\-]\s*([A-Z][A-Za-z\s]{2,30})",
+                r"(?i)Welcome\s+(?:to|,)\s*([A-Z][A-Za-z\s]{2,30})",
+                r"(?i)>\s*([A-Z][A-Za-z]{2,15}\s+[A-Z][A-Za-z]{2,15})\s*<",
+            ):
+                m = re.search(pattern, dash_html)
+                if m:
+                    name = m.group(1).strip()
+                    if len(name) > 3 and not any(
+                        skip in name.lower() for skip in ("welcome", "srm", "student", "portal")
+                    ):
+                        profile["name"] = name
+                        break
+
+        # Also try the grades page for name
+        if "name" not in profile and grades_soup:
+            for sel in (
+                "span[id*='tudent'][id*='ame']",
+                "td[id*='tudent'][id*='ame']",
+                "span[id*='Name']",
+                "td[id*='Name']",
+            ):
+                el = grades_soup.select_one(sel)
+                if el:
+                    text = el.get_text(strip=True)
+                    if text and len(text) > 2:
+                        profile["name"] = text
+                        break
+
+        # ── Photo ───────────────────────────────────────────────
+        # Dashboard is where the student photo lives
+        for soup_src in (dash_soup, grades_soup):
+            if not soup_src:
                 continue
-            if "photo" in low or "student" in low or "profile" in low or low.startswith("data:"):
-                photo_src = src
+            for img in soup_src.find_all("img"):
+                src = img.get("src") or img.get("data-src") or ""
+                if not src:
+                    continue
+                low = src.lower()
+                if "captcha" in low or "logo" in low or "icon" in low:
+                    continue
+                # On the dashboard, student photos are usually in a specific location
+                if (
+                    "photo" in low
+                    or "student" in low
+                    or "profile" in low
+                    or "image" in low
+                    or "pic" in low
+                    or "avatar" in low
+                    or "display" in low
+                    or "/data:image" in src
+                    or "getstudentphoto" in low
+                    or "showimage" in low
+                    or "photograph" in low
+                    or low.endswith((".jpg", ".jpeg", ".png", ".gif"))
+                ):
+                    # Skip tiny icons/badges
+                    width = img.get("width", "")
+                    height = img.get("height", "")
+                    try:
+                        w = int(str(width).replace("px", ""))
+                        h = int(str(height).replace("px", ""))
+                        if w < 20 or h < 20:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                    photo_src = src
+                    break
+            if profile.get("photo"):
                 break
+        else:
+            photo_src = None
 
-        if photo_src:
+        if photo_src and "photo" not in profile:
             try:
                 url = photo_src if photo_src.startswith("http") else f"{settings.sp_base_url}{photo_src}"
                 img_resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                if img_resp.status_code == 200 and img_resp.content:
+                if img_resp.status_code == 200 and img_resp.content and len(img_resp.content) > 200:
                     profile["photo"] = (
                         "data:image/jpeg;base64," + base64.b64encode(img_resp.content).decode()
                     )
+                    print(f"[SP-DATA] profile photo fetched: {len(img_resp.content)} bytes")
             except Exception as e:
                 print(f"[SP-DATA] profile photo fetch failed: {e}")
 
+        # ── Reg from img src ────────────────────────────────────
+        # Sometimes the photo URL itself contains the reg number
+        if "reg_number" not in profile and photo_src:
+            m = re.search(r"(RA\d{9,15})", photo_src)
+            if m:
+                profile["reg_number"] = m.group(1)
+
+        print(f"[SP-DATA] profile result: {list(profile.keys())}")
         return {"profile": profile}
     except Exception as e:
         print(f"[SP-DATA] fetch_profile exception: {e}")

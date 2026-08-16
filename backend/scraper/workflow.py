@@ -17,6 +17,9 @@ from scraper.parser import AcademiaParser
 from scraper.timetable import TimetableBuilder
 
 
+DAY_NAMES = {1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri"}
+
+
 class AcademiaScraper:
     """Orchestrate scraping of all Academia data pages."""
 
@@ -55,6 +58,7 @@ class AcademiaScraper:
             schedule = self.timetable_builder.build(courses, batch)
             source = "matrix"
 
+        print(f"[SCRAPER] Timetable: {len(schedule)} slots from {source} (batch={batch})")
         return TimetableResponse(
             regNumber=user.regNumber or "",
             batch=user.batch or "",
@@ -63,56 +67,88 @@ class AcademiaScraper:
         )
 
     def _unified_schedule(self, courses: CourseResponse, batch: int) -> list:
-        """Build a timetable from the Unified_Time_Table grid for the student's batch."""
+        """Build a timetable by matching course slot codes to the unified grid.
+
+        Grid layout: (day_num, hour_num) → [slot_codes]
+        Course slot: "A+X" → look up "A" and "X" in the grid
+        """
         from core.schemas.models import TimetableSlot
-        from scraper.timetable import DAY_NAMES, SLOT_MATRIX, TimetableBuilder
 
         course_by_code = {c.code: c for c in courses.courses if c.code}
+
+        # Build slot→courses reverse map: each course declares slot parts like ["A", "X"]
+        # We need to find which (day, hour) those slot parts appear in the grid
+        slot_to_courses: dict[str, list[str]] = {}  # slot_code → [course_codes]
+        for course in courses.courses:
+            if not course.code:
+                continue
+            raw_slot = course.slot.rstrip("-")
+            parts = raw_slot.split("+")
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                base_slot = part.split("-")[0]
+                slot_to_courses.setdefault(base_slot, []).append(course.code)
+
         targets = [(batch, False), (batch, True), (1, False), (2, False)]
 
         for try_batch, lower in targets:
             try:
                 url = settings.unified_timetable_url(try_batch, lower=lower)
                 html = self._fetch_page(url)
-                grid = self.parser.parse_unified_timetable(html)
+                parsed = self.parser.parse_unified_timetable(html)
             except Exception as e:
                 print(f"[SCRAPER] unified timetable fetch failed (batch={try_batch}): {e}")
-                grid = []
+                parsed = {"grid": {}}
 
+            grid = parsed.get("grid", {})
             if not grid:
                 continue
 
+            # Build reverse map: slot_code → [(day, hour)]
+            slot_positions: dict[str, list[tuple[int, int]]] = {}
+            for (day, hour), slot_codes in grid.items():
+                for sc in slot_codes:
+                    slot_positions.setdefault(sc, []).append((day, hour))
+
             schedule: list = []
             placed: set[tuple] = set()
-            for entry in grid:
-                slot = entry["slot"].rstrip("-")
-                if slot.startswith("L") and not TimetableBuilder._batch_matches(slot, batch):
+
+            for course in courses.courses:
+                if not course.code:
                     continue
-                base_slot = slot.split("-")[0]
-                time_slots = SLOT_MATRIX.get(base_slot, [])
-                if not time_slots:
-                    continue
-                for cell_text in entry["cells"].values():
-                    code = extract_course_code(cell_text)
-                    course = course_by_code.get(code) if code else None
-                    if not course:
+                raw_slot = course.slot.rstrip("-")
+                parts = raw_slot.split("+")
+                for part in parts:
+                    part = part.strip()
+                    if not part:
                         continue
-                    for day, hour in time_slots:
-                        key = (course.code, DAY_NAMES.get(day, f"Day{day}"), hour)
+                    base_slot = part.split("-")[0]
+
+                    # For lab slots, check batch
+                    if base_slot.startswith("L") and not TimetableBuilder._batch_matches(part, batch):
+                        continue
+
+                    positions = slot_positions.get(base_slot, [])
+                    for day, hour in positions:
+                        day_name = DAY_NAMES.get(day, f"Day{day}")
+                        key = (course.code, day_name, hour)
                         if key in placed:
                             continue
                         placed.add(key)
                         schedule.append(
                             TimetableSlot(
-                                day=DAY_NAMES.get(day, f"Day{day}"),
+                                day=day_name,
                                 hour=hour,
                                 courseCode=course.code,
                                 courseTitle=course.title,
-                                slot=slot,
+                                slot=base_slot,
                                 faculty=course.faculty,
                                 room=course.room,
                             )
                         )
+
             if schedule:
                 day_order = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4}
                 schedule.sort(key=lambda s: (day_order.get(s.day, 99), s.hour))
