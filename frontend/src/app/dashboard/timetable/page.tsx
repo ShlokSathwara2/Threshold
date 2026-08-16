@@ -7,12 +7,12 @@ import {
   isLoggedIn,
   isAcademiaLoggedIn,
   setAcademiaCookies,
-  clearAcademiaCookies,
   academiaLogin,
   fetchTimetable,
   type TimetableSlot,
   type TimetableResponse,
 } from '@/lib/api';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const CACHE_KEY = 'threshold_timetable_cache';
 
@@ -23,7 +23,6 @@ interface TimetableCache {
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const HOURS = [1, 2, 3, 4, 5];
 
 function loadCache(): TimetableCache | null {
   try {
@@ -92,8 +91,8 @@ export default function TimetablePage() {
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load timetable';
-      // Academia session likely expired — drop it and ask for login
-      clearAcademiaCookies();
+      // Keep the academia cookie — a transient error (deploy, timeout) shouldn't
+      // wipe the saved session. Show the error; the user can re-login if it persists.
       setError(msg);
     } finally {
       setLoading(false);
@@ -105,6 +104,10 @@ export default function TimetablePage() {
       fetchLive();
     }
   }, [academiaReady, fetchLive]);
+  usePullToRefresh(() => {
+    if (isAcademiaLoggedIn()) return fetchLive();
+    return Promise.resolve();
+  });
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +159,8 @@ export default function TimetablePage() {
     schedule
       .filter((s) => s.day === day)
       .sort((a, b) => a.hour - b.hour);
+
+  const allHours = [...new Set(schedule.map((s) => s.hour))].sort((a, b) => a - b);
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
@@ -425,7 +430,7 @@ export default function TimetablePage() {
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {HOURS.map((hour) => {
+                {allHours.map((hour) => {
                   const inHour = sessions.filter((s) => s.hour === hour);
                   if (inHour.length === 0) return null;
                   return (

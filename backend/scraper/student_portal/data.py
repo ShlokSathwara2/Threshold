@@ -213,20 +213,42 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
                         break
 
         # Fallback: regex for name patterns on dashboard
+        # IMPORTANT: strip script/style tags first so JS method names
+        # like "toLowerCase" never match the name patterns.
         if "name" not in profile and dash_html:
+            cleaned = re.sub(r"<script[^>]*>.*?</script>", " ", dash_html, flags=re.S | re.I)
+            cleaned = re.sub(r"<style[^>]*>.*?</style>", " ", cleaned, flags=re.S | re.I)
+            # Only scan body-level text nodes, not attributes
             for pattern in (
-                r"(?i)(?:student\s*name|name)\s*[:.\-]\s*([A-Z][A-Za-z\s]{2,30})",
-                r"(?i)Welcome\s+(?:to|,)\s*([A-Z][A-Za-z\s]{2,30})",
-                r"(?i)>\s*([A-Z][A-Za-z]{2,15}\s+[A-Z][A-Za-z]{2,15})\s*<",
+                r"(?i)(?:student\s*name|student\s*id)\s*[:.\-]\s*([A-Z][A-Za-z]{2,30})",
+                r"(?i)Welcome\s+(?:to|,)\s*([A-Z][A-Za-z]{2,30})",
             ):
-                m = re.search(pattern, dash_html)
+                m = re.search(pattern, cleaned)
                 if m:
                     name = m.group(1).strip()
                     if len(name) > 3 and not any(
-                        skip in name.lower() for skip in ("welcome", "srm", "student", "portal")
+                        skip in name.lower() for skip in ("welcome", "srm", "student", "portal", "javascript", "function")
                     ):
                         profile["name"] = name
                         break
+
+            if "name" not in profile:
+                # Safer: use BeautifulSoup text without script/style, then find
+                # the first "NAME" label and take the value after it
+                for script in dash_soup(["script", "style"]):
+                    script.decompose()
+                labels = dash_soup.find_all(string=re.compile(r"(?i)(name|student)"))
+                for label in labels:
+                    parent = label.parent
+                    if parent and parent.name in ("td", "span", "div", "b", "strong", "label", "p"):
+                        row_text = parent.parent.get_text(" ", strip=True) if parent.parent else ""
+                        m = re.search(r"(?i)name\s*[:.\-]\s*([A-Z][A-Za-z]{2,25}(?:\s+[A-Z][A-Za-z]{2,25}){0,3})", row_text)
+                        if m and not any(
+                            skip in m.group(1).lower()
+                            for skip in ("welcome", "srm", "student", "portal", "javascript", "function", "login", "logout")
+                        ):
+                            profile["name"] = m.group(1).strip()
+                            break
 
         # Also try the grades page for name
         if "name" not in profile and grades_soup:

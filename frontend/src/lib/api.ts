@@ -372,6 +372,30 @@ export async function fetchTimetable(): Promise<TimetableResponse> {
   return apiFetch('/timetable');
 }
 
+export interface CalendarDay {
+  date: string;
+  day: number;
+  type: 'holiday' | 'working';
+  dayOfWeek: string;
+}
+
+export interface CalendarMonth {
+  month: string;
+  year: number;
+  days: CalendarDay[];
+}
+
+export interface CalendarResponse {
+  error?: boolean;
+  message?: string;
+  calendar: CalendarMonth[];
+  status: number;
+}
+
+export async function fetchCalendar(): Promise<CalendarResponse> {
+  return apiFetch('/calendar');
+}
+
 export interface SmartResponse {
   source: 'academia' | 'student_portal';
   attendance: AttendanceResponse;
