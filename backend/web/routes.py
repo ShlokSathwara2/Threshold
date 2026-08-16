@@ -314,6 +314,7 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
                 k: re.findall(r"(?i)(?:student\s*name|register\s*no|email\s*id|faculty\s*advisor)[^<]{0,120}", v.text)[:5]
                 for k, v in pages.items()
             },
+            "profile_inner_text": pages.get("profile_inner", None).text[:3000] if "profile_inner" in pages else None,
         }
     except Exception as e:
         return {"error": str(e), "status": 500}
