@@ -19,6 +19,7 @@ from scraper.student_portal.data import (
     fetch_internal_marks,
     fetch_internal_marks_detail,
     fetch_profile,
+    fetch_academic_calendar,
 )
 
 router = APIRouter()
@@ -320,6 +321,15 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
         }
     except Exception as e:
         return {"error": str(e), "status": 500}
+
+
+@router.get("/sp/calendar")
+def sp_calendar(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Academic Calender/Planner from the Student Portal (has day orders)."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_academic_calendar(cookie).model_dump()
 
 
 @router.get("/sp/get")

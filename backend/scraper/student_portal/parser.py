@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta
+
 from bs4 import BeautifulSoup, Tag
 
 from core.schemas.models import (
     Attendance,
     AttendanceResponse,
+    CalendarDay,
+    CalendarMonth,
+    CalendarResponse,
     MarksResponse,
     Mark,
     MarksDetail,
@@ -289,6 +295,92 @@ class StudentPortalParser:
                         })
 
         return components
+
+    def parse_academic_calendar(self, html: str) -> CalendarResponse:
+        """Parse the SP Academic Calender/Planner inner page.
+
+        Table columns: DATE | DAY | STATUS | WEEK | DAY ORDER | REMARKS
+        """
+        soup = BeautifulSoup(html, "lxml")
+        days: list[CalendarDay] = []
+        working = holidays = total = None
+
+        # Stats bar (text like "94 No. of Working days 46 No. of Holidays 140 Total days")
+        text = soup.get_text(" ", strip=True)
+        m = re.search(r"(\d+)\s*No\.?\s*of\s*Working\s*days", text, re.I)
+        if m:
+            working = int(m.group(1))
+        m = re.search(r"(\d+)\s*No\.?\s*of\s*Holidays", text, re.I)
+        if m:
+            holidays = int(m.group(1))
+        m = re.search(r"(\d+)\s*Total\s*days", text, re.I)
+        if m:
+            total = int(m.group(1))
+
+        for row in soup.find_all("tr"):
+            cells = row.find_all("td")
+            if len(cells) < 6:
+                continue
+            date_txt = cells[0].get_text(strip=True)
+            if not re.match(r"\d{2}-\d{2}-\d{4}", date_txt):
+                continue
+            day_name = cells[1].get_text(strip=True)
+            status = cells[2].get_text(" ", strip=True)
+            week = cells[3].get_text(strip=True)
+            day_order = cells[4].get_text(strip=True)
+            remarks = cells[5].get_text(" ", strip=True)
+
+            # Merge into a single label: "Wk 4 · Day 5 · Working day"
+            parts = [p for p in (week, day_order, status) if p and p != "-"]
+            merged = " · ".join(parts)
+            days.append(CalendarDay(
+                date=date_txt,
+                day=day_name,
+                event=remarks if remarks and remarks != "-" else status,
+                dayOrder=merged,
+            ))
+
+        if not days:
+            return CalendarResponse(status=200, error=True, message="No calendar rows found")
+
+        # Group into months (Jul, Aug, ...)
+        months: dict[str, list[CalendarDay]] = {}
+        for d in days:
+            try:
+                month_name = datetime.strptime(d.date, "%d-%m-%Y").strftime("%B")
+            except ValueError:
+                month_name = "Unknown"
+            months.setdefault(month_name, []).append(d)
+
+        month_list = [
+            CalendarMonth(month=m, days=month_days)
+            for m, month_days in sorted(
+                months.items(),
+                key=lambda kv: datetime.strptime(kv[0], "%B") if kv[0] != "Unknown" else datetime(2100, 1, 1),
+            )
+        ]
+
+        today = tomorrow = None
+        try:
+            today_dt = datetime.now()
+            today_str = today_dt.strftime("%d-%m-%Y")
+            tomorrow_str = (today_dt + timedelta(days=1)).strftime("%d-%m-%Y")
+            for d in days:
+                if d.date == today_str:
+                    today = d
+                if d.date == tomorrow_str:
+                    tomorrow = d
+        except Exception:
+            pass
+
+        return CalendarResponse(
+            status=200,
+            today=today,
+            tomorrow=tomorrow,
+            index=len(days),
+            calendar=month_list,
+            error=False,
+        )
 
     def parse_marks_for_academia(self, html: str) -> MarksResponse:
         """Parse grades into MarksResponse format for API compatibility."""

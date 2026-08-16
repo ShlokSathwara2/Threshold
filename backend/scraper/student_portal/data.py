@@ -8,7 +8,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from core.config import settings
-from core.schemas.models import AttendanceResponse
+from core.schemas.models import AttendanceResponse, CalendarResponse
 from scraper.student_portal.parser import StudentPortalParser
 
 
@@ -402,6 +402,72 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
     except Exception as e:
         print(f"[SP-DATA] fetch_profile exception: {e}")
         return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_academic_calendar(cookie: str) -> CalendarResponse:
+    """Fetch the SP Academic Calender/Planner (with day orders).
+
+    Step 1: POST AcademicCalenderDetails.jsp — read the template <select>
+    (selTemplate value + data-fromdate/data-todate).
+    Step 2: POST AcademicCalenderDetailsInner.jsp with the template params.
+    """
+    print("[SP-DATA] fetch_academic_calendar — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+
+        page_resp = client.post(settings.sp_academic_calendar_url, data="")
+        print(f"[SP-DATA] calendar page status: {page_resp.status_code}")
+        if page_resp.status_code != 200:
+            return CalendarResponse(status=page_resp.status_code, error=True, message=f"HTTP {page_resp.status_code}")
+
+        page_soup = BeautifulSoup(page_resp.text, "lxml")
+        sel = page_soup.find("select", {"id": "selTemplate"})
+        if sel is None:
+            return CalendarResponse(status=200, error=True, message="No template selector found on calendar page")
+
+        options = sel.find_all("option")
+        if not options:
+            return CalendarResponse(status=200, error=True, message="No templates available")
+
+        # Pick the FET template (usually the first / marked FET)
+        chosen = None
+        for opt in options:
+            label = opt.get_text(strip=True).lower()
+            if "fet" in label or chosen is None:
+                chosen = opt
+        template_id = chosen.get("value") or "1"
+        from_date = chosen.get("data-fromdate", "")
+        to_date = chosen.get("data-todate", "")
+
+        year_id_el = page_soup.find("input", {"id": "hdnCurrentAcademicYearId"})
+        year_id = year_id_el.get("value", "26") if year_id_el else "26"
+
+        payload = {
+            "hdnCurrentAcademicYearId": year_id,
+            "selTemplate": template_id,
+            "hdnDayOrderTemplateId": template_id,
+            "hdnFromDate": from_date,
+            "hdnToDate": to_date,
+            "ids": "1",
+            "filter": "",
+        }
+        inner_resp = client.post(settings.sp_academic_calendar_inner_url, data=payload)
+        print(f"[SP-DATA] calendar inner status: {inner_resp.status_code}")
+
+        if inner_resp.status_code != 200:
+            return CalendarResponse(status=inner_resp.status_code, error=True, message=f"HTTP {inner_resp.status_code}")
+
+        parser = StudentPortalParser()
+        result = parser.parse_academic_calendar(inner_resp.text)
+        print(f"[SP-DATA] calendar parse: {result.index} days")
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] academic calendar exception: {e}")
+        return CalendarResponse(status=500, error=True, message=str(e))
     finally:
         client.close()
 

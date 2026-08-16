@@ -83,5 +83,13 @@ class Settings(BaseSettings):
     def sp_internal_marks_detail_url(self) -> str:
         return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentInternalMarkDetailsInner.jsp"
 
+    @property
+    def sp_academic_calendar_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/AcademicCalenderDetails.jsp"
+
+    @property
+    def sp_academic_calendar_inner_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/AcademicCalenderDetailsInner.jsp"
+
 
 settings = Settings()

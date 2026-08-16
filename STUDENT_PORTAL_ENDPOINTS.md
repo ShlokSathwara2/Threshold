@@ -227,6 +227,101 @@ Content-Type: application/x-www-form-urlencoded
 
 ---
 
+### 5. Academic Calender/Planner — **day orders** (VERIFIED 2026-08-17)
+
+```
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/AcademicCalenderDetails.jsp
+```
+
+**Auth:** Session cookies. Returns the page shell with a Template `<select id="selTemplate">`:
+
+```html
+<option value="1" data-fromdate="21-07-2026" data-todate="07-12-2026">FET Template</option>
+<option value="3" data-fromdate="21-07-2026" data-todate="20-12-2026">SAID Template</option>
+```
+
+Also has `<input id="hdnCurrentAcademicYearId" value="26">` (academic year id).
+
+**Step 2 — fetch the actual calendar:**
+
+```
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/AcademicCalenderDetailsInner.jsp
+```
+
+**Form fields:**
+
+| Field | Value |
+|-------|-------|
+| `hdnCurrentAcademicYearId` | `26` |
+| `selTemplate` | `1` (FET) |
+| `hdnDayOrderTemplateId` | `1` |
+| `hdnFromDate` | `21-07-2026` |
+| `hdnToDate` | `07-12-2026` |
+| `ids` | `1` |
+| `filter` | `""` |
+
+**Returns:** HTML with stats row + table:
+```
+94 No. of Working days  46 No. of Holidays  140 Total days
+```
+
+| Column | Content |
+|--------|---------|
+| DATE | `21-07-2026` (dd-mm-yyyy) |
+| DAY | `Tuesday` |
+| STATUS | Working day / Holiday (`.ac-badge-work` / `.ac-badge-hol`) |
+| WEEK | `Wk 1` (`.ac-week-chip`; `Wk 0` on holidays) |
+| DAY ORDER | `Day 1` .. `Day 5` (`.ac-day-chip`; empty on holidays) |
+| REMARKS | Holiday name (`Milad-un-nabi`, `Vinayagar Chathurthi`...) or `-` |
+
+**Row structure:** `<tr class="ac-tr"><td class="ac-td" data-date="...">...` — each row has 6 `td`s.
+
+> **This is the ONLY source with explicit day orders** — academia's planner has none. The day-order sequence (Day 1–5 cycling per working day, holidays skipping to `Wk 0`) drives the timetable's DO labels.
+
+**Frontend mapping:** dayOrder string built as `"Wk {n} · Day {d} · Working day"`, event = remarks (or status). Frontend shows `DO-{d}` chip per working day.
+
+---
+
+### 6. Student Profile — full details (VERIFIED 2026-08-17)
+
+```
+POST https://sp.srmist.edu.in/srmiststudentportal/students/report/studentProfile.jsp
+```
+
+**Auth:** Session cookies
+
+**Returns:** HTML with a label/value table (12 rows). Labels → parsed fields:
+
+| Label | Field key |
+|-------|-----------|
+| Student Name | `name` |
+| Student ID | `student_id` |
+| Register No. | `reg_number` |
+| Email ID | `email` |
+| Institution | `institution` |
+| Program | `program` |
+| Semester | `semester` |
+| Batch | `batch` (⚠️ usually EMPTY here — comes from academia `/user`) |
+| Section | `section` (⚠️ usually EMPTY here — comes from academia `/user`) |
+| Faculty Advisor | `faculty_advisor` |
+| Academic Advisor | `academic_advisor` |
+
+**Photo:** the student photo lives on the SPA dashboard (`HRDSystem.jsp`) — `fetch_profile` also hits that page and extracts the `<img>` (base64 data URI in response).
+
+**Backend:** `data.py::_extract_dashboard_fields(soup)` parses `tr > td,th` label→value rows; `fetch_profile` fetches `studentProfile.jsp` + grades page (semester fallback) + HRDSystem.jsp (photo).
+
+---
+
+### 7. SPA menu navigation (formId → page mapping)
+
+The SP portal is a JSP SPA. `UserHomePage.jsp` renders the menu; each item calls `funSetFormId(N)` which submits hidden form field `hdnFormId=N` to `HRDSystem.jsp`, which then loads the report JSP via `funShow(id, argURL)` → `$.post(argURL, {iden, filter, hdnFormDetails, csrfPreventionSalt})`.
+
+Known formIds (from user's menu): 8=Grade/Mark&Credit, 84=Course Status, **129=Academic Calender/Planner**, 142=Student Course Registration. The inner JSP URL for each is embedded in the page HTML as `funShow(129, "../../students/report/AcademicCalenderDetails.jsp")`.
+
+**In practice, you don't need the SPA dance** — POST the report JSP directly with session cookies (as all fetchers above do). `_init_session` (POST to `HRDSystem.jsp`) initializes the session.
+
+---
+
 ## Grade Scale
 
 | Grade | Min % | Max % | Result |
@@ -258,18 +353,26 @@ Content-Type: application/x-www-form-urlencoded
 
 | Feature | Academia | Student Portal |
 |---------|----------|----------------|
-| Attendance | ✅ | ✅ (cleaner HTML) |
+| Attendance | ✅ (page currently 403 — renamed) | ✅ (cleaner HTML) |
 | Marks/Grades | ✅ | ✅ (with SGPA/CGPA pre-calculated) |
-| Internal Marks | ❌ (manual lookup) | ✅ (dedicated page) |
-| Timetable | ✅ (derived from courses) | ❌ |
-| Calendar | ✅ | ✅ |
+| Internal Marks | ❌ (manual lookup) | ✅ (dedicated page; currently "No Record found" — not uploaded yet) |
+| Timetable | ✅ (derived from courses + unified grid) | ❌ |
+| Calendar | ✅ (planner, no day orders) | ✅ (planner WITH day orders — the source we use) |
+| Day Orders | ❌ | ✅ (AcademicCalenderDetailsInner.jsp) |
 | Courses | ✅ | ✅ |
-| User Profile | ✅ | ✅ |
+| User Profile | ✅ (batch/section) | ✅ (name/id/email/advisors — richer) |
 | Exam Results | ❌ | ✅ |
 | Credits | ❌ | ✅ (Registered/Earned/Required) |
 | CAPTCHA | Optional (sometimes triggered) | Always required (but auto-solvable) |
 | Login Complexity | Multi-step redirect | Single POST |
 | Auth Platform | Zoho Creator | JSP/Java |
+
+**Data-source decisions (as of 2026-08-17):**
+- **Timetable** → Academia (`Unified_Time_Table_2025_Batch_{N}` grid + `My_Time_Table_2023_24` courses)
+- **Calendar** → Student Portal (`AcademicCalenderDetailsInner.jsp` — only source with day orders)
+- **Attendance** → SP is more reliable (academia's `My_Attendance` currently 403)
+- **Profile** → SP (`studentProfile.jsp`), batch/section fallback to academia `/user`
+- **Batch** → academia `/user` (course page); SP shows it empty
 
 ---
 

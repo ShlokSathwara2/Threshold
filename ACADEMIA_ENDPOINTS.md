@@ -22,11 +22,15 @@ Academia is built on **Zoho Creator**. All data pages are served under the `srm_
 | Portal ID | `10002227248` | Used in login, logout, captcha, session URLs |
 | Service Name | `ZohoCreator` | Sent in login form |
 | Service URL | `https://academia.srmist.edu.in/` | Post-login redirect target |
-| Attendance Page | `My_Attendance` | Also contains Marks |
-| Course Page | `My_Time_Table_2023_24` | Contains courses, user profile, timetable derivation |
-| Calendar Page | `Academic_Planner_2025_26_EVEN` | Changes per semester (check portal for current value) |
+| Attendance Page | `My_Attendance` | ⚠️ Returns **403 "Page inaccessible"** for ODD 2026-27 (see below) |
+| Course Page | `My_Time_Table_2023_24` | ✅ Verified 200 — courses, user profile, timetable source |
+| Unified Timetable (Batch N) | `Unified_Time_Table_2025_Batch_{N}` | ✅ Verified 200 for batch 1; **batch 2+ uses lowercase `_batch_{N}`** (config has `lower=True` variant) |
+| Calendar Page | `Academic_Planner_2026_27_ODD` | ✅ Verified 200 — current semester's planner (per-semester naming) |
 
-> **⚠️ Page names change each semester.** You MUST log in with DevTools and confirm the current page names before building. The values above are from the most recent reference code.
+> **⚠️ Page names change each semester.** Verified live 2026-08-17:
+> - `My_Attendance`, `Academic_Planner_2025_26_EVEN`, `Common_Time_Table_Batch_1/2`, `Unified_Timetable_Batch_1` → **all 403/404** (renamed/removed)
+> - `My_Time_Table_2023_24`, `Unified_Time_Table_2025_Batch_1`, `Academic_Planner_2026_27_ODD` → **200 OK**
+> - Full inventory available by scanning the portal root HTML (`/srm_university/academia-academic-services/`) for page names.
 
 ---
 
@@ -197,6 +201,25 @@ GET https://academia.srmist.edu.in/srm_university/academia-academic-services/pag
 | Department | Department + Section |
 
 **Timetable derivation:** Timetable is NOT a direct endpoint — it's derived from the courses' slot values + the student's batch number against a slot-to-day/hour matrix.
+
+---
+
+### 2b. Unified Timetable (batch grid) — VERIFIED 2026-08-17
+
+```
+GET https://academia.srmist.edu.in/srm_university/academia-academic-services/page/Unified_Time_Table_2025_Batch_1
+```
+
+**Auth:** Session cookie
+
+**Returns:** HTML with a single grid table. **Layout confirmed:**
+- **Rows = Day 1..5** (the "Day Order" rows; label cells contain `Day 1` ... `Day 5`)
+- **Columns = Hour 1..12** (header row: `Hour/Day Order` then `1 2 3 ... 12`)
+- **Cells = slot codes** per (day, hour): theory slots (`A`, `A / X`, `F / X`, `B`, `G`), practicals (`P6`, `P7`...), labs (`L11`, `L12`...)
+- Cell background colors: `#F9E79F` (theory), `LightGreen` (practical), `DodgerBlue` (lab), `#F8C471` (day/hour label row), `#F1948A` (time-of-day legend)
+- `X` suffix on a slot (e.g. `A / X`, `P12/X`) marks an alternate/shared-hour slot code
+
+**Backend parser flow (`parser.py::parse_unified_timetable`):** grid `{(day_num, hour_num): [slot_codes]}` + reverse map `slot_code → [(day, hour)]`, then `workflow.py::_unified_schedule` matches each course's slot (e.g. `A1`, `L21`) to its grid positions. Batch comes from `/user` (course page). **Batch 2 grid name is lowercase `Unified_Time_Table_2025_batch_2`.**
 
 ---
 
