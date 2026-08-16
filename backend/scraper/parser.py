@@ -299,6 +299,56 @@ class AcademiaParser:
         )
 
     @staticmethod
+    def parse_unified_timetable(self, html: str) -> list[dict]:
+        """Parse the unified batch timetable grid into rows.
+
+        Format: rows = slot codes (e.g. "A1", "L3-1"), columns = days
+        (Mon..Fri), each cell holds the course that occupies that slot.
+        Returns [{"slot": "A1", "cells": {"Mon": "21CSC202J - ...", ...}}, ...]
+        """
+        soup = BeautifulSoup(html, "lxml")
+        day_map = {
+            "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri",
+        }
+
+        for table in soup.find_all("table"):
+            rows = table.find_all("tr")
+            if len(rows) < 2:
+                continue
+
+            header_cells = rows[0].find_all(["th", "td"])
+            headers = [c.get_text(strip=True).lower() for c in header_cells]
+            day_cols: list[tuple[int, str]] = []
+            for i, h in enumerate(headers):
+                for key, name in day_map.items():
+                    if h.startswith(key):
+                        day_cols.append((i, name))
+                        break
+            if not day_cols:
+                continue
+
+            grid: list[dict] = []
+            for row in rows[1:]:
+                cells = row.find_all(["td", "th"])
+                if not cells:
+                    continue
+                slot = cells[0].get_text(strip=True)
+                if not slot or not slot[0].isalpha():
+                    continue
+                entry: dict = {"slot": slot, "cells": {}}
+                for col_index, day_name in day_cols:
+                    if col_index < len(cells):
+                        text = " ".join(cells[col_index].get_text(" ", strip=True).split())
+                        if text:
+                            entry["cells"][day_name] = text
+                if entry["cells"]:
+                    grid.append(entry)
+
+            if len(grid) >= 3:
+                return grid
+
+        return []
+
     def _parse_course_row(cells) -> Course | None:
         if len(cells) < 11:
             return None
@@ -322,6 +372,14 @@ class AcademiaParser:
             room=room,
             academicYear=values[10],
         )
+
+
+def extract_course_code(text: str) -> str:
+    """Extract an SRM course code (e.g. 21CSC202J) from timetable cell text."""
+    if not text:
+        return ""
+    m = re.search(r"\b\d{2}[A-Z]{2,}\d{3}[A-Z]?\b", text)
+    return m.group(0) if m else ""
 
 
 def _next_cells(cell) -> list:

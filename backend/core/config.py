@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     def course_url(self) -> str:
         return f"{self.academia_base_url}/srm_university/academia-academic-services/page/{self.course_page_name}"
 
+    def unified_timetable_url(self, batch: int, lower: bool = False) -> str:
+        name = f"Unified_Time_Table_2025_Batch_{batch}" if not lower else f"Unified_Time_Table_2025_batch_{batch}"
+        return f"{self.academia_base_url}/srm_university/academia-academic-services/page/{name}"
+
     @property
     def calendar_url(self) -> str:
         return f"{self.academia_base_url}/srm_university/academia-academic-services/page/{self.calendar_page_name}"

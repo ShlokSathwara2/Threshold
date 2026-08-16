@@ -49,13 +49,76 @@ class AcademiaScraper:
         except ValueError:
             batch = 1
 
-        schedule = self.timetable_builder.build(courses, batch)
+        schedule = self._unified_schedule(courses, batch)
+        source = "unified"
+        if not schedule:
+            schedule = self.timetable_builder.build(courses, batch)
+            source = "matrix"
+
         return TimetableResponse(
             regNumber=user.regNumber or "",
             batch=user.batch or "",
             schedule=schedule,
             status=200,
         )
+
+    def _unified_schedule(self, courses: CourseResponse, batch: int) -> list:
+        """Build a timetable from the Unified_Time_Table grid for the student's batch."""
+        from core.schemas.models import TimetableSlot
+        from scraper.timetable import DAY_NAMES, SLOT_MATRIX, TimetableBuilder
+
+        course_by_code = {c.code: c for c in courses.courses if c.code}
+        targets = [(batch, False), (batch, True), (1, False), (2, False)]
+
+        for try_batch, lower in targets:
+            try:
+                url = settings.unified_timetable_url(try_batch, lower=lower)
+                html = self._fetch_page(url)
+                grid = self.parser.parse_unified_timetable(html)
+            except Exception as e:
+                print(f"[SCRAPER] unified timetable fetch failed (batch={try_batch}): {e}")
+                grid = []
+
+            if not grid:
+                continue
+
+            schedule: list = []
+            placed: set[tuple] = set()
+            for entry in grid:
+                slot = entry["slot"].rstrip("-")
+                if slot.startswith("L") and not TimetableBuilder._batch_matches(slot, batch):
+                    continue
+                base_slot = slot.split("-")[0]
+                time_slots = SLOT_MATRIX.get(base_slot, [])
+                if not time_slots:
+                    continue
+                for cell_text in entry["cells"].values():
+                    code = extract_course_code(cell_text)
+                    course = course_by_code.get(code) if code else None
+                    if not course:
+                        continue
+                    for day, hour in time_slots:
+                        key = (course.code, DAY_NAMES.get(day, f"Day{day}"), hour)
+                        if key in placed:
+                            continue
+                        placed.add(key)
+                        schedule.append(
+                            TimetableSlot(
+                                day=DAY_NAMES.get(day, f"Day{day}"),
+                                hour=hour,
+                                courseCode=course.code,
+                                courseTitle=course.title,
+                                slot=slot,
+                                faculty=course.faculty,
+                                room=course.room,
+                            )
+                        )
+            if schedule:
+                day_order = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4}
+                schedule.sort(key=lambda s: (day_order.get(s.day, 99), s.hour))
+                return schedule
+
+        return []
 
     def calendar(self) -> CalendarResponse:
         with AcademiaClient(cookie=self.cookie) as client:

@@ -21,6 +21,11 @@ auth_service = AuthService()
 sp_auth_service = StudentPortalAuth()
 
 
+def _academia_cookie(x_academia: str, x_csrf: str) -> str:
+    """Prefer the dedicated academia token; fall back to the shared token."""
+    return x_academia or x_csrf
+
+
 # ── Academia endpoints ──────────────────────────────────────────────
 
 @router.post("/login")
@@ -43,14 +48,20 @@ def login(body: dict):
 
 
 @router.delete("/logout")
-def logout(x_csrf_token: str = Header(alias="X-CSRF-Token")) -> dict:
-    return auth_service.logout(x_csrf_token)
+def logout(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+) -> dict:
+    return auth_service.logout(_academia_cookie(x_academia_token, x_csrf_token))
 
 
 @router.get("/attendance")
-def attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def attendance(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
     try:
-        scraper = AcademiaScraper(cookie=x_csrf_token)
+        scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
         return scraper.attendance().model_dump()
     except Exception as e:
         import traceback
@@ -59,38 +70,56 @@ def attendance(x_csrf_token: str = Header(alias="X-CSRF-Token")):
 
 
 @router.get("/marks")
-def marks(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def marks(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.marks().model_dump()
 
 
 @router.get("/courses")
-def courses(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def courses(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.courses().model_dump()
 
 
 @router.get("/user")
-def user(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def user(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.user().model_dump()
 
 
 @router.get("/timetable")
-def timetable(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def timetable(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.timetable().model_dump()
 
 
 @router.get("/calendar")
-def calendar(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def calendar(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.calendar().model_dump()
 
 
 @router.get("/get")
-def get_all(x_csrf_token: str = Header(alias="X-CSRF-Token")):
-    scraper = AcademiaScraper(cookie=x_csrf_token)
+def get_all(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
     return scraper.all_data()
 
 
@@ -313,11 +342,14 @@ def sp_internal_marks_detail(body: dict, x_csrf_token: str = Header(default="", 
 # ── Fallback endpoint (tries Academia, falls back to Student Portal) ──
 
 @router.get("/get-smart")
-def get_smart(x_csrf_token: str = Header(alias="X-CSRF-Token")):
+def get_smart(
+    x_academia_token: str = Header(default="", alias="X-Academia-Token"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
     """Try Academia first, fall back to Student Portal if it fails."""
     # Try Academia
     try:
-        scraper = AcademiaScraper(cookie=x_csrf_token)
+        scraper = AcademiaScraper(cookie=_academia_cookie(x_academia_token, x_csrf_token))
         attendance = scraper.attendance()
         if attendance.status == 200 and attendance.attendance:
             return {
