@@ -286,6 +286,10 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
                 f"{settings.sp_base_url}{settings.sp_context_path}/students/report/studentProfile.jsp",
                 data="",
             ),
+            "profile_inner": client.post(
+                f"{settings.sp_base_url}{settings.sp_context_path}/students/report/studentProfileInner.jsp",
+                data="",
+            ),
             "home": client.post(
                 f"{settings.sp_base_url}{settings.sp_context_path}/students/loginManager/UserHomePage.jsp",
                 data="",
