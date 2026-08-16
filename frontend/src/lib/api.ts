@@ -323,6 +323,14 @@ export interface SpProfile {
   reg_number?: string;
   photo?: string;
   semester?: number;
+  student_id?: string;
+  email?: string;
+  institution?: string;
+  program?: string;
+  batch?: string;
+  section?: string;
+  faculty_advisor?: string;
+  academic_advisor?: string;
 }
 
 export interface SpProfileResponse {

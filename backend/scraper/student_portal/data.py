@@ -135,6 +135,61 @@ def fetch_marks_credits(cookie: str) -> dict[str, Any]:
         client.close()
 
 
+def _extract_dashboard_fields(dash_soup: BeautifulSoup | None) -> dict[str, str]:
+    """Extract label → value pairs from the SP dashboard table.
+
+    The dashboard renders rows like "Student Name | SHLOK PARESH SATHWARA".
+    """
+    fields: dict[str, str] = {}
+    if dash_soup is None:
+        return fields
+
+    label_map = {
+        "student name": "name",
+        "name": "name",
+        "student id": "student_id",
+        "student id no": "student_id",
+        "id": "student_id",
+        "register no": "reg_number",
+        "register no.": "reg_number",
+        "register number": "reg_number",
+        "reg no": "reg_number",
+        "reg no.": "reg_number",
+        "reg no.": "reg_number",
+        "email id": "email",
+        "email": "email",
+        "e-mail": "email",
+        "institution": "institution",
+        "program": "program",
+        "programme": "program",
+        "program name": "program",
+        "semester": "semester",
+        "sem": "semester",
+        "batch": "batch",
+        "section": "section",
+        "faculty advisor": "faculty_advisor",
+        "faculty adviser": "faculty_advisor",
+        "academic advisor": "academic_advisor",
+        "academic adviser": "academic_advisor",
+    }
+
+    for row in dash_soup.find_all("tr"):
+        cells = row.find_all(["td", "th"])
+        if len(cells) < 2:
+            continue
+        label_text = cells[0].get_text(" ", strip=True).lower()
+        # Normalize repeated whitespace + trailing colons
+        label_text = " ".join(label_text.split()).rstrip(":")
+        if label_text not in label_map:
+            continue
+        value = cells[1].get_text(" ", strip=True)
+        value = " ".join(value.split())
+        if value and value not in ("-", "--", "N/A", "NA", "None", "null"):
+            fields[label_map[label_text]] = value
+
+    return fields
+
+
 def fetch_profile(cookie: str) -> dict[str, Any]:
     """Fetch the SP dashboard (HRDSystem.jsp) for photo + name + reg, then grades for semester."""
     print("[SP-DATA] fetch_profile — cookie present:", bool(cookie))
@@ -158,23 +213,37 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
         grades_soup = BeautifulSoup(grades_html, "lxml") if grades_html else None
         print(f"[SP-DATA] grades status: {grades_resp.status_code}")
 
-        # ── Reg number ──────────────────────────────────────────
-        for html_src in (dash_html, grades_html):
-            m = re.search(r"\bRA\d{9,15}\b", html_src)
-            if m:
-                profile["reg_number"] = m.group(0)
-                break
+        # ── Label/value rows from the dashboard table ────────────
+        fields = _extract_dashboard_fields(dash_soup)
+        for key, value in fields.items():
+            if key not in profile:
+                profile[key] = value
+
+        # ── Reg number (fallback: regex anywhere in HTML) ────────
+        if "reg_number" not in profile:
+            for html_src in (dash_html, grades_html):
+                m = re.search(r"\bRA\d{9,15}\b", html_src)
+                if m:
+                    profile["reg_number"] = m.group(0)
+                    break
 
         # ── Semester ────────────────────────────────────────────
         semester = None
-        for html_src in (grades_html, dash_html):
-            m = re.search(r"(?i)semester\s*:?\s*(\d{1,2})", html_src)
-            if m:
-                try:
-                    semester = int(m.group(1))
-                except ValueError:
-                    semester = None
-                break
+        sem_value = fields.get("semester")
+        if sem_value:
+            try:
+                semester = int(re.search(r"\d+", sem_value).group(0))
+            except (ValueError, AttributeError):
+                semester = None
+        if semester is None:
+            for html_src in (grades_html, dash_html):
+                m = re.search(r"(?i)semester\s*:?\s*(\d{1,2})", html_src)
+                if m:
+                    try:
+                        semester = int(m.group(1))
+                    except ValueError:
+                        semester = None
+                    break
         if semester is None and grades_html:
             grades = StudentPortalParser().parse_grades(grades_html)
             semesters = grades.get("semesters") or []

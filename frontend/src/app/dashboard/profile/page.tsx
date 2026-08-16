@@ -11,6 +11,7 @@ import {
   type SpProfile,
   type User,
 } from '@/lib/api';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   if (!value) return null;
@@ -70,6 +71,7 @@ export default function ProfilePage() {
     }
     load();
   }, [router, load]);
+  usePullToRefresh(load);
 
   const name = profile?.name || academia?.name;
   const initials = (name || '?')
@@ -208,11 +210,18 @@ export default function ProfilePage() {
             padding: '6px 16px',
           }}
         >
-          <InfoRow label="Program" value={academia?.program} />
+          <InfoRow label="Register No." value={profile?.reg_number || academia?.regNumber} />
+          <InfoRow label="Student ID" value={profile?.student_id} />
+          <InfoRow label="Email" value={profile?.email} />
+          <InfoRow label="Institution" value={profile?.institution} />
+          <InfoRow label="Program" value={profile?.program || academia?.program} />
           <InfoRow label="Department" value={academia?.department} />
-          <InfoRow label="Section" value={academia?.section} />
-          <InfoRow label="Batch" value={academia?.batch} />
+          <InfoRow label="Semester" value={profile?.semester ?? academia?.semester} />
+          <InfoRow label="Batch" value={academia?.batch || profile?.batch} />
+          <InfoRow label="Section" value={academia?.section || profile?.section} />
           <InfoRow label="Year" value={academia?.year} />
+          <InfoRow label="Faculty Advisor" value={profile?.faculty_advisor} />
+          <InfoRow label="Academic Advisor" value={profile?.academic_advisor} />
           <InfoRow label="Mobile" value={academia?.mobile} />
         </motion.div>
       )}
@@ -225,7 +234,7 @@ export default function ProfilePage() {
       }}>
         {isAcademiaLoggedIn()
           ? 'Linked to academia — pull down to refresh.'
-          : 'Log into academia (timetable) to unlock program, department and more details.'}
+          : 'Log into academia (timetable) to unlock batch, section and department.'}
       </p>
     </div>
   );
