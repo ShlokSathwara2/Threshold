@@ -103,6 +103,7 @@ class CalendarDay(BaseModel):
     day: str
     event: str
     dayOrder: str
+    isHoliday: bool = False
 
 
 class CalendarMonth(BaseModel):

@@ -56,8 +56,8 @@ export default function CalendarPage() {
     .toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     .replace(/\//g, '-');
 
-  const isHoliday = (d: { event?: string }) =>
-    /holiday/i.test(d.event || '');
+const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
+  d.isHoliday === true || /holiday/i.test(d.event || '');
 
   // ── Dynamic filter options, derived from loaded data ──
   const doNumbers = useMemo(() => {

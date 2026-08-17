@@ -389,6 +389,7 @@ export interface CalendarDay {
   day: string;
   event: string;
   dayOrder: string;
+  isHoliday?: boolean;
 }
 
 export interface CalendarMonth {

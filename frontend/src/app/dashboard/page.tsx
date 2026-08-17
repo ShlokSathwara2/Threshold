@@ -183,7 +183,7 @@ export default function DashboardPage() {
     const found: { date: Date; label: string }[] = [];
     for (const month of calendar.calendar) {
       for (const d of month.days) {
-        if (!/holiday/i.test(d.event || '')) continue;
+        if (!(d.isHoliday === true || /holiday/i.test(d.event || ''))) continue;
         const m = d.date.match(/^(\d{2})-(\d{2})-(\d{4})$/);
         if (!m) continue;
         const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));

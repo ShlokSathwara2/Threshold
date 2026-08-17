@@ -338,6 +338,7 @@ class StudentPortalParser:
                 day=day_name,
                 event=remarks if remarks and remarks != "-" else status,
                 dayOrder=merged,
+                isHoliday="holiday" in (status + " " + remarks).lower(),
             ))
 
         if not days:
