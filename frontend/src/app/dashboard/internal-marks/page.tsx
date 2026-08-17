@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -35,12 +35,12 @@ export default function InternalMarksPage() {
             width: '32px',
             height: '32px',
             border: '3px solid rgba(139, 92, 246, 0.2)',
-            borderTopColor: '#8b5cf6',
+            borderTopColor: 'var(--threshold-accent)',
             borderRadius: '50%',
           }}
         />
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-          Fetching internal marks…
+          Fetching internal marksâ€¦
         </p>
       </div>
     );
@@ -75,7 +75,7 @@ export default function InternalMarksPage() {
               borderRadius: '10px',
               border: '1px solid rgba(139, 92, 246, 0.3)',
               background: 'rgba(139, 92, 246, 0.15)',
-              color: '#a78bfa',
+              color: 'var(--threshold-accent-text)',
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
@@ -107,7 +107,7 @@ export default function InternalMarksPage() {
           textAlign: 'center',
           maxWidth: '400px',
         }}>
-          <p style={{ color: '#a78bfa', fontSize: '0.9rem', marginBottom: '12px' }}>
+          <p style={{ color: 'var(--threshold-accent-text)', fontSize: '0.9rem', marginBottom: '12px' }}>
             Internal marks haven&apos;t been uploaded yet. They appear here once your faculty publishes them.
           </p>
           <button
@@ -117,7 +117,7 @@ export default function InternalMarksPage() {
               borderRadius: '10px',
               border: '1px solid rgba(139, 92, 246, 0.3)',
               background: 'rgba(139, 92, 246, 0.15)',
-              color: '#a78bfa',
+              color: 'var(--threshold-accent-text)',
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
@@ -140,13 +140,13 @@ export default function InternalMarksPage() {
         <h1 style={{
           fontSize: '1.5rem',
           fontWeight: 800,
-          color: 'white',
+          color: 'var(--threshold-text)',
           marginBottom: '4px',
         }}>
           Internal Marks
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-          {marks.length} subject{marks.length === 1 ? '' : 's'} • current semester
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+          {marks.length} subject{marks.length === 1 ? '' : 's'} â€¢ current semester
         </p>
       </motion.div>
 
@@ -156,7 +156,7 @@ export default function InternalMarksPage() {
           const max = parseFloat(m.maxMark);
           const valid = !isNaN(scored) && !isNaN(max) && max > 0;
           const pct = valid ? (scored / max) * 100 : null;
-          const color = pct === null ? '#a78bfa' : pct >= 60 ? '#34d399' : pct >= 40 ? '#facc15' : '#f87171';
+          const color = pct === null ? 'var(--threshold-accent-text)' : pct >= 60 ? '#34d399' : pct >= 40 ? '#facc15' : '#f87171';
           return (
             <motion.div
               key={m.code}
@@ -169,8 +169,8 @@ export default function InternalMarksPage() {
                 gap: '14px',
                 padding: '14px 16px',
                 borderRadius: '14px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--threshold-surface)',
+                border: '1px solid var(--threshold-border)',
               }}
             >
               <div style={{
@@ -190,16 +190,16 @@ export default function InternalMarksPage() {
                   {m.scored}
                 </p>
                 <p style={{
-                  color: 'rgba(255,255,255,0.35)',
+                  color: 'var(--threshold-text-faint)',
                   fontSize: '0.62rem',
                   marginTop: '2px',
                 }}>
-                  / {m.maxMark || '—'}
+                  / {m.maxMark || 'â€”'}
                 </p>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{
-                  color: 'white',
+                  color: 'var(--threshold-text)',
                   fontSize: '0.85rem',
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
@@ -209,7 +209,7 @@ export default function InternalMarksPage() {
                   {m.description}
                 </p>
                 <p style={{
-                  color: 'rgba(255,255,255,0.35)',
+                  color: 'var(--threshold-text-faint)',
                   fontSize: '0.72rem',
                   marginTop: '2px',
                 }}>
@@ -227,15 +227,15 @@ export default function InternalMarksPage() {
           style={{
             padding: '10px 28px',
             borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--threshold-border)',
+            background: 'var(--threshold-surface)',
             color: 'rgba(255,255,255,0.4)',
             fontSize: '0.8rem',
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
         >
-          ↻ Refresh
+          â†» Refresh
         </button>
       </div>
     </div>

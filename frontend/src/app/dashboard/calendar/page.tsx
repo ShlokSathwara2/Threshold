@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import useEmblaCarousel from 'embla-carousel-react';
 import {
   isLoggedIn,
   fetchCalendar,
@@ -19,6 +20,7 @@ export default function CalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [doFilter, setDoFilter] = useState<string>('all');
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: 'start', containScroll: false });
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -94,10 +96,10 @@ export default function CalendarPage() {
         animate={{ opacity: 1, y: 0 }}
         style={{ marginBottom: '16px', paddingTop: '4px' }}
       >
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--threshold-text)', marginBottom: '4px' }}>
           Calendar
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           Academic planner — day orders, holidays and important dates
         </p>
       </motion.div>
@@ -127,11 +129,11 @@ export default function CalendarPage() {
                   padding: '8px 14px',
                   borderRadius: '999px',
                   border: doFilter === chip.value
-                    ? '1px solid rgba(139,92,246,0.6)'
+                    ? '1px solid rgba(var(--threshold-accent-rgb),0.6)'
                     : '1px solid rgba(255,255,255,0.1)',
                   background: doFilter === chip.value
-                    ? 'rgba(139,92,246,0.2)'
-                    : 'rgba(255,255,255,0.03)',
+                    ? 'rgba(var(--threshold-accent-rgb),0.2)'
+                    : 'var(--threshold-surface)',
                   color: doFilter === chip.value ? '#e9d5ff' : 'rgba(255,255,255,0.5)',
                   fontSize: '0.75rem',
                   fontWeight: 600,
@@ -149,40 +151,50 @@ export default function CalendarPage() {
             gap: '8px',
             marginBottom: '16px',
           }}>
-            <select
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                borderRadius: '12px',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: 'white',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                outline: 'none',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-              }}
-            >
-              <option value="all" style={{ background: '#16161f' }}>All months</option>
-              {monthNames.map((name) => (
-                <option key={name} value={name} style={{ background: '#16161f' }}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            {/* Swipeable month strip (Embla) */}
+            <div style={{ flex: 1, overflow: 'hidden' }} ref={emblaRef}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[
+                  { value: 'all', label: 'All months' },
+                  ...monthNames.map((name) => ({ value: name, label: name })),
+                ].map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setMonthFilter(m.value)}
+                    style={{
+                      flex: '0 0 auto',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      background: monthFilter === m.value
+                        ? 'rgba(var(--threshold-accent-rgb),0.2)'
+                        : 'rgba(255,255,255,0.04)',
+                      border: monthFilter === m.value
+                        ? '1px solid rgba(var(--threshold-accent-rgb),0.6)'
+                        : '1px solid var(--threshold-border)',
+                      color: monthFilter === m.value
+                        ? 'var(--threshold-accent-text)'
+                        : 'var(--threshold-text-dim)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <select
               value={doFilter}
               onChange={(e) => setDoFilter(e.target.value)}
               style={{
-                flex: 1,
+                flexShrink: 0,
                 padding: '10px 12px',
                 borderRadius: '12px',
                 background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: 'white',
+                border: '1px solid var(--threshold-border)',
+                color: 'var(--threshold-text)',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 outline: 'none',
@@ -207,11 +219,11 @@ export default function CalendarPage() {
         <div style={{
           padding: '24px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
             Loading academic calendar…
           </p>
         </div>
@@ -233,11 +245,11 @@ export default function CalendarPage() {
         <div style={{
           padding: '20px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
             Pull down to load the academic planner.
           </p>
         </div>
@@ -267,7 +279,7 @@ export default function CalendarPage() {
               padding: '12px 16px',
               borderBottom: '1px solid rgba(255,255,255,0.05)',
             }}>
-              <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', margin: 0 }}>
+              <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
                 {m.month}
               </h2>
               <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.25)', fontSize: '0.72rem' }}>
@@ -312,7 +324,7 @@ export default function CalendarPage() {
                       <p style={{
                         fontSize: '0.8rem',
                         fontWeight: 600,
-                        color: 'white',
+                        color: 'var(--threshold-text)',
                         margin: 0,
                       }}>
                         {d.day}
@@ -324,7 +336,7 @@ export default function CalendarPage() {
                             background: 'rgba(139, 92, 246, 0.2)',
                             fontSize: '0.6rem',
                             fontWeight: 700,
-                            color: '#c4b5fd',
+                            color: 'var(--threshold-accent-text)',
                           }}>
                             TODAY
                           </span>
@@ -377,11 +389,11 @@ export default function CalendarPage() {
         <div style={{
           padding: '20px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
             No entries match the selected filters.
           </p>
         </div>

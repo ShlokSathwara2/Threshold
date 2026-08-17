@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -27,8 +27,8 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
       transition={{ delay: index * 0.05 }}
       style={{
         borderRadius: '16px',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--threshold-surface)',
+        border: '1px solid var(--threshold-border)',
         overflow: 'hidden',
       }}
     >
@@ -45,16 +45,16 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#a78bfa', marginBottom: '2px' }}>
-            {subject.courseCode} · {subject.courseType}
-            {meta && meta.category ? ` · ${meta.category}` : ''}
-            {meta && meta.credit && meta.credit !== 'N/A' ? ` · ${meta.credit} cr` : ''}
-            {meta && meta.facultyName ? ` · ${meta.facultyName}` : ''}
+          <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--threshold-accent-text)', marginBottom: '2px' }}>
+            {subject.courseCode} Â· {subject.courseType}
+            {meta && meta.category ? ` Â· ${meta.category}` : ''}
+            {meta && meta.credit && meta.credit !== 'N/A' ? ` Â· ${meta.credit} cr` : ''}
+            {meta && meta.facultyName ? ` Â· ${meta.facultyName}` : ''}
           </p>
           <h3 style={{
             fontSize: '0.9rem',
             fontWeight: 600,
-            color: 'white',
+            color: 'var(--threshold-text)',
             margin: 0,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -67,7 +67,7 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
           <p style={{
             fontSize: '1rem',
             fontWeight: 800,
-            color: scheme === 'full' ? '#c4b5fd' : '#86efac',
+            color: scheme === 'full' ? 'var(--threshold-accent-text)' : '#86efac',
             margin: 0,
           }}>
             {subject.overall?.scored || '0'}
@@ -76,7 +76,7 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
             </span>
           </p>
           <p style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
-            {scheme === 'full' ? '100% internal' : '60+40 scheme'} {expanded ? '▾' : '▸'}
+            {scheme === 'full' ? '100% internal' : '60+40 scheme'} {expanded ? 'â–¾' : 'â–¸'}
           </p>
         </div>
       </div>

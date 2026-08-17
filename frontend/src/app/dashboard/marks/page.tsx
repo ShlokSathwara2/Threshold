@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -41,12 +41,12 @@ function Spinner() {
           width: '32px',
           height: '32px',
           border: '3px solid rgba(139, 92, 246, 0.2)',
-          borderTopColor: '#8b5cf6',
+          borderTopColor: 'var(--threshold-accent)',
           borderRadius: '50%',
         }}
       />
       <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-        Fetching results…
+        Fetching resultsâ€¦
       </p>
     </div>
   );
@@ -81,7 +81,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
             borderRadius: '10px',
             border: '1px solid rgba(139, 92, 246, 0.3)',
             background: 'rgba(139, 92, 246, 0.15)',
-            color: '#a78bfa',
+            color: 'var(--threshold-accent-text)',
             fontSize: '0.85rem',
             fontWeight: 600,
             cursor: 'pointer',
@@ -131,7 +131,7 @@ export default function MarksPage() {
           textAlign: 'center',
           maxWidth: '400px',
         }}>
-          <p style={{ color: '#a78bfa', fontSize: '0.9rem', marginBottom: '12px' }}>
+          <p style={{ color: 'var(--threshold-accent-text)', fontSize: '0.9rem', marginBottom: '12px' }}>
             No marks have been uploaded yet. Results will appear here once your exams are graded.
           </p>
           <button
@@ -141,7 +141,7 @@ export default function MarksPage() {
               borderRadius: '10px',
               border: '1px solid rgba(139, 92, 246, 0.3)',
               background: 'rgba(139, 92, 246, 0.15)',
-              color: '#a78bfa',
+              color: 'var(--threshold-accent-text)',
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
@@ -164,12 +164,12 @@ export default function MarksPage() {
         <h1 style={{
           fontSize: '1.5rem',
           fontWeight: 800,
-          color: 'white',
+          color: 'var(--threshold-text)',
           marginBottom: '4px',
         }}>
           Marks & Results
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           {semesters.length} semester{semesters.length === 1 ? '' : 's'} of grades tracked
         </p>
       </motion.div>
@@ -200,11 +200,11 @@ export default function MarksPage() {
           fontSize: '3.2rem',
           fontWeight: 800,
           lineHeight: 1,
-          background: 'linear-gradient(135deg, #c4b5fd, #8b5cf6, #f0abfc)',
+          background: 'linear-gradient(135deg, var(--threshold-accent-text), var(--threshold-accent), #f0abfc)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
         }}>
-          {cgpa !== null ? cgpa.toFixed(2) : '—'}
+          {cgpa !== null ? cgpa.toFixed(2) : 'â€”'}
         </p>
       </motion.div>
 
@@ -224,16 +224,16 @@ export default function MarksPage() {
             <div key={c.label} style={{
               padding: '14px 10px',
               borderRadius: '14px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--threshold-surface)',
+              border: '1px solid var(--threshold-border)',
               textAlign: 'center',
             }}>
               <p style={{
                 fontSize: '1.1rem',
                 fontWeight: 700,
-                color: 'white',
+                color: 'var(--threshold-text)',
               }}>
-                {c.value ?? '—'}
+                {c.value ?? 'â€”'}
               </p>
               <p style={{
                 color: 'rgba(255,255,255,0.4)',
@@ -256,7 +256,7 @@ export default function MarksPage() {
           marginBottom: '12px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white' }}>
+            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
               Subject Marks &amp; Grade Predictor
             </h2>
             {typeof semester === 'number' && (
@@ -267,7 +267,7 @@ export default function MarksPage() {
                 border: '1px solid rgba(139, 92, 246, 0.3)',
                 fontSize: '0.66rem',
                 fontWeight: 600,
-                color: '#c4b5fd',
+                color: 'var(--threshold-accent-text)',
               }}>
                 Sem {semester}
               </span>
@@ -293,12 +293,12 @@ export default function MarksPage() {
           <div style={{
             padding: '24px',
             borderRadius: '16px',
-            background: 'rgba(255,255,255,0.03)',
+            background: 'var(--threshold-surface)',
             border: '1px solid rgba(255,255,255,0.06)',
             textAlign: 'center',
           }}>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-              Fetching subject marks…
+            <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+              Fetching subject marksâ€¦
             </p>
           </div>
         ) : marksError ? (
@@ -331,11 +331,11 @@ export default function MarksPage() {
           <div style={{
             padding: '20px',
             borderRadius: '16px',
-            background: 'rgba(255,255,255,0.03)',
+            background: 'var(--threshold-surface)',
             border: '1px solid rgba(255,255,255,0.06)',
             textAlign: 'center',
           }}>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+            <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
               No subject marks available yet. As tests are entered in the portal, the chart and grade targets update live.
             </p>
           </div>
@@ -358,8 +358,8 @@ export default function MarksPage() {
             transition={{ delay: i * 0.05 }}
             style={{
               borderRadius: '16px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--threshold-surface)',
+              border: '1px solid var(--threshold-border)',
               overflow: 'hidden',
             }}
           >
@@ -371,24 +371,24 @@ export default function MarksPage() {
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>
               <span style={{
-                color: 'white',
+                color: 'var(--threshold-text)',
                 fontWeight: 700,
                 fontSize: '0.95rem',
               }}>
                 Semester {sem.semester}
               </span>
               <span style={{
-                color: sem.sgpa !== null ? '#a78bfa' : 'rgba(255,255,255,0.35)',
+                color: sem.sgpa !== null ? 'var(--threshold-accent-text)' : 'var(--threshold-text-faint)',
                 fontWeight: 700,
                 fontSize: '0.9rem',
               }}>
-                {sem.sgpa !== null ? `SGPA ${sem.sgpa.toFixed(3)}` : '—'}
+                {sem.sgpa !== null ? `SGPA ${sem.sgpa.toFixed(3)}` : 'â€”'}
               </span>
             </div>
 
             {sem.grades.length === 0 ? (
               <p style={{
-                color: 'rgba(255,255,255,0.35)',
+                color: 'var(--threshold-text-faint)',
                 fontSize: '0.8rem',
                 padding: '16px',
                 textAlign: 'center',
@@ -422,7 +422,7 @@ export default function MarksPage() {
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{
-                        color: 'white',
+                        color: 'var(--threshold-text)',
                         fontSize: '0.85rem',
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
@@ -432,7 +432,7 @@ export default function MarksPage() {
                         {g.description}
                       </p>
                       <p style={{
-                        color: 'rgba(255,255,255,0.35)',
+                        color: 'var(--threshold-text-faint)',
                         fontSize: '0.72rem',
                         marginTop: '2px',
                       }}>
@@ -470,15 +470,15 @@ export default function MarksPage() {
           style={{
             padding: '10px 28px',
             borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--threshold-border)',
+            background: 'var(--threshold-surface)',
             color: 'rgba(255,255,255,0.4)',
             fontSize: '0.8rem',
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
         >
-          ↻ Refresh
+          â†» Refresh
         </button>
       </div>
     </div>

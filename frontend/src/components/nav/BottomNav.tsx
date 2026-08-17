@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { usePathname, useRouter } from 'next/navigation';
+import { useTheme, hexToRgba } from '@/lib/theme';
 
 interface NavItem {
   key: string;
@@ -74,6 +75,7 @@ const RADIUS = 22;
 export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme } = useTheme();
 
   const activeIndex = Math.max(
     0,
@@ -97,11 +99,11 @@ export default function BottomNav() {
           gap: '2px',
           padding: `${PADDING}px`,
           borderRadius: 999,
-          background: 'rgba(16, 16, 28, 0.62)',
+          background: theme.isLight ? 'rgba(255,255,255,0.78)' : 'rgba(16, 16, 28, 0.62)',
           backdropFilter: 'blur(26px) saturate(180%)',
           WebkitBackdropFilter: 'blur(26px) saturate(180%)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 12px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+          border: `1px solid ${theme.isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.12)'}`,
+          boxShadow: `0 12px 44px ${theme.isLight ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.55)'}, inset 0 1px 0 ${theme.isLight ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.12)'}`,
           userSelect: 'none',
           WebkitUserSelect: 'none',
         }}
@@ -126,13 +128,13 @@ export default function BottomNav() {
                 border: 'none',
                 background: 'none',
                 cursor: 'pointer',
-                color: active ? '#c4b5fd' : 'rgba(255,255,255,0.45)',
+                color: active ? theme.accentText : theme.textFaint,
                 transition: 'color 0.2s',
               }}
             >
               <div style={{
                 transform: active ? 'scale(1.08)' : undefined,
-                filter: active ? 'drop-shadow(0 0 8px rgba(167,139,250,0.7))' : undefined,
+                filter: active ? `drop-shadow(0 0 8px ${hexToRgba(theme.accent, 0.7)})` : undefined,
                 transition: 'transform 0.2s, filter 0.2s',
               }}>
                 {item.icon}
@@ -151,8 +153,8 @@ export default function BottomNav() {
                 width: 4,
                 height: 4,
                 borderRadius: '50%',
-                background: active ? '#a78bfa' : 'transparent',
-                boxShadow: active ? '0 0 8px rgba(167,139,250,0.9)' : undefined,
+                background: active ? theme.accent : 'transparent',
+                boxShadow: active ? `0 0 8px ${hexToRgba(theme.accent, 0.9)}` : undefined,
                 transition: 'background 0.2s',
               }} />
             </button>

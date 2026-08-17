@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -88,11 +88,11 @@ export default function TimetablePage() {
       setSavedAt(now);
       saveCache({ batch: res.batch || '', savedAt: now, schedule: next });
       if (next.length === 0) {
-        setError('Timetable is empty for your batch — the portal may not have published it yet.');
+        setError('Timetable is empty for your batch â€” the portal may not have published it yet.');
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load timetable';
-      // Keep the academia cookie — a transient error (deploy, timeout) shouldn't
+      // Keep the academia cookie â€” a transient error (deploy, timeout) shouldn't
       // wipe the saved session. Show the error; the user can re-login if it persists.
       setError(msg);
     } finally {
@@ -131,12 +131,12 @@ export default function TimetablePage() {
           setCaptchaText('');
           setLoginError(res.message || 'Enter the CAPTCHA to continue');
         } else {
-          setLoginError(res.message || 'Login failed — check your credentials');
+          setLoginError(res.message || 'Login failed â€” check your credentials');
         }
         return;
       }
       if (!res.cookies) {
-        setLoginError('Login succeeded but no session was returned — try again');
+        setLoginError('Login succeeded but no session was returned â€” try again');
         return;
       }
       setAcademiaCookies(res.cookies);
@@ -151,7 +151,7 @@ export default function TimetablePage() {
 
   const needsLogin = !isAcademiaLoggedIn();
 
-  // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
+  // Today's DO (e.g. DO-3) is not a fixed weekday â€” derive it from the
   // SP academic calendar's real day order so the highlight stays correct
   // even when holidays shift the sequence.
   const [todayIndex, setTodayIndex] = useState(-1);
@@ -185,10 +185,10 @@ export default function TimetablePage() {
         animate={{ opacity: 1, y: 0 }}
         style={{ marginBottom: '16px', paddingTop: '4px' }}
       >
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--threshold-text)', marginBottom: '4px' }}>
           Timetable
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           Your weekly schedule from the academia unified timetable
         </p>
         {batch && (
@@ -208,14 +208,14 @@ export default function TimetablePage() {
             Batch {batch}
             {savedAt && (
               <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.66rem' }}>
-                · saved {new Date(savedAt).toLocaleDateString()}
+                Â· saved {new Date(savedAt).toLocaleDateString()}
               </span>
             )}
           </span>
         )}
       </motion.div>
 
-      {/* ── Academia login card ── */}
+      {/* â”€â”€ Academia login card â”€â”€ */}
       <AnimatePresence>
         {needsLogin && (
           <motion.div
@@ -230,11 +230,11 @@ export default function TimetablePage() {
               marginBottom: '16px',
             }}
           >
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--threshold-text)', marginBottom: '4px' }}>
               Academia login needed
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
-              The timetable lives in academia, not the SP portal — and academia uses its own login
+              The timetable lives in academia, not the SP portal â€” and academia uses its own login
               (your SP credentials won&apos;t work here). It&apos;s saved after the first load and
               stays until the semester ends.
             </p>
@@ -250,7 +250,7 @@ export default function TimetablePage() {
                   borderRadius: '12px',
                   border: '1px solid rgba(255,255,255,0.1)',
                   background: 'rgba(255,255,255,0.04)',
-                  color: 'white',
+                  color: 'var(--threshold-text)',
                   fontSize: '0.9rem',
                   outline: 'none',
                 }}
@@ -265,7 +265,7 @@ export default function TimetablePage() {
                   borderRadius: '12px',
                   border: '1px solid rgba(255,255,255,0.1)',
                   background: 'rgba(255,255,255,0.04)',
-                  color: 'white',
+                  color: 'var(--threshold-text)',
                   fontSize: '0.9rem',
                   outline: 'none',
                 }}
@@ -277,8 +277,8 @@ export default function TimetablePage() {
                   gap: '10px',
                   padding: '10px',
                   borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'var(--threshold-surface)',
+                  border: '1px solid var(--threshold-border)',
                 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -297,7 +297,7 @@ export default function TimetablePage() {
                       borderRadius: '10px',
                       border: '1px solid rgba(255,255,255,0.1)',
                       background: 'rgba(255,255,255,0.04)',
-                      color: 'white',
+                      color: 'var(--threshold-text)',
                       fontSize: '0.85rem',
                       outline: 'none',
                     }}
@@ -315,31 +315,31 @@ export default function TimetablePage() {
                   borderRadius: '12px',
                   border: 'none',
                   background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                  color: 'white',
+                  color: 'var(--threshold-text)',
                   fontSize: '0.9rem',
                   fontWeight: 700,
                   cursor: loggingIn ? 'wait' : 'pointer',
                   opacity: loggingIn ? 0.6 : 1,
                 }}
               >
-                {loggingIn ? 'Logging in…' : captcha ? 'Verify & load timetable' : 'Log in & load timetable'}
+                {loggingIn ? 'Logging inâ€¦' : captcha ? 'Verify & load timetable' : 'Log in & load timetable'}
               </button>
             </form>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Loading / error ── */}
+      {/* â”€â”€ Loading / error â”€â”€ */}
       {loading && schedule.length === 0 && (
         <div style={{
           padding: '24px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-            Loading your batch timetable…
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+            Loading your batch timetableâ€¦
           </p>
         </div>
       )}
@@ -365,21 +365,21 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fcd34d', fontSize: '0.75rem', margin: 0 }}>
-            Showing saved timetable — {error} Re-log in above to refresh.
+            Showing saved timetable â€” {error} Re-log in above to refresh.
           </p>
         </div>
       )}
 
-      {/* ── AcadLoop-style grid: hours × DO columns ── */}
+      {/* â”€â”€ AcadLoop-style grid: hours Ã— DO columns â”€â”€ */}
       {!needsLogin && schedule.length === 0 && !loading && !error && (
         <div style={{
           padding: '20px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
             No timetable entries yet. Pull down to refresh.
           </p>
         </div>
@@ -401,7 +401,7 @@ export default function TimetablePage() {
               {/* Header: corner + day columns */}
               <div style={{
                 display: 'flex',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid var(--threshold-border)',
                 background: 'rgba(139, 92, 246, 0.08)',
               }}>
                 <div style={{
@@ -410,7 +410,7 @@ export default function TimetablePage() {
                   padding: '10px 10px',
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  color: 'rgba(255,255,255,0.35)',
+                  color: 'var(--threshold-text-faint)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.4px',
                   display: 'flex',
@@ -432,7 +432,7 @@ export default function TimetablePage() {
                       <span style={{
                         fontSize: '0.78rem',
                         fontWeight: 800,
-                        color: isToday ? '#c4b5fd' : 'white',
+                        color: isToday ? 'var(--threshold-accent-text)' : 'white',
                       }}>
                         {day}
                       </span>
@@ -442,7 +442,7 @@ export default function TimetablePage() {
                           marginTop: '2px',
                           fontSize: '0.55rem',
                           fontWeight: 700,
-                          color: '#a78bfa',
+                          color: 'var(--threshold-accent-text)',
                         }}>
                           TODAY
                         </span>
@@ -519,14 +519,14 @@ export default function TimetablePage() {
                                     : s.slot.startsWith('P')
                                       ? 'rgba(34, 197, 94, 0.1)'
                                       : 'rgba(139, 92, 246, 0.12)',
-                                border: '1px solid rgba(255,255,255,0.08)',
+                                border: '1px solid var(--threshold-border)',
                               }}
                             >
                               <span style={{
                                 display: 'block',
                                 fontSize: '0.62rem',
                                 fontWeight: 700,
-                                color: '#c4b5fd',
+                                color: 'var(--threshold-accent-text)',
                                 letterSpacing: '0.2px',
                               }}>
                                 {s.courseCode}
@@ -535,7 +535,7 @@ export default function TimetablePage() {
                                 display: 'block',
                                 fontSize: '0.68rem',
                                 fontWeight: 600,
-                                color: 'white',
+                                color: 'var(--threshold-text)',
                                 margin: '2px 0',
                                 lineHeight: 1.2,
                               }}>
@@ -552,7 +552,7 @@ export default function TimetablePage() {
                                 {s.faculty && s.faculty !== 'N/A'
                                   ? s.faculty.split('(')[0].trim()
                                   : ''}
-                                {s.room && s.room !== 'N/A' ? ` · ${s.room}` : ''}
+                                {s.room && s.room !== 'N/A' ? ` Â· ${s.room}` : ''}
                               </span>
                             </div>
                           ))}
@@ -575,14 +575,14 @@ export default function TimetablePage() {
             style={{
               padding: '10px 28px',
               borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid var(--threshold-border)',
+              background: 'var(--threshold-surface)',
               color: 'rgba(255,255,255,0.4)',
               fontSize: '0.8rem',
               cursor: loading ? 'wait' : 'pointer',
             }}
           >
-            {loading ? 'Refreshing…' : '↻ Refresh'}
+            {loading ? 'Refreshingâ€¦' : 'â†» Refresh'}
           </button>
         </div>
       )}

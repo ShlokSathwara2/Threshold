@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,12 +37,12 @@ export default function AttendancePage() {
             width: '32px',
             height: '32px',
             border: '3px solid rgba(139, 92, 246, 0.2)',
-            borderTopColor: '#8b5cf6',
+            borderTopColor: 'var(--threshold-accent)',
             borderRadius: '50%',
           }}
         />
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-          Fetching attendance data…
+          Fetching attendance dataâ€¦
         </p>
       </div>
     );
@@ -77,7 +77,7 @@ export default function AttendancePage() {
               borderRadius: '10px',
               border: '1px solid rgba(139, 92, 246, 0.3)',
               background: 'rgba(139, 92, 246, 0.15)',
-              color: '#a78bfa',
+              color: 'var(--threshold-accent-text)',
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
@@ -101,13 +101,13 @@ export default function AttendancePage() {
         <h1 style={{
           fontSize: '1.5rem',
           fontWeight: 800,
-          color: 'white',
+          color: 'var(--threshold-text)',
           marginBottom: '4px',
         }}>
           Attendance
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-          {subjects.length} subjects tracked • Sorted by risk (lowest margin first)
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+          {subjects.length} subjects tracked â€¢ Sorted by risk (lowest margin first)
         </p>
       </motion.div>
 
@@ -128,15 +128,15 @@ export default function AttendancePage() {
           style={{
             padding: '10px 28px',
             borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--threshold-border)',
+            background: 'var(--threshold-surface)',
             color: 'rgba(255,255,255,0.4)',
             fontSize: '0.8rem',
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
         >
-          ↻ Refresh
+          â†» Refresh
         </button>
       </div>
     </div>

@@ -8,11 +8,14 @@ import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
 import { SubjectRegistryProvider } from '@/lib/subject-registry';
+import { ThemeProvider, useTheme } from '@/lib/theme';
+import Lenis from 'lenis';
 
 const navItems = [
   { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
   { label: 'CGPA Calc', path: '/dashboard/cgpa', icon: '▣' },
   { label: 'Internal Marks', path: '/dashboard/internal-marks', icon: '✸' },
+  { label: 'Settings', path: '/dashboard/settings', icon: '⚙' },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -24,11 +27,30 @@ const pageTitles: Record<string, string> = {
   '/dashboard/timetable': 'Timetable',
   '/dashboard/calendar': 'Calendar',
   '/dashboard/profile': 'Profile',
+  '/dashboard/settings': 'Settings',
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function NoiseOverlay() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 5,
+        pointerEvents: 'none',
+        opacity: 0.028,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        backgroundSize: '120px 120px',
+      }}
+    />
+  );
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { theme } = useTheme();
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +96,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [router]);
 
+  // Lenis smooth scroll on the scroll container
+  useEffect(() => {
+    const lenis = new Lenis({
+      autoRaf: true,
+      smoothWheel: false,
+    });
+    return () => {
+      lenis.destroy();
+    };
+  }, []);
+
   const handleLogout = () => {
     clearSession();
     router.push('/welcome');
@@ -87,10 +120,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div style={{
       height: '100dvh',
       overflow: 'hidden',
-      background: '#09090f',
+      background: theme.bg,
       display: 'flex',
       flexDirection: 'column',
     }}>
+      <NoiseOverlay />
+
       {/* Top Bar */}
       <header style={{
         zIndex: 50,
@@ -99,10 +134,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         justifyContent: 'space-between',
         padding: '10px 16px',
         paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))',
-        background: 'rgba(9, 9, 15, 0.85)',
+        background: theme.headerBg,
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: `1px solid ${theme.border}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
           <button
@@ -111,7 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             style={{
               background: 'none',
               border: 'none',
-              color: 'white',
+              color: theme.text,
               fontSize: '1.15rem',
               lineHeight: 1,
               cursor: 'pointer',
@@ -126,7 +161,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <h1 style={{
             fontSize: '1.05rem',
             fontWeight: 700,
-            color: 'white',
+            color: theme.text,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -143,10 +178,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button
             onClick={handleSwitchAccount}
             style={{
-              background: 'rgba(139, 92, 246, 0.15)',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
+              background: theme.accentDim,
+              border: `1px solid ${theme.accent}4d`,
               borderRadius: '8px',
-              color: '#a78bfa',
+              color: theme.accentText,
               fontSize: '0.72rem',
               padding: '6px 10px',
               cursor: 'pointer',
@@ -197,8 +232,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         width: '272px',
         height: '100dvh',
         zIndex: 60,
-        background: 'rgba(13, 13, 28, 0.98)',
-        borderRight: '1px solid rgba(255,255,255,0.08)',
+        background: theme.bgSoft,
+        borderRight: `1px solid ${theme.borderStrong}`,
         padding: 'calc(20px + env(safe-area-inset-top, 0px)) 14px 24px',
         display: 'flex',
         flexDirection: 'column',
@@ -212,11 +247,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           padding: '12px 14px',
           marginBottom: '12px',
           borderRadius: '12px',
-          background: 'rgba(139, 92, 246, 0.12)',
-          border: '1px solid rgba(139, 92, 246, 0.2)',
+          background: theme.accentDim,
+          border: `1px solid ${theme.accent}33`,
         }}>
           <p style={{
-            color: 'white',
+            color: theme.text,
             fontWeight: 600,
             fontSize: '0.85rem',
             whiteSpace: 'nowrap',
@@ -226,7 +261,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {user || 'Student'}
           </p>
           <p style={{
-            color: 'rgba(255,255,255,0.35)',
+            color: theme.textFaint,
             fontSize: '0.68rem',
             marginTop: '2px',
           }}>
@@ -249,9 +284,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 gap: '12px',
                 padding: '13px 14px',
                 borderRadius: '12px',
-                border: isActive ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid transparent',
-                background: isActive ? 'rgba(139, 92, 246, 0.18)' : 'transparent',
-                color: isActive ? '#c4b5fd' : 'rgba(255,255,255,0.55)',
+                border: isActive ? `1px solid ${theme.accent}40` : '1px solid transparent',
+                background: isActive ? theme.accentDim : 'transparent',
+                color: isActive ? theme.accentText : theme.textDim,
                 fontSize: '0.9rem',
                 fontWeight: isActive ? 600 : 400,
                 cursor: 'pointer',
@@ -282,6 +317,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }}
           >
             {children}
+            <p style={{
+              textAlign: 'center',
+              fontSize: '0.7rem',
+              color: theme.textFaint,
+              margin: '28px 0 8px',
+              letterSpacing: '0.3px',
+            }}>
+              Made by <span style={{ fontWeight: 700, color: theme.textDim }}>Shlok Sathwara</span> ✦
+            </p>
           </main>
         </SubjectRegistryProvider>
       </PullRefresh>
@@ -289,5 +333,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Bottom navigation */}
       <BottomNav />
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </ThemeProvider>
   );
 }

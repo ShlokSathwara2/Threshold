@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -24,7 +24,7 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
       borderBottom: '1px solid rgba(255,255,255,0.05)',
     }}>
       <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{label}</span>
-      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white', textAlign: 'right' }}>
+      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--threshold-text)', textAlign: 'right' }}>
         {value}
       </span>
     </div>
@@ -88,10 +88,10 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         style={{ marginBottom: '16px', paddingTop: '4px' }}
       >
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--threshold-text)', marginBottom: '4px' }}>
           Profile
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           Your student details from the portal
         </p>
       </motion.div>
@@ -100,12 +100,12 @@ export default function ProfilePage() {
         <div style={{
           padding: '24px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-            Loading profile…
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+            Loading profileâ€¦
           </p>
         </div>
       ) : error && !profile && !academia ? (
@@ -153,10 +153,10 @@ export default function ProfilePage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'linear-gradient(135deg, #8b5cf6, #d946ef)',
+                background: 'linear-gradient(135deg, var(--threshold-accent), #d946ef)',
                 fontSize: '1.4rem',
                 fontWeight: 800,
-                color: 'white',
+                color: 'var(--threshold-text)',
               }}>
                 {initials}
               </div>
@@ -165,7 +165,7 @@ export default function ProfilePage() {
               <h2 style={{
                 fontSize: '1.15rem',
                 fontWeight: 800,
-                color: 'white',
+                color: 'var(--threshold-text)',
                 margin: 0,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -188,7 +188,7 @@ export default function ProfilePage() {
                   border: '1px solid rgba(139, 92, 246, 0.3)',
                   fontSize: '0.68rem',
                   fontWeight: 600,
-                  color: '#c4b5fd',
+                  color: 'var(--threshold-accent-text)',
                 }}>
                   Semester {profile.semester}
                 </span>
@@ -233,7 +233,7 @@ export default function ProfilePage() {
         marginTop: '20px',
       }}>
         {isAcademiaLoggedIn()
-          ? 'Linked to academia — pull down to refresh.'
+          ? 'Linked to academia â€” pull down to refresh.'
           : 'Log into academia (timetable) to unlock batch, section and department.'}
       </p>
     </div>

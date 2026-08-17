@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { motion } from 'framer-motion';
 import type { Mark, TestPerformance } from '@/lib/api';
@@ -36,7 +36,7 @@ function Chart({ points, maxVal }: { points: { x: number; y: number; t: number }
       <motion.polyline
         points={line}
         fill="none"
-        stroke="#8b5cf6"
+        stroke="var(--threshold-accent)"
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -51,7 +51,7 @@ function Chart({ points, maxVal }: { points: { x: number; y: number; t: number }
           cx={toX(i, points.length)}
           cy={toY(p.y)}
           r={i === points.length - 1 ? 4 : 3}
-          fill={i === points.length - 1 ? '#c4b5fd' : '#8b5cf6'}
+          fill={i === points.length - 1 ? 'var(--threshold-accent-text)' : 'var(--threshold-accent)'}
           stroke="#09090f"
           strokeWidth="1.5"
           initial={{ opacity: 0, scale: 0 }}
@@ -130,7 +130,7 @@ export default function SubjectMarksChart({ subject }: { subject: Mark }) {
         })}
         {tests.length === 0 && (
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', textAlign: 'center', padding: '10px' }}>
-            No test components entered yet — starts at 0/0
+            No test components entered yet â€” starts at 0/0
           </p>
         )}
       </div>

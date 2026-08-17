@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -31,7 +31,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
       <div style={{
         padding: '20px',
         borderRadius: '16px',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'var(--threshold-surface)',
         border: '1px solid rgba(255,255,255,0.06)',
         textAlign: 'center',
       }}>
@@ -59,7 +59,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
       <div style={{
         padding: '20px',
         borderRadius: '16px',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'var(--threshold-surface)',
         border: '1px solid rgba(255,255,255,0.06)',
         textAlign: 'center',
       }}>
@@ -76,7 +76,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
       style={{
         padding: '20px',
         borderRadius: '16px',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'var(--threshold-surface)',
         border: '1px solid rgba(255,255,255,0.06)',
         marginBottom: '24px',
       }}
@@ -85,15 +85,15 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         Internal Marks
       </h2>
 
-      {/* ── Combined total: all subjects → total obtained ── */}
+      {/* â”€â”€ Combined total: all subjects â†’ total obtained â”€â”€ */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '14px 16px',
         borderRadius: '14px',
-        background: 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(59,130,246,0.06))',
-        border: '1px solid rgba(139,92,246,0.25)',
+        background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.14), rgba(59,130,246,0.06))',
+        border: '1px solid rgba(var(--threshold-accent-rgb),0.25)',
         marginBottom: '14px',
       }}>
         <div>
@@ -101,20 +101,20 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
             margin: 0,
             fontSize: '0.72rem',
             fontWeight: 700,
-            color: '#c4b5fd',
+            color: 'var(--threshold-accent-text)',
             letterSpacing: '0.4px',
             textTransform: 'uppercase',
           }}>
             Total Marks
           </p>
-          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)' }}>
+          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--threshold-text-faint)' }}>
             Combined across {marks.length} subject{marks.length > 1 ? 's' : ''}
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'white' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--threshold-text)' }}>
             {marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0).toFixed(1)}
-            <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 500, fontSize: '0.85rem' }}>
+            <span style={{ color: 'var(--threshold-text-faint)', fontWeight: 500, fontSize: '0.85rem' }}>
               {' / '}
             </span>
             <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
@@ -135,7 +135,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
             {(() => {
               const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
               const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
-              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : '—';
+              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : 'â€”';
             })()}
           </p>
         </div>
@@ -163,12 +163,12 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'white' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
                     {m.code}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px', fontSize: '0.7rem' }}>·</span>
+                  <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px', fontSize: '0.7rem' }}>Â·</span>
                   <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>
-                    {m.description.length > 30 ? m.description.slice(0, 28) + '…' : m.description}
+                    {m.description.length > 30 ? m.description.slice(0, 28) + 'â€¦' : m.description}
                   </span>
                 </div>
                 <span style={{

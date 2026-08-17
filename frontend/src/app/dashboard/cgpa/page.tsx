@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -78,7 +78,7 @@ export default function CgpaCalculatorPage() {
         }
         if (map.size > 0) setCreditMap(map);
       } catch {
-        // academia unavailable — keep default credits
+        // academia unavailable â€” keep default credits
       } finally {
         if (!cancelled) setCreditsSettled(true);
       }
@@ -184,10 +184,10 @@ export default function CgpaCalculatorPage() {
         animate={{ opacity: 1, y: 0 }}
         style={{ marginBottom: '8px', paddingTop: '4px' }}
       >
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--threshold-text)', marginBottom: '4px' }}>
           CGPA Calculator
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           Two tools: predict your SGPA, then plan your end-sem targets
         </p>
         {typeof semester === 'number' && (
@@ -202,19 +202,19 @@ export default function CgpaCalculatorPage() {
             border: '1px solid rgba(139, 92, 246, 0.3)',
             fontSize: '0.72rem',
             fontWeight: 600,
-            color: '#c4b5fd',
+            color: 'var(--threshold-accent-text)',
           }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#8b5cf6' }} />
-            Current semester · Sem {semester}
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--threshold-accent)' }} />
+            Current semester Â· Sem {semester}
           </div>
         )}
       </motion.div>
 
-      {/* ─────────────── CALCULATOR 1: SGPA PREDICTOR ─────────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CALCULATOR 1: SGPA PREDICTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <SectionHeader
-        color="#8b5cf6"
-        title="1 · SGPA Predictor"
-        subtitle="Pick the grade you expect in each current-semester subject — your SGPA recomputes instantly. Only subjects from this semester are listed."
+        color="var(--threshold-accent)"
+        title="1 Â· SGPA Predictor"
+        subtitle="Pick the grade you expect in each current-semester subject â€” your SGPA recomputes instantly. Only subjects from this semester are listed."
       />
 
       {/* SGPA Hero */}
@@ -243,14 +243,14 @@ export default function CgpaCalculatorPage() {
           fontSize: '3rem',
           fontWeight: 800,
           lineHeight: 1,
-          background: 'linear-gradient(135deg, #c4b5fd, #8b5cf6, #f0abfc)',
+          background: 'linear-gradient(135deg, var(--threshold-accent-text), var(--threshold-accent), #f0abfc)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
         }}>
           {sgpa.toFixed(3)}
         </p>
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '8px' }}>
-          {totalPoints.toFixed(1)} grade points ÷ {totalCredits} credits
+          {totalPoints.toFixed(1)} grade points Ã· {totalCredits} credits
         </p>
       </motion.div>
 
@@ -264,7 +264,7 @@ export default function CgpaCalculatorPage() {
             borderRadius: '10px',
             border: '1px dashed rgba(139, 92, 246, 0.4)',
             background: 'rgba(139, 92, 246, 0.08)',
-            color: '#a78bfa',
+            color: 'var(--threshold-accent-text)',
             fontSize: '0.8rem',
             fontWeight: 600,
             cursor: 'pointer',
@@ -279,13 +279,13 @@ export default function CgpaCalculatorPage() {
             padding: '10px 16px',
             borderRadius: '10px',
             border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.03)',
+            background: 'var(--threshold-surface)',
             color: canUndo ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)',
             fontSize: '0.8rem',
             cursor: canUndo ? 'pointer' : 'not-allowed',
           }}
         >
-          ↶ Undo
+          â†¶ Undo
         </button>
         <button
           onClick={reset}
@@ -307,12 +307,12 @@ export default function CgpaCalculatorPage() {
         <div style={{
           padding: '24px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-            Loading current subjects…
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+            Loading current subjectsâ€¦
           </p>
         </div>
       )}
@@ -326,7 +326,7 @@ export default function CgpaCalculatorPage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fca5a5', fontSize: '0.75rem', margin: 0 }}>
-            Could not auto-load subjects ({marksError}) — add them manually below.
+            Could not auto-load subjects ({marksError}) â€” add them manually below.
           </p>
         </div>
       )}
@@ -347,7 +347,7 @@ export default function CgpaCalculatorPage() {
               style={{
                 padding: '12px 14px',
                 borderRadius: '14px',
-                background: 'rgba(255,255,255,0.03)',
+                background: 'var(--threshold-surface)',
                 border: '1px solid rgba(255,255,255,0.07)',
               }}
             >
@@ -361,9 +361,9 @@ export default function CgpaCalculatorPage() {
                     minWidth: 0,
                     padding: '8px 10px',
                     borderRadius: '10px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(255,255,255,0.03)',
-                    color: 'white',
+                    border: '1px solid var(--threshold-border)',
+                    background: 'var(--threshold-surface)',
+                    color: 'var(--threshold-text)',
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     outline: 'none',
@@ -381,16 +381,16 @@ export default function CgpaCalculatorPage() {
                       width: '46px',
                       padding: '8px 6px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: 'rgba(255,255,255,0.03)',
-                      color: 'white',
+                      border: '1px solid var(--threshold-border)',
+                      background: 'var(--threshold-surface)',
+                      color: 'var(--threshold-text)',
                       fontSize: '0.85rem',
                       fontWeight: 700,
                       textAlign: 'center',
                       outline: 'none',
                     }}
                   />
-                  <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)' }}>cr</span>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--threshold-text-faint)' }}>cr</span>
                   <button
                     onClick={() => deleteRow(row.id)}
                     disabled={rows.length <= 1}
@@ -400,13 +400,13 @@ export default function CgpaCalculatorPage() {
                       padding: '6px 9px',
                       borderRadius: '8px',
                       border: 'none',
-                      background: rows.length <= 1 ? 'rgba(255,255,255,0.03)' : 'rgba(239, 68, 68, 0.12)',
+                      background: rows.length <= 1 ? 'var(--threshold-surface)' : 'rgba(239, 68, 68, 0.12)',
                       color: rows.length <= 1 ? 'rgba(255,255,255,0.2)' : '#f87171',
                       fontSize: '0.8rem',
                       cursor: rows.length <= 1 ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    ✕
+                    âœ•
                   </button>
                 </div>
               </div>
@@ -415,7 +415,7 @@ export default function CgpaCalculatorPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginBottom: '8px' }}>
                 <span style={{
                   fontSize: '0.68rem',
-                  color: 'rgba(255,255,255,0.35)',
+                  color: 'var(--threshold-text-faint)',
                   marginRight: '4px',
                   flexShrink: 0,
                 }}>
@@ -432,7 +432,7 @@ export default function CgpaCalculatorPage() {
                         borderRadius: '8px',
                         border: active ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.07)',
                         background: active ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.02)',
-                        color: active ? '#c4b5fd' : 'rgba(255,255,255,0.45)',
+                        color: active ? 'var(--threshold-accent-text)' : 'rgba(255,255,255,0.45)',
                         fontSize: '0.72rem',
                         fontWeight: active ? 700 : 500,
                         cursor: 'pointer',
@@ -452,8 +452,8 @@ export default function CgpaCalculatorPage() {
                   flexShrink: 0,
                   minWidth: '76px',
                 }}>
-                  {row.credits || 0} cr × {gp} GP ={' '}
-                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>{points.toFixed(1)}</span>
+                  {row.credits || 0} cr Ã— {gp} GP ={' '}
+                  <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>{points.toFixed(1)}</span>
                 </span>
                 <div style={{
                   flex: 1,
@@ -468,7 +468,7 @@ export default function CgpaCalculatorPage() {
                     style={{
                       height: '100%',
                       borderRadius: '2px',
-                      background: points > 0 ? '#8b5cf6' : 'rgba(255,255,255,0.15)',
+                      background: points > 0 ? 'var(--threshold-accent)' : 'rgba(255,255,255,0.15)',
                     }}
                   />
                 </div>
@@ -487,34 +487,34 @@ export default function CgpaCalculatorPage() {
         })}
       </div>
 
-      {/* ─────────────── CALCULATOR 2: GRADE PREDICTOR ─────────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CALCULATOR 2: GRADE PREDICTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <SectionHeader
         color="#22c55e"
-        title="2 · Grade Predictor"
-        subtitle="For each current-semester subject, see what you must score in the end-sem exam to reach each grade — based on the internal marks already entered in the portal. Past-semester subjects are never listed here."
+        title="2 Â· Grade Predictor"
+        subtitle="For each current-semester subject, see what you must score in the end-sem exam to reach each grade â€” based on the internal marks already entered in the portal. Past-semester subjects are never listed here."
       />
 
       {marksLoading ? (
         <div style={{
           padding: '24px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-            Loading subject marks…
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
+            Loading subject marksâ€¦
           </p>
         </div>
       ) : marks.length === 0 ? (
         <div style={{
           padding: '20px',
           borderRadius: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'var(--threshold-surface)',
           border: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
         }}>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+          <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
             No marks entered in the portal yet. Once faculty publish internal marks, targets appear here automatically.
           </p>
         </div>
@@ -536,12 +536,12 @@ export default function CgpaCalculatorPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#86efac', marginBottom: '2px' }}>
-                    {m.courseCode} · {m.courseType}
+                    {m.courseCode} Â· {m.courseType}
                   </p>
                   <h3 style={{
                     fontSize: '0.9rem',
                     fontWeight: 600,
-                    color: 'white',
+                    color: 'var(--threshold-text)',
                     margin: 0,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
@@ -561,7 +561,7 @@ export default function CgpaCalculatorPage() {
                   color: '#86efac',
                 }}>
                   {m.overall?.scored || '0'}
-                  <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400, fontSize: '0.72rem' }}>
+                  <span style={{ color: 'var(--threshold-text-faint)', fontWeight: 400, fontSize: '0.72rem' }}>
                     /{m.overall?.total || '0'}
                   </span>
                 </div>
@@ -578,7 +578,7 @@ export default function CgpaCalculatorPage() {
         textAlign: 'center',
         marginTop: '20px',
       }}>
-        Past semesters are already graded — the calculators only cover your current subjects.
+        Past semesters are already graded â€” the calculators only cover your current subjects.
       </p>
     </div>
   );

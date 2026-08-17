@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -41,16 +41,16 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
         marginBottom: '10px',
         background: scheme === 'full' ? 'rgba(139, 92, 246, 0.12)' : 'rgba(34, 197, 94, 0.1)',
         border: `1px solid ${scheme === 'full' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(34, 197, 94, 0.25)'}`,
-        color: scheme === 'full' ? '#c4b5fd' : '#86efac',
+        color: scheme === 'full' ? 'var(--threshold-accent-text)' : '#86efac',
       }}>
         {scheme === 'full'
-          ? `Fully internal (total ${overallTotal} > ${FULL_INTERNAL_THRESHOLD} — no end sem)`
-          : 'Internal + end sem (60/40 — exam 75 → 40)'}
+          ? `Fully internal (total ${overallTotal} > ${FULL_INTERNAL_THRESHOLD} â€” no end sem)`
+          : 'Internal + end sem (60/40 â€” exam 75 â†’ 40)'}
       </div>
 
       {!subject && (
         <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', marginBottom: '8px' }}>
-          No portal marks for this subject yet — enter internal marks manually below.
+          No portal marks for this subject yet â€” enter internal marks manually below.
         </p>
       )}
 
@@ -73,7 +73,7 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
             borderRadius: '10px',
             border: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(255,255,255,0.04)',
-            color: 'white',
+            color: 'var(--threshold-text)',
             fontSize: '0.9rem',
             fontWeight: 700,
             outline: 'none',
@@ -84,7 +84,7 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
           marginLeft: 'auto',
           fontSize: '0.8rem',
           fontWeight: 700,
-          color: '#a78bfa',
+          color: 'var(--threshold-accent-text)',
         }}>
           {internalScored > 0 ? `${currentGrade.grade} (${currentGrade.gp} GP)` : ''}
         </span>
@@ -99,11 +99,11 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
           fontSize: '0.78rem',
           color: 'rgba(255,255,255,0.6)',
         }}>
-          Fully internal — no end-sem exam to back-calculate. Current standing:{' '}
-          <span style={{ color: '#c4b5fd', fontWeight: 700 }}>
+          Fully internal â€” no end-sem exam to back-calculate. Current standing:{' '}
+          <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>
             {internalScored}/{internalTotal} ({overallTotal > 0 ? ((internalScored / internalTotal) * 100).toFixed(1) : '0.0'}%)
           </span>{' '}
-          → <span style={{ color: '#c4b5fd', fontWeight: 700 }}>{currentGrade.grade}</span>
+          â†’ <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>{currentGrade.grade}</span>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -134,13 +134,13 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
                   justifyContent: 'center',
                   fontWeight: 800,
                   fontSize: '0.75rem',
-                  color: band.grade === currentGrade.grade ? '#09090f' : '#c4b5fd',
-                  background: band.grade === currentGrade.grade ? '#c4b5fd' : 'rgba(139, 92, 246, 0.15)',
+                  color: band.grade === currentGrade.grade ? '#09090f' : 'var(--threshold-accent-text)',
+                  background: band.grade === currentGrade.grade ? 'var(--threshold-accent-text)' : 'rgba(139, 92, 246, 0.15)',
                 }}>
                   {band.grade}
                 </span>
                 <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', minWidth: '46px' }}>
-                  ≥ {band.min}
+                  â‰¥ {band.min}
                 </span>
                 <span style={{
                   fontSize: '0.75rem',
