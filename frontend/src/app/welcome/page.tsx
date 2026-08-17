@@ -71,11 +71,11 @@ export default function WelcomePage() {
   const handleGetStarted = () => {
     if (starting) return;
     setStarting(true);
-    window.setTimeout(() => router.push('/login'), 750);
+    window.setTimeout(() => router.push('/sp-login'), 750);
   };
 
   return (
-    <div style={{ position: 'relative', minHeight: '100dvh', background: '#09090f' }}>
+    <div style={{ position: 'relative', height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#09090f' }}>
       {/* Background */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
         <RippleDistortion

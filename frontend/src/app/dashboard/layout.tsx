@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession } from '@/lib/api';
+import { clearAllCaches } from '@/lib/cache';
 import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
@@ -72,15 +73,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   // Keepalive: probe the SP session periodically; when the cookie dies,
-  // log the user out so they re-enter credentials.
+  // keep the last screen + data visible and surface a floating popup so the
+  // user can tap through to re-sign-in (no forced logout / redirect).
+  const [sessionExpired, setSessionExpired] = useState(false);
   useEffect(() => {
     if (!isSpLoggedIn()) return;
     let destroyed = false;
+    let expired = false;
     const checkSession = async () => {
+      if (expired) return;
       const { alive } = await checkSpSession();
-      if (!destroyed && !alive) {
-        clearSession();
-        router.push('/sp-login?expired=1');
+      if (!destroyed && !alive && !expired) {
+        expired = true;
+        setSessionExpired(true);
       }
     };
     const onVisible = () => {
@@ -96,6 +101,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
+  const handleSessionExpiredTap = () => {
+    clearSession();
+    router.push('/sp-login?expired=1');
+  };
+
   // Lenis smooth scroll on the scroll container
   useEffect(() => {
     const lenis = new Lenis({
@@ -109,11 +119,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     clearSession();
+    clearAllCaches();
     router.push('/welcome');
   };
 
   const handleSwitchAccount = () => {
-    router.push('/login');
+    router.push('/welcome');
   };
 
   return (
@@ -323,6 +334,61 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Bottom navigation */}
       <BottomNav />
+
+      {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
+      {sessionExpired && (
+        <motion.button
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={handleSessionExpiredTap}
+          style={{
+            position: 'fixed',
+            left: '16px',
+            right: '16px',
+            bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))',
+            zIndex: 900,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px 16px',
+            borderRadius: '16px',
+            border: '1px solid rgba(245, 158, 11, 0.45)',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.16), rgba(245,158,11,0.05))',
+            color: 'var(--threshold-text)',
+            cursor: 'pointer',
+            boxShadow: '0 10px 32px rgba(0,0,0,0.45), 0 0 24px rgba(245,158,11,0.18)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            textAlign: 'left',
+          }}
+        >
+          <span style={{
+            flexShrink: 0,
+            width: '34px',
+            height: '34px',
+            borderRadius: '11px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(245,158,11,0.2)',
+            border: '1px solid rgba(245,158,11,0.35)',
+            fontSize: '1rem',
+          }}>
+            ⚠
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700 }}>
+              Session timed out
+            </span>
+            <span style={{ display: 'block', fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)', marginTop: '1px' }}>
+              Tap to sign in again — your data above is still from before.
+            </span>
+          </span>
+          <span style={{ flexShrink: 0, fontSize: '0.75rem', fontWeight: 700, color: '#fbbf24' }}>
+            Sign in →
+          </span>
+        </motion.button>
+      )}
     </div>
   );
 }

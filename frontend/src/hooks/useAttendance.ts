@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchSpAttendance,
   fetchCourses,
@@ -10,6 +10,15 @@ import {
   type Course,
 } from '@/lib/api';
 import { calculateAllSubjects, calculateOverallStats, type SubjectAttendance, type OverallStats } from '@/lib/attendance-calculator';
+import { getCached, setCached } from '@/lib/cache';
+
+const CACHE_NS = 'attendance';
+
+interface AttendanceCache {
+  raw: Attendance[];
+  subjects: SubjectAttendance[];
+  overall: OverallStats;
+}
 
 function matchesBatch(slot: string, batch: number): boolean {
   const m = slot.match(/-(\d+)$/);
@@ -53,22 +62,28 @@ export interface UseAttendanceResult {
 }
 
 export function useAttendance(): UseAttendanceResult {
-  const [raw, setRaw] = useState<Attendance[]>([]);
-  const [subjects, setSubjects] = useState<SubjectAttendance[]>([]);
-  const [overall, setOverall] = useState<OverallStats>({
-    totalPresent: 0,
-    totalAbsent: 0,
-    totalClasses: 0,
-    overallPercentage: 0,
-    subjectsBelowThreshold: 0,
-    subjectsSafe: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  // Paint cached data immediately so the dashboard renders instantly;
+  // fresh data replaces it when the network call resolves.
+  const cached = typeof window === 'undefined' ? null : getCached<AttendanceCache>(CACHE_NS);
+  const [raw, setRaw] = useState<Attendance[]>(cached?.data.raw ?? []);
+  const [subjects, setSubjects] = useState<SubjectAttendance[]>(cached?.data.subjects ?? []);
+  const [overall, setOverall] = useState<OverallStats>(
+    cached?.data.overall ?? {
+      totalPresent: 0,
+      totalAbsent: 0,
+      totalClasses: 0,
+      overallPercentage: 0,
+      subjectsBelowThreshold: 0,
+      subjectsSafe: 0,
+    }
+  );
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState('academia');
+  const hasDataRef = useRef((cached?.data.raw.length ?? 0) > 0);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasDataRef.current) setLoading(true);
     setError(null);
     try {
       const [attRes, courseRes, userRes] = await Promise.allSettled([
@@ -126,10 +141,20 @@ export function useAttendance(): UseAttendanceResult {
         });
       }
 
+      hasDataRef.current = calculated.length > 0;
       setSubjects(calculated);
       setOverall(calculateOverallStats(calculated));
+      setCached<AttendanceCache>(CACHE_NS, {
+        raw: data,
+        subjects: calculated,
+        overall: calculateOverallStats(calculated),
+      });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch attendance');
+      // Keep showing the last known data on screen; only surface an error
+      // when there is nothing cached to show.
+      if (!hasDataRef.current) {
+        setError(e instanceof Error ? e.message : 'Failed to fetch attendance');
+      }
     } finally {
       setLoading(false);
     }

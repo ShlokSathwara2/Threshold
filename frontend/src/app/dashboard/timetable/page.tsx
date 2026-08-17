@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -74,7 +74,7 @@ export default function TimetablePage() {
 
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.push('/login');
+      router.push('/welcome');
     }
   }, [router]);
 

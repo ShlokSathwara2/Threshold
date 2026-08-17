@@ -1,6 +1,6 @@
-﻿﻿"use client";
+﻿"use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useSubjectRegistry } from '@/lib/subject-registry';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, hexToRgba } from '@/lib/theme';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
@@ -66,7 +67,11 @@ export default function DashboardPage() {
   const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
   const [gradesKey, setGradesKey] = useState(0);
   const { getSubject } = useSubjectRegistry();
-  usePullToRefresh(async () => { await refetchAttendance(); setGradesKey((k) => k + 1); });
+  usePullToRefresh(async () => {
+    await refetchAttendance();
+    setGradesKey((k) => k + 1);
+    await fetchAll();
+  });
 
   const [profile, setProfile] = useState<SpProfile | null>(null);
   const [todayDO, setTodayDO] = useState<string | null>(null);
@@ -75,6 +80,7 @@ export default function DashboardPage() {
   const [calendar, setCalendar] = useState<CalendarResponse | null>(null);
   const [internalMarks, setInternalMarks] = useState<InternalMark[] | null>(null);
   const [academiaKey, setAcademiaKey] = useState(0);
+  const [staleAsOf, setStaleAsOf] = useState<number | null>(null);
 
   const loadTimetable = async () => {
     if (!isAcademiaLoggedIn()) return;
@@ -97,53 +103,74 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const p = await fetchSpProfile();
-        if (!cancelled && p.profile) setProfile(p.profile);
-      } catch {
-        /* ignore */
-      }
-      try {
-        const cal: CalendarResponse = await fetchCalendar();
-        if (!cancelled) setCalendar(cal);
-        if (!cancelled && !cal.error && cal.today) {
-          const m = cal.today.dayOrder?.match(/Day\s*(\d)/i);
-          setTodayDO(m ? `DO-${m[1]}` : null);
-          setCalError(null);
-        } else {
-          setTodayDO(null);
-          setCalError(cal?.error ? (cal.message || 'Calendar unavailable') : null);
-        }
-      } catch {
-        if (!cancelled) {
-          setTodayDO(null);
-          setCalError(null);
-        }
-      }
-      try {
-        const im = await fetchSpInternalMarks();
-        if (!cancelled) setInternalMarks(im.internal_marks?.length ? im.internal_marks : null);
-      } catch {
-        if (!cancelled) setInternalMarks(null);
-      }
-      if (!isAcademiaLoggedIn()) {
-        setTodayClasses(null);
-        return;
-      }
-      try {
-        const tt: TimetableResponse = await fetchTimetable();
-        if (!cancelled) {
-          setTodayClasses(tt.schedule?.length ? tt.schedule : null);
-        }
-      } catch {
-        if (!cancelled) setTodayClasses(null);
-      }
-    })();
-    return () => { cancelled = true; };
+  const applyToday = (cal: CalendarResponse | null) => {
+    if (!cal || cal.error || !cal.today) {
+      setTodayDO(null);
+      setCalError(cal?.error ? (cal.message || 'Calendar unavailable') : null);
+      return;
+    }
+    const m = cal.today.dayOrder?.match(/Day\s*(\d)/i);
+    setTodayDO(m ? `DO-${m[1]}` : null);
+    setCalError(null);
+  };
+
+  // Fetches everything in parallel (profile + calendar + internal marks,
+  // then academia timetable if logged in) and refreshes the local cache.
+  const fetchAll = useCallback(async () => {
+    const [pRes, calRes, imRes] = await Promise.allSettled([
+      fetchSpProfile(),
+      fetchCalendar(),
+      fetchSpInternalMarks(),
+    ]);
+
+    if (pRes.status === 'fulfilled' && pRes.value.profile) {
+      const p = pRes.value.profile;
+      setProfile(p);
+      // Don't cache the (potentially large) photo — it loads on demand.
+      setCached<SpProfile>('profile', { ...p, photo: undefined });
+    }
+    if (calRes.status === 'fulfilled') {
+      const cal: CalendarResponse = calRes.value;
+      setCalendar(cal);
+      setCached<CalendarResponse>('calendar', cal);
+      applyToday(cal);
+      setStaleAsOf(null);
+    } else {
+      applyToday(null);
+    }
+    if (imRes.status === 'fulfilled') {
+      const im = imRes.value.internal_marks?.length ? imRes.value.internal_marks : null;
+      setInternalMarks(im);
+      if (im) setCached<InternalMark[]>('internalMarks', im);
+    }
+
+    if (!isAcademiaLoggedIn()) {
+      setTodayClasses(null);
+      return;
+    }
+    try {
+      const tt: TimetableResponse = await fetchTimetable();
+      setTodayClasses(tt.schedule?.length ? tt.schedule : null);
+    } catch {
+      setTodayClasses(null);
+    }
   }, []);
+
+  useEffect(() => {
+    // Paint cached values instantly so the dashboard is never blank
+    const cachedCal = getCached<CalendarResponse>('calendar');
+    if (cachedCal) {
+      setCalendar(cachedCal.data);
+      applyToday(cachedCal.data);
+      setStaleAsOf(cachedCal.savedAt);
+    }
+    const cachedIM = getCached<InternalMark[]>('internalMarks');
+    if (cachedIM) setInternalMarks(cachedIM.data);
+    const cachedProfile = getCached<SpProfile>('profile');
+    if (cachedProfile?.data) setProfile({ ...cachedProfile.data, photo: undefined });
+
+    fetchAll();
+  }, [fetchAll]);
 
   const firstName = profile?.name?.split(' ')[0] || 'Student';
   const todaysSlots = todayClasses
@@ -771,6 +798,16 @@ export default function DashboardPage() {
               boxShadow: '0 0 12px rgba(var(--threshold-accent-rgb),0.3)',
             }}>
               {todayDO}
+            </span>
+          )}
+          {staleAsOf && (
+            <span style={{
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.35)',
+              letterSpacing: '0.3px',
+            }}>
+              as of {new Date(staleAsOf).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
             </span>
           )}
           <button

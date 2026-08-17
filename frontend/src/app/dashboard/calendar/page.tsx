@@ -24,7 +24,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.push('/login');
+      router.push('/welcome');
     }
   }, [router]);
 

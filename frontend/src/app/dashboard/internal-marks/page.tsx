@@ -1,4 +1,4 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ export default function InternalMarksPage() {
 
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.push('/login');
+      router.push('/welcome');
     }
   }, [router]);
 
