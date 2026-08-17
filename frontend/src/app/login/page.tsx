@@ -403,17 +403,6 @@ export default function LoginPage() {
             </form>
           )}
         </motion.div>
-
-        {/* Footer */}
-        <p style={{
-          marginTop: 'auto',
-          paddingTop: '24px',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-          color: 'rgba(255,255,255,0.2)',
-          fontSize: '0.72rem',
-        }}>
-          Made by Shlok Sathwara
-        </p>
       </div>
     </div>
   );

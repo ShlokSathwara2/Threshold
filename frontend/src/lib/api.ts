@@ -6,35 +6,32 @@ export interface Session {
   timestamp: number;
 }
 
-const ACADEMIA_KEY = 'threshold_academia_cookie';
+// Academia session is kept in memory ONLY — never persisted to localStorage.
+// The timetable belongs to whoever logs in, so each user on a shared device
+// must enter their own academia credentials (asked on every app launch).
+let academiaCookie: string | null = null;
+let academiaUsername: string | null = null;
 
 export function getAcademiaCookies(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return localStorage.getItem(ACADEMIA_KEY);
-  } catch {
-    return null;
-  }
+  return academiaCookie;
 }
 
-export function setAcademiaCookies(cookies: string) {
-  try {
-    localStorage.setItem(ACADEMIA_KEY, cookies);
-  } catch {
-    /* ignore */
-  }
+export function getAcademiaUsername(): string | null {
+  return academiaUsername;
+}
+
+export function setAcademiaCookies(cookies: string, username?: string) {
+  academiaCookie = cookies;
+  if (username) academiaUsername = username;
 }
 
 export function clearAcademiaCookies() {
-  try {
-    localStorage.removeItem(ACADEMIA_KEY);
-  } catch {
-    /* ignore */
-  }
+  academiaCookie = null;
+  academiaUsername = null;
 }
 
 export function isAcademiaLoggedIn(): boolean {
-  return !!getAcademiaCookies();
+  return !!academiaCookie;
 }
 
 export function getSession(): Session | null {

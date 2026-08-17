@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -85,7 +85,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         Internal Marks
       </h2>
 
-      {/* â”€â”€ Combined total: all subjects â†’ total obtained â”€â”€ */}
+      {/* ── Combined total: all subjects → total obtained ── */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -135,7 +135,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
             {(() => {
               const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
               const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
-              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : 'â€”';
+              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : '—';
             })()}
           </p>
         </div>
@@ -166,9 +166,9 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
                   <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
                     {m.code}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px', fontSize: '0.7rem' }}>Â·</span>
+                  <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px', fontSize: '0.7rem' }}>·</span>
                   <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>
-                    {m.description.length > 30 ? m.description.slice(0, 28) + 'â€¦' : m.description}
+                    {m.description.length > 30 ? m.description.slice(0, 28) + '…' : m.description}
                   </span>
                 </div>
                 <span style={{

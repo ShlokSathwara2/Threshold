@@ -317,15 +317,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             }}
           >
             {children}
-            <p style={{
-              textAlign: 'center',
-              fontSize: '0.7rem',
-              color: theme.textFaint,
-              margin: '28px 0 8px',
-              letterSpacing: '0.3px',
-            }}>
-              Made by <span style={{ fontWeight: 700, color: theme.textDim }}>Shlok Sathwara</span> ✦
-            </p>
           </main>
         </SubjectRegistryProvider>
       </PullRefresh>

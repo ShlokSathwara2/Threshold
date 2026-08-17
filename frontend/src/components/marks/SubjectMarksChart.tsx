@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { motion } from 'framer-motion';
 import type { Mark, TestPerformance } from '@/lib/api';
@@ -130,7 +130,7 @@ export default function SubjectMarksChart({ subject }: { subject: Mark }) {
         })}
         {tests.length === 0 && (
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', textAlign: 'center', padding: '10px' }}>
-            No test components entered yet â€” starts at 0/0
+            No test components entered yet — starts at 0/0
           </p>
         )}
       </div>

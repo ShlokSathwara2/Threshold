@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -44,8 +44,8 @@ function parseClock(t: string | undefined): number | null {
   const m = t.match(/(\d{1,2}):(\d{2})/);
   if (!m) return null;
   let min = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-  // Times arrive as 12-hour strings without AM/PM: hours â‰¤ 6 are afternoon
-  // (e.g. "01:25 - 02:15" = 1:25 PM), 12 is midday, 7â€“11 are morning.
+  // Times arrive as 12-hour strings without AM/PM: hours ≤ 6 are afternoon
+  // (e.g. "01:25 - 02:15" = 1:25 PM), 12 is midday, 7–11 are morning.
   if (Math.floor(min / 60) <= 6) min += 12 * 60;
   return min;
 }
@@ -54,7 +54,7 @@ function slotWindow(s: TimetableSlot): { start: number; end: number } {
   const [fromRaw, toRaw] = (s.time || '').split('-');
   let start = parseClock(fromRaw);
   let end = parseClock(toRaw);
-  // Fallback for missing/odd times: hour 1 â‰ˆ 08:00, each hour 50 min
+  // Fallback for missing/odd times: hour 1 ≈ 08:00, each hour 50 min
   if (start === null) start = 480 + (s.hour - 1) * 50;
   if (end === null) end = start + 50;
   return { start, end };
@@ -175,7 +175,7 @@ export default function DashboardPage() {
 
   const atRisk = subjects.filter((s) => s.isBelowThreshold);
 
-  // â”€â”€ Alerts: upcoming holidays from the academic calendar â”€â”€
+  // ── Alerts: upcoming holidays from the academic calendar ──
   const upcomingHolidays = (() => {
     if (!calendar || calendar.error || !calendar.calendar) return [];
     const todayD = new Date();
@@ -196,14 +196,14 @@ export default function DashboardPage() {
 
   const holidayToday = upcomingHolidays.some((h) => h.date.getTime() === new Date().setHours(0, 0, 0, 0));
 
-  // â”€â”€ Current / next class â”€â”€
+  // ── Current / next class ──
   const currentClass = todaysSlots.find((s) => {
     const w = slotWindow(s);
     return nowMin >= w.start && nowMin < w.end;
   });
   const nextClass = todaysSlots.find((s) => slotWindow(s).start > nowMin);
 
-  // â”€â”€ Marks lookup for the quick list â”€â”€
+  // ── Marks lookup for the quick list ──
   const marksByCode = new Map<string, InternalMark>();
   internalMarks?.forEach((m) => {
     if (!marksByCode.has(m.code)) marksByCode.set(m.code, m);
@@ -263,7 +263,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* â”€â”€ Hero â”€â”€ */}
+      {/* ── Hero ── */}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -396,7 +396,7 @@ export default function DashboardPage() {
               boxShadow: `0 0 8px ${overallColor}`,
             }} />
             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>
-              {loading ? 'â€¦' : `${overall.overallPercentage.toFixed(1)}%`} overall
+              {loading ? '…' : `${overall.overallPercentage.toFixed(1)}%`} overall
             </span>
           </div>
           {profile?.semester && (
@@ -416,7 +416,7 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* â”€â”€ Quick Stats Grid â”€â”€ */}
+      {/* ── Quick Stats Grid ── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
@@ -458,7 +458,7 @@ export default function DashboardPage() {
               fontWeight: 800,
               color: overallColor,
             }}>
-              {loading ? 'â€”' : `${overall.overallPercentage.toFixed(0)}%`}
+              {loading ? '—' : `${overall.overallPercentage.toFixed(0)}%`}
             </span>
           </div>
           <p style={{ color: 'var(--threshold-text-dim)', fontSize: '0.75rem', fontWeight: 600 }}>
@@ -493,7 +493,7 @@ export default function DashboardPage() {
             marginBottom: '4px',
             lineHeight: 1,
           }}>
-            {loading ? 'â€”' : overall.subjectsBelowThreshold}
+            {loading ? '—' : overall.subjectsBelowThreshold}
           </div>
           <p style={{ color: 'var(--threshold-text-dim)', fontSize: '0.75rem', fontWeight: 600 }}>
             Below 75%
@@ -525,7 +525,7 @@ export default function DashboardPage() {
             marginBottom: '4px',
             lineHeight: 1,
           }}>
-            {loading ? 'â€”' : overall.totalClasses}
+            {loading ? '—' : overall.totalClasses}
           </div>
           <p style={{ color: 'var(--threshold-text-dim)', fontSize: '0.75rem', fontWeight: 600 }}>
             Classes Held
@@ -557,15 +557,15 @@ export default function DashboardPage() {
             marginBottom: '4px',
             lineHeight: 1,
           }}>
-            {loading ? 'â€”' : overall.subjectsSafe}
+            {loading ? '—' : overall.subjectsSafe}
           </div>
           <p style={{ color: 'var(--threshold-text-dim)', fontSize: '0.75rem', fontWeight: 600 }}>
-            Safe (â‰¥75%)
+            Safe (≥75%)
           </p>
         </motion.div>
       </div>
 
-      {/* â”€â”€ Alerts â”€â”€ */}
+      {/* ── Alerts ── */}
       {(!loading || upcomingHolidays.length > 0) && (
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -591,7 +591,7 @@ export default function DashboardPage() {
             <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
               Alerts
             </h2>
-            <span style={{ color: '#fbbf24', fontSize: '0.95rem' }}>âš¡</span>
+            <span style={{ color: '#fbbf24', fontSize: '0.95rem' }}>⚡</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {!loading && overall.subjectsBelowThreshold > 0 && (
@@ -615,7 +615,7 @@ export default function DashboardPage() {
                   color: '#f87171',
                   fontSize: '0.95rem',
                 }}>
-                  âš 
+                  ⚠
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
@@ -638,7 +638,7 @@ export default function DashboardPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Fix â†’
+                  Fix →
                 </button>
               </div>
             )}
@@ -663,7 +663,7 @@ export default function DashboardPage() {
                   color: '#86efac',
                   fontSize: '0.95rem',
                 }}>
-                  ðŸŽ‰
+                  🎉
                 </span>
                 <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)', flex: 1 }}>
                   Holiday today
@@ -693,7 +693,7 @@ export default function DashboardPage() {
                     color: '#93c5fd',
                     fontSize: '0.95rem',
                   }}>
-                    ðŸ“…
+                    📅
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
@@ -725,14 +725,14 @@ export default function DashboardPage() {
                 color: 'var(--threshold-text-faint)',
                 fontSize: '0.75rem',
               }}>
-                All clear â€” no risks or holidays on the horizon.
+                All clear — no risks or holidays on the horizon.
               </p>
             )}
           </div>
         </motion.div>
       )}
 
-      {/* â”€â”€ Today's Classes â”€â”€ */}
+      {/* ── Today's Classes ── */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -785,7 +785,7 @@ export default function DashboardPage() {
               fontWeight: 600,
             }}
           >
-            Full timetable â†’
+            Full timetable →
           </button>
         </div>
 
@@ -813,7 +813,7 @@ export default function DashboardPage() {
               color: currentClass ? '#f0abfc' : 'var(--threshold-accent-text)',
               textTransform: 'uppercase',
             }}>
-              {currentClass ? 'â— In class now' : nextClass ? 'Up next' : ''}
+              {currentClass ? '● In class now' : nextClass ? 'Up next' : ''}
             </p>
             {(currentClass || nextClass) && (
               <>
@@ -834,10 +834,10 @@ export default function DashboardPage() {
                   color: 'var(--threshold-text-dim)',
                 }}>
                   {(currentClass || nextClass)!.courseCode}
-                  {(currentClass || nextClass)!.slot ? ` Â· ${(currentClass || nextClass)!.slot}` : ''}
-                  {' Â· '}{fmtTime(slotWindow((currentClass || nextClass)!).start)} â€“ {fmtTime(slotWindow((currentClass || nextClass)!).end)}
+                  {(currentClass || nextClass)!.slot ? ` · ${(currentClass || nextClass)!.slot}` : ''}
+                  {' · '}{fmtTime(slotWindow((currentClass || nextClass)!).start)} – {fmtTime(slotWindow((currentClass || nextClass)!).end)}
                   {(currentClass || nextClass)!.room && (currentClass || nextClass)!.room !== 'N/A'
-                    ? ` Â· ${(currentClass || nextClass)!.room}`
+                    ? ` · ${(currentClass || nextClass)!.room}`
                     : ''}
                 </p>
               </>
@@ -859,7 +859,7 @@ export default function DashboardPage() {
             fontSize: '0.75rem',
           }}>
             {calError
-              ? `Calendar unavailable (${calError}) â€” your Student Portal session may have expired. Re-login to restore the day order.`
+              ? `Calendar unavailable (${calError}) — your Student Portal session may have expired. Re-login to restore the day order.`
               : 'Could not determine today\'s day order from the calendar.'}
           </p>
         )}
@@ -873,12 +873,12 @@ export default function DashboardPage() {
                 fontSize: '0.8rem',
                 fontWeight: 500,
               }}>
-                No classes on {todayDO} â€” enjoy the free day!
+                No classes on {todayDO} — enjoy the free day!
               </p>
             </div>
           ) : (
             <div style={{ padding: '16px 16px 8px' }}>
-              {/* â”€â”€ Timeline (progress bar + nodes + labels) â”€â”€ */}
+              {/* ── Timeline (progress bar + nodes + labels) ── */}
               <div style={{ position: 'relative', paddingTop: '6px', marginBottom: '8px' }}>
                 {/* Track */}
                 <div style={{
@@ -968,7 +968,7 @@ export default function DashboardPage() {
                 <span>END {fmtTime(dayEnd)}</span>
               </div>
 
-              {/* â”€â”€ Flowchart: class cards in order â”€â”€ */}
+              {/* ── Flowchart: class cards in order ── */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                 {todaysSlots.map((s, i) => {
                   const w = slotWindow(s);
@@ -1037,7 +1037,7 @@ export default function DashboardPage() {
                             letterSpacing: '0.3px',
                             whiteSpace: 'nowrap',
                           }}>
-                            {fmtTime(w.start)} â€“ {fmtTime(w.end)}
+                            {fmtTime(w.start)} – {fmtTime(w.end)}
                           </span>
                           <span style={{
                             flexShrink: 0,
@@ -1066,7 +1066,7 @@ export default function DashboardPage() {
                               color: '#f5d0fe',
                               letterSpacing: '0.4px',
                             }}>
-                              â— ONGOING
+                              ● ONGOING
                             </span>
                           )}
                           {done && (
@@ -1101,8 +1101,8 @@ export default function DashboardPage() {
                           textOverflow: 'ellipsis',
                         }}>
                           {s.courseCode}
-                          {s.faculty && s.faculty !== 'N/A' ? ` Â· ${s.faculty.split('(')[0].trim()}` : ''}
-                          {s.room && s.room !== 'N/A' ? ` Â· ${s.room}` : ''}
+                          {s.faculty && s.faculty !== 'N/A' ? ` · ${s.faculty.split('(')[0].trim()}` : ''}
+                          {s.room && s.room !== 'N/A' ? ` · ${s.room}` : ''}
                         </p>
                       </div>
                     </motion.div>
@@ -1114,7 +1114,7 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* â”€â”€ Subjects at Risk â”€â”€ */}
+      {/* ── Subjects at Risk ── */}
       {!loading && subjects.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1142,7 +1142,7 @@ export default function DashboardPage() {
                 fontWeight: 600,
               }}
             >
-              View all â†’
+              View all →
             </button>
           </div>
 
@@ -1167,10 +1167,10 @@ export default function DashboardPage() {
               >
                 <div>
                   <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--threshold-text)', margin: 0 }}>
-                    {subject.courseTitle.length > 30 ? subject.courseTitle.slice(0, 28) + 'â€¦' : subject.courseTitle}
+                    {subject.courseTitle.length > 30 ? subject.courseTitle.slice(0, 28) + '…' : subject.courseTitle}
                   </p>
                   <p style={{ fontSize: '0.7rem', color: 'var(--threshold-text-faint)', margin: '2px 0 0' }}>
-                    {subject.courseCode} â€¢ {subject.facultyName}
+                    {subject.courseCode} • {subject.facultyName}
                   </p>
                   <p style={{
                     fontSize: '0.66rem',
@@ -1224,7 +1224,7 @@ export default function DashboardPage() {
                 textAlign: 'center',
               }}>
                 <p style={{ color: '#86efac', fontSize: '0.85rem', fontWeight: 600 }}>
-                  All subjects above 75% â€” you&apos;re safe!
+                  All subjects above 75% — you&apos;re safe!
                 </p>
               </div>
             )}

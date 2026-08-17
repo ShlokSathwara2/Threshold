@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -44,13 +44,13 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
         color: scheme === 'full' ? 'var(--threshold-accent-text)' : '#86efac',
       }}>
         {scheme === 'full'
-          ? `Fully internal (total ${overallTotal} > ${FULL_INTERNAL_THRESHOLD} â€” no end sem)`
-          : 'Internal + end sem (60/40 â€” exam 75 â†’ 40)'}
+          ? `Fully internal (total ${overallTotal} > ${FULL_INTERNAL_THRESHOLD} — no end sem)`
+          : 'Internal + end sem (60/40 — exam 75 → 40)'}
       </div>
 
       {!subject && (
         <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', marginBottom: '8px' }}>
-          No portal marks for this subject yet â€” enter internal marks manually below.
+          No portal marks for this subject yet — enter internal marks manually below.
         </p>
       )}
 
@@ -99,11 +99,11 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
           fontSize: '0.78rem',
           color: 'rgba(255,255,255,0.6)',
         }}>
-          Fully internal â€” no end-sem exam to back-calculate. Current standing:{' '}
+          Fully internal — no end-sem exam to back-calculate. Current standing:{' '}
           <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>
             {internalScored}/{internalTotal} ({overallTotal > 0 ? ((internalScored / internalTotal) * 100).toFixed(1) : '0.0'}%)
           </span>{' '}
-          â†’ <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>{currentGrade.grade}</span>
+          → <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>{currentGrade.grade}</span>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -140,7 +140,7 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
                   {band.grade}
                 </span>
                 <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', minWidth: '46px' }}>
-                  â‰¥ {band.min}
+                  ≥ {band.min}
                 </span>
                 <span style={{
                   fontSize: '0.75rem',

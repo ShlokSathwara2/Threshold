@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   isLoggedIn,
   isAcademiaLoggedIn,
+  getAcademiaUsername,
   setAcademiaCookies,
   academiaLogin,
   fetchTimetable,
@@ -15,7 +16,7 @@ import {
 } from '@/lib/api';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
-const CACHE_KEY = 'threshold_timetable_cache';
+const CACHE_PREFIX = 'threshold_timetable_cache';
 
 interface TimetableCache {
   batch: string;
@@ -25,9 +26,13 @@ interface TimetableCache {
 
 const DAYS = ['DO-1', 'DO-2', 'DO-3', 'DO-4', 'DO-5'];
 
-function loadCache(): TimetableCache | null {
+function cacheKey(username: string | null): string {
+  return `${CACHE_PREFIX}__${username || 'anon'}`;
+}
+
+function loadCache(username: string | null): TimetableCache | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey(username));
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -35,9 +40,17 @@ function loadCache(): TimetableCache | null {
   }
 }
 
-function saveCache(cache: TimetableCache) {
+function saveCache(username: string | null, cache: TimetableCache) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    localStorage.setItem(cacheKey(username), JSON.stringify(cache));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearCache(username: string | null) {
+  try {
+    localStorage.removeItem(cacheKey(username));
   } catch {
     /* ignore */
   }
@@ -65,9 +78,10 @@ export default function TimetablePage() {
     }
   }, [router]);
 
-  // Show any cached timetable immediately
+  // Show a cached timetable only for the currently logged-in academia user
   useEffect(() => {
-    const cached = loadCache();
+    if (!isAcademiaLoggedIn()) return;
+    const cached = loadCache(getAcademiaUsername());
     if (cached) {
       setSchedule(cached.schedule);
       setBatch(cached.batch);
@@ -86,13 +100,13 @@ export default function TimetablePage() {
       setBatch(res.batch || '');
       const now = Date.now();
       setSavedAt(now);
-      saveCache({ batch: res.batch || '', savedAt: now, schedule: next });
+      saveCache(getAcademiaUsername(), { batch: res.batch || '', savedAt: now, schedule: next });
       if (next.length === 0) {
-        setError('Timetable is empty for your batch â€” the portal may not have published it yet.');
+        setError('Timetable is empty for your batch — the portal may not have published it yet.');
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load timetable';
-      // Keep the academia cookie â€” a transient error (deploy, timeout) shouldn't
+      // Keep the academia cookie — a transient error (deploy, timeout) shouldn't
       // wipe the saved session. Show the error; the user can re-login if it persists.
       setError(msg);
     } finally {
@@ -131,15 +145,16 @@ export default function TimetablePage() {
           setCaptchaText('');
           setLoginError(res.message || 'Enter the CAPTCHA to continue');
         } else {
-          setLoginError(res.message || 'Login failed â€” check your credentials');
+          setLoginError(res.message || 'Login failed — check your credentials');
         }
         return;
       }
       if (!res.cookies) {
-        setLoginError('Login succeeded but no session was returned â€” try again');
+        setLoginError('Login succeeded but no session was returned — try again');
         return;
       }
-      setAcademiaCookies(res.cookies);
+      setAcademiaCookies(res.cookies, username.trim());
+      clearCache(username.trim());
       setCaptcha(null);
       await fetchLive();
     } catch (err: unknown) {
@@ -151,7 +166,7 @@ export default function TimetablePage() {
 
   const needsLogin = !isAcademiaLoggedIn();
 
-  // Today's DO (e.g. DO-3) is not a fixed weekday â€” derive it from the
+  // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
   // even when holidays shift the sequence.
   const [todayIndex, setTodayIndex] = useState(-1);
@@ -208,14 +223,14 @@ export default function TimetablePage() {
             Batch {batch}
             {savedAt && (
               <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.66rem' }}>
-                Â· saved {new Date(savedAt).toLocaleDateString()}
+                · saved {new Date(savedAt).toLocaleDateString()}
               </span>
             )}
           </span>
         )}
       </motion.div>
 
-      {/* â”€â”€ Academia login card â”€â”€ */}
+      {/* ── Academia login card ── */}
       <AnimatePresence>
         {needsLogin && (
           <motion.div
@@ -234,9 +249,9 @@ export default function TimetablePage() {
               Academia login needed
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
-              The timetable lives in academia, not the SP portal â€” and academia uses its own login
-              (your SP credentials won&apos;t work here). It&apos;s saved after the first load and
-              stays until the semester ends.
+              The timetable lives in academia, not the SP portal — and academia uses its own login
+              (your SP credentials won&apos;t work here). It&apos;s per-user and not saved on this
+              device — you&apos;ll be asked to log in again each time you open the app.
             </p>
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <input
@@ -322,14 +337,14 @@ export default function TimetablePage() {
                   opacity: loggingIn ? 0.6 : 1,
                 }}
               >
-                {loggingIn ? 'Logging inâ€¦' : captcha ? 'Verify & load timetable' : 'Log in & load timetable'}
+                {loggingIn ? 'Logging in…' : captcha ? 'Verify & load timetable' : 'Log in & load timetable'}
               </button>
             </form>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* â”€â”€ Loading / error â”€â”€ */}
+      {/* ── Loading / error ── */}
       {loading && schedule.length === 0 && (
         <div style={{
           padding: '24px',
@@ -339,7 +354,7 @@ export default function TimetablePage() {
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-            Loading your batch timetableâ€¦
+            Loading your batch timetable…
           </p>
         </div>
       )}
@@ -365,12 +380,12 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fcd34d', fontSize: '0.75rem', margin: 0 }}>
-            Showing saved timetable â€” {error} Re-log in above to refresh.
+            Showing saved timetable — {error} Re-log in above to refresh.
           </p>
         </div>
       )}
 
-      {/* â”€â”€ AcadLoop-style grid: hours Ã— DO columns â”€â”€ */}
+      {/* ── AcadLoop-style grid: hours × DO columns ── */}
       {!needsLogin && schedule.length === 0 && !loading && !error && (
         <div style={{
           padding: '20px',
@@ -552,7 +567,7 @@ export default function TimetablePage() {
                                 {s.faculty && s.faculty !== 'N/A'
                                   ? s.faculty.split('(')[0].trim()
                                   : ''}
-                                {s.room && s.room !== 'N/A' ? ` Â· ${s.room}` : ''}
+                                {s.room && s.room !== 'N/A' ? ` · ${s.room}` : ''}
                               </span>
                             </div>
                           ))}
@@ -582,7 +597,7 @@ export default function TimetablePage() {
               cursor: loading ? 'wait' : 'pointer',
             }}
           >
-            {loading ? 'Refreshingâ€¦' : 'â†» Refresh'}
+            {loading ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
       )}

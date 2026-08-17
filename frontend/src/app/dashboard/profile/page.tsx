@@ -105,7 +105,7 @@ export default function ProfilePage() {
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-            Loading profileâ€¦
+            Loading profile…
           </p>
         </div>
       ) : error && !profile && !academia ? (
@@ -233,8 +233,18 @@ export default function ProfilePage() {
         marginTop: '20px',
       }}>
         {isAcademiaLoggedIn()
-          ? 'Linked to academia â€” pull down to refresh.'
+          ? 'Linked to academia — pull down to refresh.'
           : 'Log into academia (timetable) to unlock batch, section and department.'}
+      </p>
+
+      <p style={{
+        textAlign: 'center',
+        fontSize: '0.72rem',
+        color: 'var(--threshold-text-faint)',
+        margin: '24px 0 8px',
+        letterSpacing: '0.3px',
+      }}>
+        Made by <span style={{ fontWeight: 700, color: 'var(--threshold-text-dim)' }}>Shlok Sathwara</span> ✦
       </p>
     </div>
   );

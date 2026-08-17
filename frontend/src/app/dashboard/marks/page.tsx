@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -46,7 +46,7 @@ function Spinner() {
         }}
       />
       <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-        Fetching resultsâ€¦
+        Fetching results…
       </p>
     </div>
   );
@@ -204,7 +204,7 @@ export default function MarksPage() {
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
         }}>
-          {cgpa !== null ? cgpa.toFixed(2) : 'â€”'}
+          {cgpa !== null ? cgpa.toFixed(2) : '—'}
         </p>
       </motion.div>
 
@@ -233,7 +233,7 @@ export default function MarksPage() {
                 fontWeight: 700,
                 color: 'var(--threshold-text)',
               }}>
-                {c.value ?? 'â€”'}
+                {c.value ?? '—'}
               </p>
               <p style={{
                 color: 'rgba(255,255,255,0.4)',
@@ -298,7 +298,7 @@ export default function MarksPage() {
             textAlign: 'center',
           }}>
             <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-              Fetching subject marksâ€¦
+              Fetching subject marks…
             </p>
           </div>
         ) : marksError ? (
@@ -382,7 +382,7 @@ export default function MarksPage() {
                 fontWeight: 700,
                 fontSize: '0.9rem',
               }}>
-                {sem.sgpa !== null ? `SGPA ${sem.sgpa.toFixed(3)}` : 'â€”'}
+                {sem.sgpa !== null ? `SGPA ${sem.sgpa.toFixed(3)}` : '—'}
               </span>
             </div>
 
@@ -478,7 +478,7 @@ export default function MarksPage() {
             transition: 'all 0.2s',
           }}
         >
-          â†» Refresh
+          ↻ Refresh
         </button>
       </div>
     </div>

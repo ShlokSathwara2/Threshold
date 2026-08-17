@@ -45,7 +45,7 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
         setLoginError('Login succeeded but no session was returned — try again');
         return;
       }
-      setAcademiaCookies(res.cookies);
+      setAcademiaCookies(res.cookies, username.trim());
       setCaptcha(null);
       setLoginError('');
       onSuccess?.();
@@ -72,8 +72,8 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
       </h2>
       <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
         The timetable lives in academia, not the SP portal — and academia uses its own login
-        (your SP credentials won&apos;t work here). It&apos;s saved after the first load and
-        stays until the semester ends.
+        (your SP credentials won&apos;t work here). Credentials are never saved on this device —
+        log in whenever you want to load your timetable, and it stays yours only.
       </p>
       <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <input

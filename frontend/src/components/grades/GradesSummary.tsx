@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -118,7 +118,7 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--threshold-accent-text)', marginBottom: '2px' }}>
-            {data.cgpa?.toFixed(2) ?? 'â€”'}
+            {data.cgpa?.toFixed(2) ?? '—'}
           </div>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>CGPA</p>
         </div>
@@ -130,7 +130,7 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#22c55e', marginBottom: '2px' }}>
-            {data.credits_earned ?? 'â€”'}
+            {data.credits_earned ?? '—'}
           </div>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>Earned</p>
         </div>
@@ -142,7 +142,7 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>
-            {data.credits_registered ?? 'â€”'}
+            {data.credits_registered ?? '—'}
           </div>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>Registered</p>
         </div>
@@ -203,7 +203,7 @@ function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expande
           transform: expanded ? 'rotate(180deg)' : 'rotate(0)',
           transition: 'transform 0.2s',
         }}>
-          â–¼
+          ▼
         </span>
       </button>
 
@@ -227,9 +227,9 @@ function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expande
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ color: 'rgba(255,255,255,0.6)' }}>{g.code}</span>
-                <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px' }}>Â·</span>
+                <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px' }}>·</span>
                 <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem' }}>
-                  {g.description.length > 25 ? g.description.slice(0, 23) + 'â€¦' : g.description}
+                  {g.description.length > 25 ? g.description.slice(0, 23) + '…' : g.description}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>

@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -78,7 +78,7 @@ export default function CgpaCalculatorPage() {
         }
         if (map.size > 0) setCreditMap(map);
       } catch {
-        // academia unavailable â€” keep default credits
+        // academia unavailable — keep default credits
       } finally {
         if (!cancelled) setCreditsSettled(true);
       }
@@ -205,16 +205,16 @@ export default function CgpaCalculatorPage() {
             color: 'var(--threshold-accent-text)',
           }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--threshold-accent)' }} />
-            Current semester Â· Sem {semester}
+            Current semester · Sem {semester}
           </div>
         )}
       </motion.div>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CALCULATOR 1: SGPA PREDICTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ─────────────── CALCULATOR 1: SGPA PREDICTOR ─────────────── */}
       <SectionHeader
         color="var(--threshold-accent)"
-        title="1 Â· SGPA Predictor"
-        subtitle="Pick the grade you expect in each current-semester subject â€” your SGPA recomputes instantly. Only subjects from this semester are listed."
+        title="1 · SGPA Predictor"
+        subtitle="Pick the grade you expect in each current-semester subject — your SGPA recomputes instantly. Only subjects from this semester are listed."
       />
 
       {/* SGPA Hero */}
@@ -250,7 +250,7 @@ export default function CgpaCalculatorPage() {
           {sgpa.toFixed(3)}
         </p>
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '8px' }}>
-          {totalPoints.toFixed(1)} grade points Ã· {totalCredits} credits
+          {totalPoints.toFixed(1)} grade points ÷ {totalCredits} credits
         </p>
       </motion.div>
 
@@ -285,7 +285,7 @@ export default function CgpaCalculatorPage() {
             cursor: canUndo ? 'pointer' : 'not-allowed',
           }}
         >
-          â†¶ Undo
+          ↶ Undo
         </button>
         <button
           onClick={reset}
@@ -312,7 +312,7 @@ export default function CgpaCalculatorPage() {
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-            Loading current subjectsâ€¦
+            Loading current subjects…
           </p>
         </div>
       )}
@@ -326,7 +326,7 @@ export default function CgpaCalculatorPage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fca5a5', fontSize: '0.75rem', margin: 0 }}>
-            Could not auto-load subjects ({marksError}) â€” add them manually below.
+            Could not auto-load subjects ({marksError}) — add them manually below.
           </p>
         </div>
       )}
@@ -406,7 +406,7 @@ export default function CgpaCalculatorPage() {
                       cursor: rows.length <= 1 ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    âœ•
+                    ✕
                   </button>
                 </div>
               </div>
@@ -452,7 +452,7 @@ export default function CgpaCalculatorPage() {
                   flexShrink: 0,
                   minWidth: '76px',
                 }}>
-                  {row.credits || 0} cr Ã— {gp} GP ={' '}
+                  {row.credits || 0} cr × {gp} GP ={' '}
                   <span style={{ color: 'var(--threshold-accent-text)', fontWeight: 700 }}>{points.toFixed(1)}</span>
                 </span>
                 <div style={{
@@ -487,11 +487,11 @@ export default function CgpaCalculatorPage() {
         })}
       </div>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CALCULATOR 2: GRADE PREDICTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ─────────────── CALCULATOR 2: GRADE PREDICTOR ─────────────── */}
       <SectionHeader
         color="#22c55e"
-        title="2 Â· Grade Predictor"
-        subtitle="For each current-semester subject, see what you must score in the end-sem exam to reach each grade â€” based on the internal marks already entered in the portal. Past-semester subjects are never listed here."
+        title="2 · Grade Predictor"
+        subtitle="For each current-semester subject, see what you must score in the end-sem exam to reach each grade — based on the internal marks already entered in the portal. Past-semester subjects are never listed here."
       />
 
       {marksLoading ? (
@@ -503,7 +503,7 @@ export default function CgpaCalculatorPage() {
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-            Loading subject marksâ€¦
+            Loading subject marks…
           </p>
         </div>
       ) : marks.length === 0 ? (
@@ -536,7 +536,7 @@ export default function CgpaCalculatorPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#86efac', marginBottom: '2px' }}>
-                    {m.courseCode} Â· {m.courseType}
+                    {m.courseCode} · {m.courseType}
                   </p>
                   <h3 style={{
                     fontSize: '0.9rem',
@@ -578,7 +578,7 @@ export default function CgpaCalculatorPage() {
         textAlign: 'center',
         marginTop: '20px',
       }}>
-        Past semesters are already graded â€” the calculators only cover your current subjects.
+        Past semesters are already graded — the calculators only cover your current subjects.
       </p>
     </div>
   );

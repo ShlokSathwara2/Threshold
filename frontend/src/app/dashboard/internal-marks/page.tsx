@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -40,7 +40,7 @@ export default function InternalMarksPage() {
           }}
         />
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-          Fetching internal marksâ€¦
+          Fetching internal marks…
         </p>
       </div>
     );
@@ -146,7 +146,7 @@ export default function InternalMarksPage() {
           Internal Marks
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-          {marks.length} subject{marks.length === 1 ? '' : 's'} â€¢ current semester
+          {marks.length} subject{marks.length === 1 ? '' : 's'} • current semester
         </p>
       </motion.div>
 
@@ -194,7 +194,7 @@ export default function InternalMarksPage() {
                   fontSize: '0.62rem',
                   marginTop: '2px',
                 }}>
-                  / {m.maxMark || 'â€”'}
+                  / {m.maxMark || '—'}
                 </p>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -235,7 +235,7 @@ export default function InternalMarksPage() {
             transition: 'all 0.2s',
           }}
         >
-          â†» Refresh
+          ↻ Refresh
         </button>
       </div>
     </div>

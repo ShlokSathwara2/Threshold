@@ -39,20 +39,6 @@ function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () 
   );
 }
 
-function FooterCredit({ textColor }: { textColor: string }) {
-  return (
-    <p style={{
-      textAlign: 'center',
-      fontSize: '0.72rem',
-      color: textColor,
-      margin: '28px 0 8px',
-      letterSpacing: '0.3px',
-    }}>
-      Made by <span style={{ fontWeight: 700 }}>Shlok Sathwara</span> ✦
-    </p>
-  );
-}
-
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme, notif, setNotif } = useTheme();
@@ -252,7 +238,6 @@ export default function SettingsPage() {
         }}>
           v0.9.0 · Phase 8 Premium UI
         </p>
-        <FooterCredit textColor="rgba(255,255,255,0.35)" />
       </motion.section>
     </div>
   );

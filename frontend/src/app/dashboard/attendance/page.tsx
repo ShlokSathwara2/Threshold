@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -42,7 +42,7 @@ export default function AttendancePage() {
           }}
         />
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-          Fetching attendance dataâ€¦
+          Fetching attendance data…
         </p>
       </div>
     );
@@ -107,7 +107,7 @@ export default function AttendancePage() {
           Attendance
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-          {subjects.length} subjects tracked â€¢ Sorted by risk (lowest margin first)
+          {subjects.length} subjects tracked • Sorted by risk (lowest margin first)
         </p>
       </motion.div>
 
@@ -136,7 +136,7 @@ export default function AttendancePage() {
             transition: 'all 0.2s',
           }}
         >
-          â†» Refresh
+          ↻ Refresh
         </button>
       </div>
     </div>

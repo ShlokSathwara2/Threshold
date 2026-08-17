@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -46,10 +46,10 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--threshold-accent-text)', marginBottom: '2px' }}>
-            {subject.courseCode} Â· {subject.courseType}
-            {meta && meta.category ? ` Â· ${meta.category}` : ''}
-            {meta && meta.credit && meta.credit !== 'N/A' ? ` Â· ${meta.credit} cr` : ''}
-            {meta && meta.facultyName ? ` Â· ${meta.facultyName}` : ''}
+            {subject.courseCode} · {subject.courseType}
+            {meta && meta.category ? ` · ${meta.category}` : ''}
+            {meta && meta.credit && meta.credit !== 'N/A' ? ` · ${meta.credit} cr` : ''}
+            {meta && meta.facultyName ? ` · ${meta.facultyName}` : ''}
           </p>
           <h3 style={{
             fontSize: '0.9rem',
@@ -76,7 +76,7 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
             </span>
           </p>
           <p style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
-            {scheme === 'full' ? '100% internal' : '60+40 scheme'} {expanded ? 'â–¾' : 'â–¸'}
+            {scheme === 'full' ? '100% internal' : '60+40 scheme'} {expanded ? '▾' : '▸'}
           </p>
         </div>
       </div>

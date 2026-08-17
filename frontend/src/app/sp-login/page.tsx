@@ -439,16 +439,6 @@ export default function SpLoginPage() {
             </form>
           )}
         </motion.div>
-
-        <p style={{
-          marginTop: 'auto',
-          paddingTop: '24px',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-          color: 'rgba(255,255,255,0.2)',
-          fontSize: '0.72rem',
-        }}>
-          Made by Shlok Sathwara
-        </p>
       </div>
     </div>
   );
