@@ -3,10 +3,15 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
+import { displayDate, type LeaveProjection, type ReachPlan } from '@/lib/day-order';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 interface Props {
   subject: SubjectAttendance;
   index: number;
+  dayOrders?: Map<string, number>;
+  reachPlan?: ReachPlan | null;
+  projection?: LeaveProjection | null;
 }
 
 const statusColors: Record<SubjectAttendance['status'], { bg: string; border: string; text: string; accent: string }> = {
@@ -17,12 +22,14 @@ const statusColors: Record<SubjectAttendance['status'], { bg: string; border: st
 };
 
 function ProgressBar({ percentage, color }: { percentage: number; color: string }) {
+  const { theme } = useTheme();
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div style={{
       width: '100%',
       height: '4px',
       borderRadius: '2px',
-      background: 'rgba(255,255,255,0.06)',
+      background: WB(0.06),
       overflow: 'hidden',
     }}>
       <motion.div
@@ -40,6 +47,9 @@ function ProgressBar({ percentage, color }: { percentage: number; color: string 
 }
 
 function StatPill({ label, value, color }: { label: string; value: number | string; color?: string }) {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div style={{
       display: 'flex',
@@ -48,26 +58,35 @@ function StatPill({ label, value, color }: { label: string; value: number | stri
       gap: '2px',
       padding: '6px 10px',
       borderRadius: '8px',
-      background: 'rgba(255,255,255,0.03)',
+      background: WB(0.03),
       minWidth: '48px',
     }}>
-      <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <span style={{ fontSize: '0.65rem', color: W(0.35), textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <span style={{ fontSize: '0.9rem', fontWeight: 700, color: color || 'white' }}>
+      <span style={{ fontSize: '0.9rem', fontWeight: 700, color: color || theme.text }}>
         {value}
       </span>
     </div>
   );
 }
 
-export default function SubjectAttendanceCard({ subject, index }: Props) {
+export default function SubjectAttendanceCard({ subject, index, dayOrders, reachPlan, projection }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const colors = statusColors[subject.status];
+
+  const projected = projection && projection.missed > 0 ? projection : null;
 
   const shortTitle = subject.courseTitle.length > 28
     ? subject.courseTitle.slice(0, 26) + '…'
     : subject.courseTitle;
+
+  const doList = dayOrders && dayOrders.size > 0
+    ? [...dayOrders.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    : null;
 
   return (
     <motion.div
@@ -103,7 +122,7 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
           <h3 style={{
             fontSize: '0.9rem',
             fontWeight: 600,
-            color: 'white',
+            color: theme.text,
             margin: 0,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -111,12 +130,12 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
           }}>
             {shortTitle}
           </h3>
-          <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
+          <p style={{ fontSize: '0.7rem', color: W(0.3), margin: '2px 0 0' }}>
             {subject.facultyName}
           </p>
           <p style={{
             fontSize: '0.66rem',
-            color: 'rgba(255,255,255,0.35)',
+            color: W(0.35),
             margin: '3px 0 0',
             display: 'flex',
             alignItems: 'center',
@@ -134,7 +153,7 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
                 style={{
                   padding: '2px 7px',
                   borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: WB(0.05),
                   border: '1px solid rgba(255,255,255,0.06)',
                   fontWeight: 500,
                 }}
@@ -147,14 +166,36 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
 
         {/* Percentage Badge */}
         <div style={{
-          padding: '6px 12px',
-          borderRadius: '10px',
-          background: `${colors.text}18`,
-          border: `1px solid ${colors.text}30`,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '2px',
+          flexShrink: 0,
         }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: colors.text }}>
-            {subject.percentage.toFixed(1)}%
-          </span>
+          <div style={{
+            padding: '6px 12px',
+            borderRadius: '10px',
+            background: projected ? `${projected.dropsBelow75 ? '#ef4444' : '#22c55e'}1f` : `${colors.text}18`,
+            border: `1px solid ${projected ? (projected.dropsBelow75 ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)') : `${colors.text}30`}`,
+          }}>
+            <span style={{
+              fontSize: '1.1rem',
+              fontWeight: 800,
+              color: projected ? (projected.dropsBelow75 ? '#ef4444' : '#22c55e') : colors.text,
+            }}>
+              {(projected ? projected.projectedPercentage : subject.percentage).toFixed(1)}%
+            </span>
+          </div>
+          {projected && (
+            <span style={{
+              fontSize: '0.56rem',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              color: projected.dropsBelow75 ? '#ef4444' : '#22c55e',
+            }}>
+              AFTER LEAVE
+            </span>
+          )}
         </div>
       </div>
 
@@ -165,13 +206,44 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
       <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
         <StatPill label="Present" value={subject.present} color="#22c55e" />
         <StatPill label="Absent" value={subject.absent} color="#ef4444" />
-        <StatPill label="Total" value={subject.total} />
-        <StatPill
-          label="Margin"
-          value={subject.isBelowThreshold ? `−${subject.mustAttend}` : `+${subject.canBunk}`}
-          color={subject.isBelowThreshold ? '#ef4444' : '#22c55e'}
-        />
+        <StatPill label="Total" value={projected ? projected.projectedTotal : subject.total} />
+        {projected ? (
+          <StatPill
+            label={projected.dropsBelow75 ? 'After leave' : 'After leave'}
+            value={`${projected.projectedPercentage.toFixed(1)}%`}
+            color={projected.dropsBelow75 ? '#ef4444' : '#22c55e'}
+          />
+        ) : (
+          <StatPill
+            label="Margin"
+            value={subject.isBelowThreshold ? `−${subject.mustAttend}` : `+${subject.canBunk}`}
+            color={subject.isBelowThreshold ? '#ef4444' : '#22c55e'}
+          />
+        )}
       </div>
+
+      {/* Leave chip when projection active */}
+      {projected && (
+        <div style={{
+          marginTop: '8px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '5px 10px',
+          borderRadius: '8px',
+          background: projected.dropsBelow75 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.1)',
+          border: `1px solid ${projected.dropsBelow75 ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.25)'}`,
+        }}>
+          <span style={{
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            color: projected.dropsBelow75 ? '#fca5a5' : '#86efac',
+          }}>
+            Leave misses {projected.missed} class{projected.missed === 1 ? '' : 'es'}
+            {projected.dropsBelow75 ? ' — drops below 75%' : ' — still above 75%'}
+          </span>
+        </div>
+      )}
 
       {/* Expanded Details */}
       <AnimatePresence>
@@ -216,41 +288,108 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
                 </div>
               )}
 
+              {/* Recovery plan — reach 75% by a concrete date */}
+              {subject.isBelowThreshold && reachPlan && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: reachPlan.reachable ? 'rgba(234, 179, 8, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                  border: `1px solid ${reachPlan.reachable ? 'rgba(234, 179, 8, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                }}>
+                  {!reachPlan.hasSchedule ? (
+                    <p style={{ fontSize: '0.78rem', color: W(0.5), margin: 0, fontWeight: 500 }}>
+                      No timetable data — can't estimate a date to reach 75%
+                    </p>
+                  ) : reachPlan.reachable ? (
+                    <p style={{ fontSize: '0.78rem', color: '#fde68a', margin: 0, fontWeight: 500 }}>
+                      Attend every class till <span style={{ fontWeight: 800, color: '#fbbf24' }}>{displayDate(reachPlan.reachDate!)}</span> to cross 75%
+                      <span style={{ color: W(0.45) }}>
+                        {' '}— {reachPlan.needed} needed, {reachPlan.futureClasses} on schedule
+                      </span>
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: '0.78rem', color: '#fca5a5', margin: 0, fontWeight: 500 }}>
+                      Can't reach 75% this semester — only <span style={{ fontWeight: 800 }}>{reachPlan.futureClasses}</span> classes left on schedule
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Class schedule by day order */}
+              <div>
+                <p style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.6px',
+                  textTransform: 'uppercase',
+                  color: W(0.35),
+                  margin: '0 0 6px',
+                }}>
+                  Class schedule by day order
+                </p>
+                {doList ? (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {doList.map(([doName, count]) => (
+                      <span key={doName} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '5px 10px',
+                        borderRadius: '8px',
+                        background: 'rgba(139, 92, 246, 0.1)',
+                        border: '1px solid rgba(139, 92, 246, 0.25)',
+                      }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--threshold-accent-text)' }}>
+                          {doName}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: W(0.55) }}>
+                          {count} class{count === 1 ? '' : 'es'}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.72rem', color: W(0.35), margin: 0 }}>
+                    No timetable data for this subject
+                  </p>
+                )}
+              </div>
+
               {/* Category & Slot & Timetable details */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                   {subject.category || 'Category —'}
                 </span>
-                <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                   Slot: {subject.slot}
                 </span>
                 {subject.room && subject.room !== 'N/A' && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     Room: {subject.room}
                   </span>
                 )}
                 {subject.credit && subject.credit !== 'N/A' && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     Credits: {subject.credit}
                   </span>
                 )}
                 {subject.courseType && subject.courseType !== 'N/A' && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     Type: {subject.courseType}
                   </span>
                 )}
                 {subject.courseCategory && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     {subject.courseCategory}
                   </span>
                 )}
                 {subject.facultyId && subject.facultyId !== 'N/A' && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     Faculty ID: {subject.facultyId}
                   </span>
                 )}
                 {subject.academicYear && (
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '0.7rem', color: W(0.3), padding: '4px 8px', borderRadius: '6px', background: WB(0.04) }}>
                     {subject.academicYear}
                   </span>
                 )}

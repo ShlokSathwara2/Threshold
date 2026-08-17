@@ -1,13 +1,18 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpInternalMarks, type InternalMark } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number }) {
   const [marks, setMarks] = useState<InternalMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,10 +37,10 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         textAlign: 'center',
       }}>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>Loading internal marks...</p>
+        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>Loading internal marks...</p>
       </div>
     );
   }
@@ -60,10 +65,10 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         textAlign: 'center',
       }}>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>No internal marks data available</p>
+        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>No internal marks data available</p>
       </div>
     );
   }
@@ -77,11 +82,11 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         marginBottom: '24px',
       }}
     >
-      <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: '16px' }}>
+      <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: W(0.7), marginBottom: '16px' }}>
         Internal Marks
       </h2>
 
@@ -117,7 +122,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
             <span style={{ color: 'var(--threshold-text-faint)', fontWeight: 500, fontSize: '0.85rem' }}>
               {' / '}
             </span>
-            <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.9rem', color: W(0.5), fontWeight: 600 }}>
               {marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0).toFixed(0)}
             </span>
           </span>
@@ -157,8 +162,8 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
               style={{
                 padding: '12px 14px',
                 borderRadius: '12px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.04)',
+                background: WB(0.02),
+                border: `1px solid ${WB(0.04)}`,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -166,8 +171,8 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
                   <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
                     {m.code}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px', fontSize: '0.7rem' }}>·</span>
-                  <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>
+                  <span style={{ color: W(0.25), margin: '0 6px', fontSize: '0.7rem' }}>·</span>
+                  <span style={{ fontSize: '0.72rem', color: W(0.4) }}>
                     {m.description.length > 30 ? m.description.slice(0, 28) + '…' : m.description}
                   </span>
                 </div>
@@ -178,7 +183,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
                   flexShrink: 0,
                   marginLeft: '8px',
                 }}>
-                  {m.scored}<span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400, fontSize: '0.75rem' }}>/{m.maxMark}</span>
+                  {m.scored}<span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.75rem' }}>/{m.maxMark}</span>
                 </span>
               </div>
 
@@ -186,7 +191,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
               <div style={{
                 height: '3px',
                 borderRadius: '2px',
-                background: 'rgba(255,255,255,0.06)',
+                background: WB(0.06),
                 overflow: 'hidden',
               }}>
                 <motion.div

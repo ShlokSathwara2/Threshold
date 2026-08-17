@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 const ThresholdText = dynamic(() => import('@/components/effects/ThresholdText'), { ssr: false });
 const RippleDistortion = dynamic(() => import('@/components/effects/RippleDistortion'), { ssr: false });
@@ -66,6 +67,9 @@ const FeatureIcon = ({ type, color }: { type: string; color: string }) => {
 
 export default function WelcomePage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [starting, setStarting] = useState(false);
 
   const handleGetStarted = () => {
@@ -153,7 +157,7 @@ export default function WelcomePage() {
                   ease: [0.23, 1, 0.32, 1],
                 }}
                 style={{
-                  color: 'rgba(255,255,255,0.75)',
+                  color: W(0.75),
                   marginRight: '6px',
                 }}
               >
@@ -194,7 +198,7 @@ export default function WelcomePage() {
             transition={{ duration: 0.6 }}
             style={{
               fontSize: '1.15rem',
-              color: 'rgba(255,255,255,0.7)',
+              color: W(0.7),
               textAlign: 'center',
               marginBottom: '28px',
               fontWeight: 500,
@@ -219,7 +223,7 @@ export default function WelcomePage() {
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08, duration: 0.4 }}
-                whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.06)' }}
+                whileHover={{ scale: 1.02, backgroundColor: WB(0.06) }}
                 whileTap={{ scale: 0.97 }}
                 style={{
                   display: 'flex',
@@ -227,8 +231,8 @@ export default function WelcomePage() {
                   gap: '14px',
                   padding: '14px 16px',
                   borderRadius: '16px',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: WB(0.03),
+                  border: `1px solid ${WB(0.06)}`,
                   backdropFilter: 'blur(12px)',
                   cursor: 'pointer',
                   transition: 'border-color 0.3s, box-shadow 0.3s',
@@ -247,10 +251,10 @@ export default function WelcomePage() {
                   <FeatureIcon type={feature.icon} color={feature.color} />
                 </div>
                 <div>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'rgba(255,255,255,0.9)', marginBottom: '2px' }}>
+                  <p style={{ fontSize: '0.9rem', fontWeight: 600, color: W(0.9), marginBottom: '2px' }}>
                     {feature.title}
                   </p>
-                  <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
+                  <p style={{ fontSize: '0.75rem', color: W(0.4), lineHeight: 1.4 }}>
                     {feature.description}
                   </p>
                 </div>

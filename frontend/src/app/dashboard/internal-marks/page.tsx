@@ -6,9 +6,13 @@ import { motion } from 'framer-motion';
 import { isLoggedIn } from '@/lib/api';
 import { useInternalMarks } from '@/hooks/useInternalMarks';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 export default function InternalMarksPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const { marks, loading, error, refetch } = useInternalMarks();
   usePullToRefresh(refetch);
 
@@ -39,7 +43,7 @@ export default function InternalMarksPage() {
             borderRadius: '50%',
           }}
         />
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+        <p style={{ color: W(0.4), fontSize: '0.85rem' }}>
           Fetching internal marks…
         </p>
       </div>
@@ -229,7 +233,7 @@ export default function InternalMarksPage() {
             borderRadius: '10px',
             border: '1px solid var(--threshold-border)',
             background: 'var(--threshold-surface)',
-            color: 'rgba(255,255,255,0.4)',
+            color: W(0.4),
             fontSize: '0.8rem',
             cursor: 'pointer',
             transition: 'all 0.2s',

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform } from '@/lib/capacitor';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -20,6 +21,9 @@ const SP_DASHBOARD_URL = 'https://sp.srmist.edu.in/srmiststudentportal/students/
 
 export default function LoginPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [cookie, setCookie] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,9 +164,9 @@ export default function LoginPage() {
     width: '100%',
     padding: '14px 16px',
     borderRadius: '12px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(255,255,255,0.05)',
-    color: 'white',
+    border: `1px solid ${WB(0.1)}`,
+    background: WB(0.05),
+    color: theme.text,
     fontSize: '14px',
     outline: 'none',
     transition: 'border-color 0.3s',
@@ -256,14 +260,14 @@ export default function LoginPage() {
           <h1 style={{
             fontSize: '1.5rem',
             fontWeight: 700,
-            color: 'white',
+            color: theme.text,
             textAlign: 'center',
             marginBottom: '6px',
           }}>
             {isNative ? 'Student Portal' : 'Welcome back'}
           </h1>
           <p style={{
-            color: 'rgba(255,255,255,0.45)',
+            color: W(0.45),
             textAlign: 'center',
             marginBottom: '28px',
             fontSize: '0.85rem',
@@ -321,7 +325,7 @@ export default function LoginPage() {
               </motion.button>
 
               <p style={{
-                color: 'rgba(255,255,255,0.3)',
+                color: W(0.3),
                 fontSize: '0.7rem',
                 marginTop: '12px',
                 lineHeight: 1.4,
@@ -334,7 +338,7 @@ export default function LoginPage() {
             /* ── Web: Manual Cookie Paste ── */
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
                   Session Cookie
                 </label>
                 <textarea
@@ -349,10 +353,10 @@ export default function LoginPage() {
                     lineHeight: 1.4,
                   }}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
                 />
                 <p style={{
-                  color: 'rgba(255,255,255,0.3)',
+                  color: W(0.3),
                   fontSize: '0.7rem',
                   marginTop: '6px',
                   lineHeight: 1.4,

@@ -1,7 +1,8 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { motion } from 'framer-motion';
 import type { Mark, TestPerformance } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 function parseNum(v: string): number {
   const n = parseFloat(v);
@@ -9,6 +10,8 @@ function parseNum(v: string): number {
 }
 
 function Chart({ points, maxVal }: { points: { x: number; y: number; t: number }[]; maxVal: number }) {
+  const { theme } = useTheme();
+  const WB = (a: number) => overlayBg(theme, a);
   const W = 320;
   const H = 120;
   const PAD = 8;
@@ -21,13 +24,13 @@ function Chart({ points, maxVal }: { points: { x: number; y: number; t: number }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
       {/* baseline */}
-      <line x1={PAD} y1={toY(0)} x2={W - PAD} y2={toY(0)} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <line x1={PAD} y1={toY(0)} x2={W - PAD} y2={toY(0)} stroke={WB(0.12)} strokeWidth="1" />
       {/* total envelope */}
       {points.length > 1 && (
         <polyline
           points={points.map((p, i) => `${toX(i, points.length)},${toY(p.t)}`).join(' ')}
           fill="none"
-          stroke="rgba(255,255,255,0.18)"
+          stroke={WB(0.18)}
           strokeWidth="2"
           strokeDasharray="4 3"
         />
@@ -66,6 +69,10 @@ function Chart({ points, maxVal }: { points: { x: number; y: number; t: number }
 export default function SubjectMarksChart({ subject }: { subject: Mark }) {
   const tests: TestPerformance[] = subject.testPerformance || [];
 
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
+
   let cumScored = 0;
   let cumTotal = 0;
   const points: { x: number; y: number; t: number }[] = [{ x: 0, y: 0, t: 0 }];
@@ -97,11 +104,11 @@ export default function SubjectMarksChart({ subject }: { subject: Mark }) {
               gap: '10px',
               padding: '8px 10px',
               borderRadius: '10px',
-              background: 'rgba(255,255,255,0.02)',
+              background: WB(0.02),
             }}>
               <span style={{
                 fontSize: '0.72rem',
-                color: 'rgba(255,255,255,0.45)',
+                color: W(0.45),
                 minWidth: '72px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -109,7 +116,7 @@ export default function SubjectMarksChart({ subject }: { subject: Mark }) {
               }}>
                 {t.test}
               </span>
-              <div style={{ flex: 1, height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+              <div style={{ flex: 1, height: '4px', borderRadius: '2px', background: WB(0.06), overflow: 'hidden' }}>
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${pct}%` }}
@@ -123,13 +130,13 @@ export default function SubjectMarksChart({ subject }: { subject: Mark }) {
                 color: color,
                 flexShrink: 0,
               }}>
-                {s}<span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400, fontSize: '0.7rem' }}>/{m}</span>
+                {s}<span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.7rem' }}>/{m}</span>
               </span>
             </div>
           );
         })}
         {tests.length === 0 && (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', textAlign: 'center', padding: '10px' }}>
+          <p style={{ color: W(0.3), fontSize: '0.75rem', textAlign: 'center', padding: '10px' }}>
             No test components entered yet — starts at 0/0
           </p>
         )}

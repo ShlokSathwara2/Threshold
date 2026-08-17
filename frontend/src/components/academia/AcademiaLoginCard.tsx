@@ -7,8 +7,12 @@ import {
   academiaLogin,
   type AcademiaLoginResponse,
 } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => void }) {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -70,7 +74,7 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
       <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
         Academia login needed
       </h2>
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
+      <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
         The timetable lives in academia, not the SP portal — and academia uses its own login
         (your SP credentials won&apos;t work here). Credentials are never saved on this device —
         log in whenever you want to load your timetable, and it stays yours only.
@@ -85,9 +89,9 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
           style={{
             padding: '12px 14px',
             borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.04)',
-            color: 'white',
+            border: `1px solid ${WB(0.1)}`,
+            background: WB(0.04),
+            color: theme.text,
             fontSize: '0.9rem',
             outline: 'none',
           }}
@@ -100,9 +104,9 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
           style={{
             padding: '12px 14px',
             borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.04)',
-            color: 'white',
+            border: `1px solid ${WB(0.1)}`,
+            background: WB(0.04),
+            color: theme.text,
             fontSize: '0.9rem',
             outline: 'none',
           }}
@@ -114,8 +118,8 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
             gap: '10px',
             padding: '10px',
             borderRadius: '12px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: WB(0.03),
+            border: `1px solid ${WB(0.08)}`,
           }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -132,9 +136,9 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
                 flex: 1,
                 padding: '10px 12px',
                 borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.04)',
-                color: 'white',
+                border: `1px solid ${WB(0.1)}`,
+                background: WB(0.04),
+                color: theme.text,
                 fontSize: '0.85rem',
                 outline: 'none',
               }}

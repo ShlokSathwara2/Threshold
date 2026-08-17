@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import useEmblaCarousel from 'embla-carousel-react';
 import {
   isLoggedIn,
   fetchCalendar,
@@ -12,15 +11,19 @@ import {
   type CalendarDay,
 } from '@/lib/api';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import Dropdown from '@/components/ui/Dropdown';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 export default function CalendarPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [months, setMonths] = useState<CalendarMonth[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [doFilter, setDoFilter] = useState<string>('all');
-  const [emblaRef, emblaApi] = useEmblaCarousel({ align: 'start', containScroll: false });
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -57,7 +60,7 @@ export default function CalendarPage() {
     .replace(/\//g, '-');
 
 const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
-  d.isHoliday === true || /holiday/i.test(d.event || '');
+    d.isHoliday === true || /holiday/i.test(d.event || '');
 
   // ── Dynamic filter options, derived from loaded data ──
   const doNumbers = useMemo(() => {
@@ -106,112 +109,29 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
 
       {/* ── Filters (options are derived from loaded data) ── */}
       {months.length > 0 && (
-        <>
-          {/* Quick filter chips */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '12px',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            paddingBottom: '2px',
-          }}>
-            {[
-              { value: 'all', label: 'All' },
-              { value: 'holiday', label: '🎉 Holidays' },
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '16px',
+        }}>
+          <Dropdown
+            value={monthFilter}
+            onChange={setMonthFilter}
+            options={[
+              { value: 'all', label: 'All months' },
+              ...monthNames.map((name) => ({ value: name, label: name })),
+            ]}
+          />
+          <Dropdown
+            value={doFilter}
+            onChange={setDoFilter}
+            options={[
+              { value: 'all', label: 'All day orders' },
+              { value: 'holiday', label: 'Holidays only', hint: '🎉' },
               ...doNumbers.map((n) => ({ value: `DO-${n}`, label: `DO-${n}` })),
-            ].map((chip) => (
-              <button
-                key={chip.value}
-                onClick={() => setDoFilter(chip.value)}
-                style={{
-                  flexShrink: 0,
-                  padding: '8px 14px',
-                  borderRadius: '999px',
-                  border: doFilter === chip.value
-                    ? '1px solid rgba(var(--threshold-accent-rgb),0.6)'
-                    : '1px solid rgba(255,255,255,0.1)',
-                  background: doFilter === chip.value
-                    ? 'rgba(var(--threshold-accent-rgb),0.2)'
-                    : 'var(--threshold-surface)',
-                  color: doFilter === chip.value ? '#e9d5ff' : 'rgba(255,255,255,0.5)',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '16px',
-          }}>
-            {/* Swipeable month strip (Embla) */}
-            <div style={{ flex: 1, overflow: 'hidden' }} ref={emblaRef}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {[
-                  { value: 'all', label: 'All months' },
-                  ...monthNames.map((name) => ({ value: name, label: name })),
-                ].map((m) => (
-                  <button
-                    key={m.value}
-                    onClick={() => setMonthFilter(m.value)}
-                    style={{
-                      flex: '0 0 auto',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      background: monthFilter === m.value
-                        ? 'rgba(var(--threshold-accent-rgb),0.2)'
-                        : 'rgba(255,255,255,0.04)',
-                      border: monthFilter === m.value
-                        ? '1px solid rgba(var(--threshold-accent-rgb),0.6)'
-                        : '1px solid var(--threshold-border)',
-                      color: monthFilter === m.value
-                        ? 'var(--threshold-accent-text)'
-                        : 'var(--threshold-text-dim)',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <select
-              value={doFilter}
-              onChange={(e) => setDoFilter(e.target.value)}
-              style={{
-                flexShrink: 0,
-                padding: '10px 12px',
-                borderRadius: '12px',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid var(--threshold-border)',
-                color: 'var(--threshold-text)',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                outline: 'none',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-              }}
-            >
-              <option value="all" style={{ background: '#16161f' }}>All day orders</option>
-              <option value="holiday" style={{ background: '#16161f' }}>Holidays only</option>
-              {doNumbers.map((n) => (
-                <option key={n} value={`DO-${n}`} style={{ background: '#16161f' }}>
-                  DO-{n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
+            ]}
+          />
+        </div>
       )}
 
       {/* ── Loading / error ── */}
@@ -220,7 +140,7 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
           padding: '24px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -246,7 +166,7 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
           padding: '20px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -266,8 +186,8 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
             transition={{ delay: mi * 0.05 }}
             style={{
               borderRadius: '16px',
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: WB(0.02),
+              border: `1px solid ${WB(0.06)}`,
               marginBottom: '12px',
               overflow: 'hidden',
             }}
@@ -277,12 +197,12 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
               alignItems: 'center',
               gap: '8px',
               padding: '12px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              borderBottom: `1px solid ${WB(0.05)}`,
             }}>
               <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
                 {m.month}
               </h2>
-              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.25)', fontSize: '0.72rem' }}>
+              <span style={{ marginLeft: 'auto', color: W(0.25), fontSize: '0.72rem' }}>
                 {holidayCount} holidays
               </span>
             </div>
@@ -300,7 +220,7 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
                       alignItems: 'center',
                       gap: '12px',
                       padding: '10px 16px',
-                      borderBottom: di < m.days.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                      borderBottom: di < m.days.length - 1 ? `1px solid ${WB(0.04)}` : 'none',
                       background: isToday ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
                     }}
                   >
@@ -312,11 +232,11 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: holiday ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.04)',
-                      border: isToday ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                      background: holiday ? 'rgba(239, 68, 68, 0.1)' : WB(0.04),
+                      border: isToday ? '1px solid rgba(139, 92, 246, 0.5)' : `1px solid ${WB(0.06)}`,
                       fontSize: '0.8rem',
                       fontWeight: 700,
-                      color: holiday ? '#f87171' : 'white',
+                      color: holiday ? '#f87171' : theme.text,
                     }}>
                       {d.date?.split('-')[0]}
                     </div>
@@ -390,7 +310,7 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
           padding: '20px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>

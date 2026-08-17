@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { spLoginInit, spLoginVerify } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
 const PortalRift = dynamic(() => import('@/components/animations/PortalRift'), { ssr: false });
@@ -16,6 +17,9 @@ type AnimType = typeof animations[number];
 
 export default function SpLoginPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [expired] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('expired') === '1');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -32,9 +36,9 @@ export default function SpLoginPage() {
     width: '100%',
     padding: '14px 16px',
     borderRadius: '12px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(255,255,255,0.05)',
-    color: 'white',
+    border: `1px solid ${WB(0.1)}`,
+    background: WB(0.05),
+    color: theme.text,
     fontSize: '14px',
     outline: 'none',
     transition: 'border-color 0.3s',
@@ -196,14 +200,14 @@ export default function SpLoginPage() {
           <h1 style={{
             fontSize: '1.5rem',
             fontWeight: 700,
-            color: 'white',
+            color: theme.text,
             textAlign: 'center',
             marginBottom: '6px',
           }}>
             Student Portal
           </h1>
           <p style={{
-            color: 'rgba(255,255,255,0.45)',
+            color: W(0.45),
             textAlign: 'center',
             marginBottom: '28px',
             fontSize: '0.85rem',
@@ -239,7 +243,7 @@ export default function SpLoginPage() {
           {step === 'credentials' && (
             <form onSubmit={handleCredentialsSubmit}>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
                   NetID
                 </label>
                 <input
@@ -251,12 +255,12 @@ export default function SpLoginPage() {
                   autoComplete="username"
                   style={inputStyle}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
                 />
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
                   Password
                 </label>
                 <input
@@ -267,7 +271,7 @@ export default function SpLoginPage() {
                   autoComplete="current-password"
                   style={inputStyle}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
                 />
               </div>
 
@@ -320,8 +324,8 @@ export default function SpLoginPage() {
                   textAlign: 'center',
                   padding: '16px',
                   borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: WB(0.08),
+                  border: `1px solid ${WB(0.1)}`,
                 }}>
                   <img
                     src={captchaImage}
@@ -353,7 +357,7 @@ export default function SpLoginPage() {
               )}
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '6px' }}>
+                <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
                   Type the text you see above
                 </label>
                 <input
@@ -372,7 +376,7 @@ export default function SpLoginPage() {
                     fontSize: '16px',
                   }}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
                 />
               </div>
 
@@ -410,9 +414,9 @@ export default function SpLoginPage() {
                     flex: '0 0 auto',
                     padding: '14px 20px',
                     borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: 'rgba(255,255,255,0.5)',
+                    border: `1px solid ${WB(0.1)}`,
+                    background: WB(0.05),
+                    color: W(0.5),
                     fontSize: '14px',
                     cursor: 'pointer',
                   }}

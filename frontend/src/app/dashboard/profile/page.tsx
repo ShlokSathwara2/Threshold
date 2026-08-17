@@ -11,19 +11,23 @@ import {
   type SpProfile,
   type User,
 } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   if (!value) return null;
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div style={{
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: '12px 4px',
-      borderBottom: '1px solid rgba(255,255,255,0.05)',
+      borderBottom: `1px solid ${WB(0.05)}`,
     }}>
-      <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{label}</span>
+      <span style={{ fontSize: '0.75rem', color: W(0.4) }}>{label}</span>
       <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--threshold-text)', textAlign: 'right' }}>
         {value}
       </span>
@@ -33,6 +37,9 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [profile, setProfile] = useState<SpProfile | null>(null);
   const [academia, setAcademia] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,7 +108,7 @@ export default function ProfilePage() {
           padding: '24px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -123,7 +130,7 @@ export default function ProfilePage() {
           animate={{ opacity: 1, scale: 1 }}
           style={{
             borderRadius: '20px',
-            background: 'linear-gradient(160deg, rgba(139, 92, 246, 0.12), rgba(255,255,255,0.02))',
+            background: `linear-gradient(160deg, rgba(139, 92, 246, 0.12), ${WB(0.02)})`,
             border: '1px solid rgba(139, 92, 246, 0.2)',
             padding: '20px',
             marginBottom: '14px',
@@ -174,7 +181,7 @@ export default function ProfilePage() {
                 {name || 'Student'}
               </h2>
               {profile?.reg_number && (
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', margin: '4px 0 0' }}>
+                <p style={{ color: W(0.45), fontSize: '0.78rem', margin: '4px 0 0' }}>
                   {profile.reg_number}
                 </p>
               )}
@@ -205,8 +212,8 @@ export default function ProfilePage() {
           transition={{ delay: 0.1 }}
           style={{
             borderRadius: '18px',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            background: WB(0.02),
+            border: `1px solid ${WB(0.06)}`,
             padding: '6px 16px',
           }}
         >
@@ -227,7 +234,7 @@ export default function ProfilePage() {
       )}
 
       <p style={{
-        color: 'rgba(255,255,255,0.25)',
+        color: W(0.25),
         fontSize: '0.72rem',
         textAlign: 'center',
         marginTop: '20px',

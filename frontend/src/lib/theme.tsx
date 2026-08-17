@@ -161,6 +161,17 @@ export function hexToRgb(hex: string): string {
   return `${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)}`;
 }
 
+// Overlay text color that adapts to light/dark so hardcoded white-alpha
+// strings don't disappear on light backgrounds.
+export function overlay(theme: ThemePalette, alpha: number): string {
+  return theme.isLight ? `rgba(19,19,24,${alpha})` : `rgba(255,255,255,${alpha})`;
+}
+
+// Overlay surface/border color (black-alpha in light mode, white-alpha in dark).
+export function overlayBg(theme: ThemePalette, alpha: number): string {
+  return theme.isLight ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`;
+}
+
 interface ThemeContextValue {
   theme: ThemePalette;
   setTheme: (id: string) => void;

@@ -7,6 +7,7 @@ import { isLoggedIn } from '@/lib/api';
 import { useResults } from '@/hooks/useResults';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
 import SubjectMarksCard from '@/components/marks/SubjectMarksCard';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const GRADE_COLORS: Record<string, string> = {
@@ -25,6 +26,9 @@ function gradeColor(grade: string): string {
 }
 
 function Spinner() {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div style={{
       display: 'flex',
@@ -45,7 +49,7 @@ function Spinner() {
           borderRadius: '50%',
         }}
       />
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+      <p style={{ color: W(0.4), fontSize: '0.85rem' }}>
         Fetching results…
       </p>
     </div>
@@ -96,6 +100,9 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 
 export default function MarksPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const { semesters, cgpa, creditsRegistered, creditsEarned, creditsRequired, loading, error, refetch } = useResults();
   const { marks: subjectMarks, loading: marksLoading, error: marksError, semester, refetch: refetchMarks } = useSubjectMarks();
   usePullToRefresh(async () => {
@@ -188,7 +195,7 @@ export default function MarksPage() {
         }}
       >
         <p style={{
-          color: 'rgba(255,255,255,0.5)',
+          color: W(0.5),
           fontSize: '0.75rem',
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
@@ -236,7 +243,7 @@ export default function MarksPage() {
                 {c.value ?? '—'}
               </p>
               <p style={{
-                color: 'rgba(255,255,255,0.4)',
+                color: W(0.4),
                 fontSize: '0.68rem',
                 marginTop: '2px',
               }}>
@@ -294,7 +301,7 @@ export default function MarksPage() {
             padding: '24px',
             borderRadius: '16px',
             background: 'var(--threshold-surface)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: `1px solid ${WB(0.06)}`,
             textAlign: 'center',
           }}>
             <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -332,7 +339,7 @@ export default function MarksPage() {
             padding: '20px',
             borderRadius: '16px',
             background: 'var(--threshold-surface)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: `1px solid ${WB(0.06)}`,
             textAlign: 'center',
           }}>
             <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -368,7 +375,7 @@ export default function MarksPage() {
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '14px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: `1px solid ${WB(0.06)}`,
             }}>
               <span style={{
                 color: 'var(--threshold-text)',
@@ -403,7 +410,7 @@ export default function MarksPage() {
                     alignItems: 'center',
                     gap: '12px',
                     padding: '12px 16px',
-                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: `1px solid ${WB(0.04)}`,
                   }}>
                     <span style={{
                       minWidth: '34px',
@@ -440,7 +447,7 @@ export default function MarksPage() {
                       </p>
                     </div>
                     <span style={{
-                      color: 'rgba(255,255,255,0.4)',
+                      color: W(0.4),
                       fontSize: '0.72rem',
                       whiteSpace: 'nowrap',
                     }}>
@@ -455,7 +462,7 @@ export default function MarksPage() {
       </div>
 
       <p style={{
-        color: 'rgba(255,255,255,0.25)',
+        color: W(0.25),
         fontSize: '0.72rem',
         textAlign: 'center',
         marginTop: '20px',
@@ -472,7 +479,7 @@ export default function MarksPage() {
             borderRadius: '10px',
             border: '1px solid var(--threshold-border)',
             background: 'var(--threshold-surface)',
-            color: 'rgba(255,255,255,0.4)',
+            color: W(0.4),
             fontSize: '0.8rem',
             cursor: 'pointer',
             transition: 'all 0.2s',

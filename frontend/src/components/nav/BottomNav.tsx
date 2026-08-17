@@ -10,7 +10,6 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const SLOT_W = 62;
 const ITEMS: NavItem[] = [
   {
     key: 'dashboard',
@@ -69,8 +68,7 @@ const ITEMS: NavItem[] = [
   },
 ];
 
-const PADDING = 5;
-const RADIUS = 22;
+const PILL_PADDING = 6;
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -89,6 +87,7 @@ export default function BottomNav() {
         bottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',
         left: '50%',
         transform: 'translateX(-50%)',
+        width: 'min(330px, calc(100vw - 32px))',
         zIndex: 70,
       }}
     >
@@ -97,9 +96,9 @@ export default function BottomNav() {
           display: 'flex',
           alignItems: 'center',
           gap: '2px',
-          padding: `${PADDING}px`,
+          padding: `${PILL_PADDING}px`,
           borderRadius: 999,
-          background: theme.isLight ? 'rgba(255,255,255,0.78)' : 'rgba(16, 16, 28, 0.62)',
+          background: theme.isLight ? 'rgba(255,255,255,0.82)' : 'rgba(16, 16, 28, 0.66)',
           backdropFilter: 'blur(26px) saturate(180%)',
           WebkitBackdropFilter: 'blur(26px) saturate(180%)',
           border: `1px solid ${theme.isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.12)'}`,
@@ -118,45 +117,58 @@ export default function BottomNav() {
               }}
               aria-label={item.label}
               style={{
-                width: SLOT_W,
+                flex: 1,
+                minWidth: 0,
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
                 justifyContent: 'center',
-                gap: '3px',
-                padding: '8px 0 7px',
                 border: 'none',
                 background: 'none',
                 cursor: 'pointer',
-                color: active ? theme.accentText : theme.textFaint,
-                transition: 'color 0.2s',
+                padding: 0,
               }}
             >
-              <div style={{
-                transform: active ? 'scale(1.08)' : undefined,
-                filter: active ? `drop-shadow(0 0 8px ${hexToRgba(theme.accent, 0.7)})` : undefined,
-                transition: 'transform 0.2s, filter 0.2s',
-              }}>
-                {item.icon}
+              {/* Inset capsule — breathing room on every side means it can
+                  never merge with the pill's rounded side sections */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '3px',
+                  width: '100%',
+                  padding: '8px 0 7px',
+                  borderRadius: 999,
+                  background: active
+                    ? `linear-gradient(135deg, ${theme.accent} 0%, ${hexToRgba(theme.accent, 0.72)} 100%)`
+                    : 'transparent',
+                  boxShadow: active
+                    ? `0 6px 20px ${hexToRgba(theme.accent, 0.45)}, inset 0 1px 0 rgba(255,255,255,0.22)`
+                    : 'none',
+                  transform: active ? 'scale(1.02)' : 'scale(1)',
+                  transition: 'background 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease',
+                }}
+              >
+                <div style={{
+                  color: active ? '#fff' : theme.textFaint,
+                  filter: active ? `drop-shadow(0 0 7px ${hexToRgba(theme.accent, 0.8)})` : undefined,
+                  transition: 'color 0.2s, filter 0.2s',
+                  display: 'flex',
+                }}>
+                  {item.icon}
+                </div>
+                <span style={{
+                  fontSize: '0.52rem',
+                  fontWeight: active ? 700 : 500,
+                  letterSpacing: '0.2px',
+                  color: active ? '#fff' : theme.textFaint,
+                  textShadow: active ? '0 1px 2px rgba(0,0,0,0.35)' : undefined,
+                  whiteSpace: 'nowrap',
+                  transition: 'color 0.2s',
+                }}>
+                  {item.label}
+                </span>
               </div>
-              <span style={{
-                fontSize: '0.52rem',
-                fontWeight: active ? 700 : 500,
-                letterSpacing: '0.2px',
-                transition: 'color 0.2s',
-                whiteSpace: 'nowrap',
-              }}>
-                {item.label}
-              </span>
-              {/* Active indicator dot */}
-              <div style={{
-                width: 4,
-                height: 4,
-                borderRadius: '50%',
-                background: active ? theme.accent : 'transparent',
-                boxShadow: active ? `0 0 8px ${hexToRgba(theme.accent, 0.9)}` : undefined,
-                transition: 'background 0.2s',
-              }} />
             </button>
           );
         })}

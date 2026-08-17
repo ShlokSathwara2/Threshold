@@ -1,4 +1,4 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -7,6 +7,7 @@ import { isSpLoggedIn, fetchCourses, type Mark } from '@/lib/api';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
 import { GRADE_POINTS, computeSgpa, type CgpaRow } from '@/lib/grade-calculator';
 import GradeTargetTool from '@/components/marks/GradeTargetTool';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const GRADE_OPTIONS = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F'];
@@ -22,6 +23,9 @@ function blankRow(name = ''): CgpaRow {
 }
 
 function SectionHeader({ color, title, subtitle }: { color: string; title: string; subtitle: string }) {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div style={{ margin: '24px 0 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -31,12 +35,12 @@ function SectionHeader({ color, title, subtitle }: { color: string; title: strin
           fontWeight: 700,
           letterSpacing: '1.2px',
           textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.75)',
+          color: W(0.75),
         }}>
           {title}
         </h2>
       </div>
-      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', lineHeight: 1.5 }}>
+      <p style={{ color: W(0.3), fontSize: '0.75rem', lineHeight: 1.5 }}>
         {subtitle}
       </p>
     </div>
@@ -47,6 +51,10 @@ export default function CgpaCalculatorPage() {
   const router = useRouter();
   const { marks, loading: marksLoading, error: marksError, semester, refetch: refetchMarks } = useSubjectMarks();
   usePullToRefresh(refetchMarks);
+
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
 
   const [rows, setRows] = useState<CgpaRow[]>([]);
   const [history, setHistory] = useState<CgpaRow[][]>([]);
@@ -231,7 +239,7 @@ export default function CgpaCalculatorPage() {
         }}
       >
         <p style={{
-          color: 'rgba(255,255,255,0.5)',
+          color: W(0.5),
           fontSize: '0.75rem',
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
@@ -249,7 +257,7 @@ export default function CgpaCalculatorPage() {
         }}>
           {sgpa.toFixed(3)}
         </p>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '8px' }}>
+        <p style={{ color: W(0.4), fontSize: '0.75rem', marginTop: '8px' }}>
           {totalPoints.toFixed(1)} grade points ÷ {totalCredits} credits
         </p>
       </motion.div>
@@ -278,9 +286,9 @@ export default function CgpaCalculatorPage() {
           style={{
             padding: '10px 16px',
             borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: `1px solid ${WB(0.1)}`,
             background: 'var(--threshold-surface)',
-            color: canUndo ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)',
+            color: canUndo ? W(0.7) : W(0.25),
             fontSize: '0.8rem',
             cursor: canUndo ? 'pointer' : 'not-allowed',
           }}
@@ -308,7 +316,7 @@ export default function CgpaCalculatorPage() {
           padding: '24px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -348,7 +356,7 @@ export default function CgpaCalculatorPage() {
                 padding: '12px 14px',
                 borderRadius: '14px',
                 background: 'var(--threshold-surface)',
-                border: '1px solid rgba(255,255,255,0.07)',
+                border: `1px solid ${WB(0.07)}`,
               }}
             >
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
@@ -401,7 +409,7 @@ export default function CgpaCalculatorPage() {
                       borderRadius: '8px',
                       border: 'none',
                       background: rows.length <= 1 ? 'var(--threshold-surface)' : 'rgba(239, 68, 68, 0.12)',
-                      color: rows.length <= 1 ? 'rgba(255,255,255,0.2)' : '#f87171',
+                      color: rows.length <= 1 ? W(0.2) : '#f87171',
                       fontSize: '0.8rem',
                       cursor: rows.length <= 1 ? 'not-allowed' : 'pointer',
                     }}
@@ -430,9 +438,9 @@ export default function CgpaCalculatorPage() {
                       style={{
                         padding: '5px 11px',
                         borderRadius: '8px',
-                        border: active ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.07)',
-                        background: active ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.02)',
-                        color: active ? 'var(--threshold-accent-text)' : 'rgba(255,255,255,0.45)',
+                        border: active ? '1px solid rgba(139, 92, 246, 0.5)' : `1px solid ${WB(0.07)}`,
+                        background: active ? 'rgba(139, 92, 246, 0.25)' : WB(0.02),
+                        color: active ? 'var(--threshold-accent-text)' : W(0.45),
                         fontSize: '0.72rem',
                         fontWeight: active ? 700 : 500,
                         cursor: 'pointer',
@@ -448,7 +456,7 @@ export default function CgpaCalculatorPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{
                   fontSize: '0.72rem',
-                  color: 'rgba(255,255,255,0.45)',
+                  color: W(0.45),
                   flexShrink: 0,
                   minWidth: '76px',
                 }}>
@@ -459,7 +467,7 @@ export default function CgpaCalculatorPage() {
                   flex: 1,
                   height: '4px',
                   borderRadius: '2px',
-                  background: 'rgba(255,255,255,0.06)',
+                  background: WB(0.06),
                   overflow: 'hidden',
                 }}>
                   <motion.div
@@ -468,13 +476,13 @@ export default function CgpaCalculatorPage() {
                     style={{
                       height: '100%',
                       borderRadius: '2px',
-                      background: points > 0 ? 'var(--threshold-accent)' : 'rgba(255,255,255,0.15)',
+                      background: points > 0 ? 'var(--threshold-accent)' : WB(0.15),
                     }}
                   />
                 </div>
                 <span style={{
                   fontSize: '0.66rem',
-                  color: 'rgba(255,255,255,0.3)',
+                  color: W(0.3),
                   flexShrink: 0,
                   width: '40px',
                   textAlign: 'right',
@@ -499,7 +507,7 @@ export default function CgpaCalculatorPage() {
           padding: '24px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -511,7 +519,7 @@ export default function CgpaCalculatorPage() {
           padding: '20px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -573,7 +581,7 @@ export default function CgpaCalculatorPage() {
       )}
 
       <p style={{
-        color: 'rgba(255,255,255,0.25)',
+        color: W(0.25),
         fontSize: '0.72rem',
         textAlign: 'center',
         marginTop: '20px',

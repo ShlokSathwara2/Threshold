@@ -9,7 +9,7 @@ import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
 import { SubjectRegistryProvider } from '@/lib/subject-registry';
-import { ThemeProvider, useTheme } from '@/lib/theme';
+import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
 import Lenis from 'lenis';
 
 const navItems = [
@@ -52,6 +52,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
@@ -380,7 +382,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700 }}>
               Session timed out
             </span>
-            <span style={{ display: 'block', fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)', marginTop: '1px' }}>
+            <span style={{ display: 'block', fontSize: '0.7rem', color: W(0.55), marginTop: '1px' }}>
               Tap to sign in again — your data above is still from before.
             </span>
           </span>

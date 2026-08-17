@@ -1,12 +1,15 @@
 "use client";
 
 import { motion } from 'framer-motion';
-import { useTheme, THEMES, hexToRgba } from '@/lib/theme';
+import { useTheme, THEMES, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isSpLoggedIn } from '@/lib/api';
 
 function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () => void; accent: string }) {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <button
       onClick={onChange}
@@ -18,7 +21,7 @@ function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () 
         borderRadius: '999px',
         border: 'none',
         cursor: 'pointer',
-        background: checked ? accent : 'rgba(255,255,255,0.12)',
+        background: checked ? accent : WB(0.12),
         position: 'relative',
         transition: 'background 0.25s',
         flexShrink: 0,
@@ -42,6 +45,8 @@ function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () 
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme, notif, setNotif } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
 
   useEffect(() => {
     if (!isSpLoggedIn()) router.push('/sp-login');
@@ -54,10 +59,10 @@ export default function SettingsPage() {
         animate={{ opacity: 1, y: 0 }}
         style={{ marginBottom: '20px' }}
       >
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: theme.text, marginBottom: '4px' }}>
           Settings
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
+        <p style={{ color: W(0.35), fontSize: '0.8rem' }}>
           Theme, notifications &amp; about
         </p>
       </motion.div>
@@ -70,17 +75,17 @@ export default function SettingsPage() {
         style={{
           padding: '18px',
           borderRadius: '18px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
           marginBottom: '14px',
         }}
       >
         <h2 style={{
-          fontSize: '0.9rem', fontWeight: 700, color: 'white', marginBottom: '4px',
+          fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px',
         }}>
           Theme
         </h2>
-        <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)', marginBottom: '14px' }}>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
           Five distinct looks — choice is saved on this device
         </p>
 
@@ -99,8 +104,8 @@ export default function SettingsPage() {
                   borderRadius: '14px',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  background: active ? t.accentDim : 'rgba(255,255,255,0.02)',
-                  border: active ? `1px solid ${t.accent}55` : '1px solid rgba(255,255,255,0.06)',
+                  background: active ? t.accentDim : WB(0.02),
+                  border: active ? `1px solid ${t.accent}55` : `1px solid ${WB(0.06)}`,
                   transition: 'all 0.2s',
                 }}
               >
@@ -108,20 +113,20 @@ export default function SettingsPage() {
                   {t.swatch.map((c, i) => (
                     <span key={i} style={{
                       width: '16px', height: '16px', borderRadius: '5px', background: c,
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      border: `1px solid ${WB(0.15)}`,
                     }} />
                   ))}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{
                     fontSize: '0.83rem', fontWeight: 600, margin: 0,
-                    color: active ? hexToRgba(theme.text, 0.95) : 'rgba(255,255,255,0.75)',
+                    color: active ? hexToRgba(theme.text, 0.95) : W(0.75),
                   }}>
                     {t.name}
                   </p>
                   <p style={{
                     fontSize: '0.68rem', margin: '2px 0 0',
-                    color: 'rgba(255,255,255,0.35)',
+                    color: W(0.35),
                   }}>
                     {t.desc}
                   </p>
@@ -147,25 +152,25 @@ export default function SettingsPage() {
         style={{
           padding: '18px',
           borderRadius: '18px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
           marginBottom: '14px',
         }}
       >
-        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px' }}>
           Notifications
         </h2>
-        <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)', marginBottom: '14px' }}>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
           Master switch stops everything; category toggles silence just one type
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
             <div>
-              <p style={{ fontSize: '0.82rem', fontWeight: 600, color: 'white', margin: 0 }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 600, color: theme.text, margin: 0 }}>
                 Master toggle
               </p>
-              <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', margin: '2px 0 0' }}>
+              <p style={{ fontSize: '0.68rem', color: W(0.35), margin: '2px 0 0' }}>
                 No notifications fire when off
               </p>
             </div>
@@ -190,17 +195,17 @@ export default function SettingsPage() {
                 gap: '10px',
                 padding: '12px 14px',
                 borderRadius: '12px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.05)',
+                background: WB(0.02),
+                border: `1px solid ${WB(0.05)}`,
                 opacity: notif.enabled ? 1 : 0.45,
                 transition: 'opacity 0.2s',
               }}
             >
               <div>
-                <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'white', margin: 0 }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: 600, color: theme.text, margin: 0 }}>
                   {c.label}
                 </p>
-                <p style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.35)', margin: '2px 0 0' }}>
+                <p style={{ fontSize: '0.66rem', color: W(0.35), margin: '2px 0 0' }}>
                   {c.desc}
                 </p>
               </div>
@@ -222,19 +227,19 @@ export default function SettingsPage() {
         style={{
           padding: '18px',
           borderRadius: '18px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
         }}
       >
-        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', marginBottom: '10px' }}>
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '10px' }}>
           About
         </h2>
-        <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.6 }}>
+        <p style={{ fontSize: '0.78rem', color: W(0.45), margin: 0, lineHeight: 1.6 }}>
           THRESHOLD — your semester copilot. Attendance, marks, timetable, and calendar
           from the Student Portal &amp; Academia, interpreted into decisions.
         </p>
         <p style={{
-          fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', margin: '10px 0 0',
+          fontSize: '0.7rem', color: W(0.3), margin: '10px 0 0',
         }}>
           v0.9.0 · Phase 8 Premium UI
         </p>

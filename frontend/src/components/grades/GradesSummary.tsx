@@ -1,14 +1,19 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpGrades, type GradesResponse, type SemesterGrades } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number }) {
   const [data, setData] = useState<GradesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSem, setExpandedSem] = useState<number | null>(null);
+
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,10 +38,10 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         textAlign: 'center',
       }}>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>Loading grades...</p>
+        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>Loading grades...</p>
       </div>
     );
   }
@@ -61,10 +66,10 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         textAlign: 'center',
       }}>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>No grades data available</p>
+        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>No grades data available</p>
       </div>
     );
   }
@@ -80,13 +85,13 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
         padding: '20px',
         borderRadius: '16px',
         background: 'var(--threshold-surface)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${WB(0.06)}`,
         marginBottom: '24px',
       }}
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
+        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: W(0.7) }}>
           Grades
         </h2>
         {data.cgpa !== null && (
@@ -114,37 +119,37 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
           padding: '12px',
           borderRadius: '12px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--threshold-accent-text)', marginBottom: '2px' }}>
             {data.cgpa?.toFixed(2) ?? '—'}
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>CGPA</p>
+          <p style={{ color: W(0.4), fontSize: '0.65rem' }}>CGPA</p>
         </div>
         <div style={{
           padding: '12px',
           borderRadius: '12px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#22c55e', marginBottom: '2px' }}>
             {data.credits_earned ?? '—'}
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>Earned</p>
+          <p style={{ color: W(0.4), fontSize: '0.65rem' }}>Earned</p>
         </div>
         <div style={{
           padding: '12px',
           borderRadius: '12px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>
+          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: W(0.6), marginBottom: '2px' }}>
             {data.credits_registered ?? '—'}
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>Registered</p>
+          <p style={{ color: W(0.4), fontSize: '0.65rem' }}>Registered</p>
         </div>
       </div>
 
@@ -164,6 +169,9 @@ export default function GradesSummary({ refreshKey = 0 }: { refreshKey?: number 
 }
 
 function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expanded: boolean; onToggle: () => void }) {
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   return (
     <div>
       <button
@@ -175,8 +183,8 @@ function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expande
           alignItems: 'center',
           padding: '12px 14px',
           borderRadius: '12px',
-          border: '1px solid rgba(255,255,255,0.06)',
-          background: expanded ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255,255,255,0.02)',
+          border: `1px solid ${WB(0.06)}`,
+          background: expanded ? 'rgba(139, 92, 246, 0.08)' : WB(0.02),
           cursor: 'pointer',
           textAlign: 'left',
           transition: 'all 0.2s',
@@ -199,7 +207,7 @@ function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expande
         </div>
         <span style={{
           fontSize: '0.7rem',
-          color: 'rgba(255,255,255,0.3)',
+          color: W(0.3),
           transform: expanded ? 'rotate(180deg)' : 'rotate(0)',
           transition: 'transform 0.2s',
         }}>
@@ -226,14 +234,14 @@ function SemesterRow({ sem, expanded, onToggle }: { sem: SemesterGrades; expande
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ color: 'rgba(255,255,255,0.6)' }}>{g.code}</span>
-                <span style={{ color: 'rgba(255,255,255,0.25)', margin: '0 6px' }}>·</span>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem' }}>
+                <span style={{ color: W(0.6) }}>{g.code}</span>
+                <span style={{ color: W(0.25), margin: '0 6px' }}>·</span>
+                <span style={{ color: W(0.4), fontSize: '0.72rem' }}>
                   {g.description.length > 25 ? g.description.slice(0, 23) + '…' : g.description}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
+                <span style={{ color: W(0.3), fontSize: '0.7rem' }}>
                   {g.credit} cr
                 </span>
                 <span style={{

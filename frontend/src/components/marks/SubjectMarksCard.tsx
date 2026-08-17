@@ -1,10 +1,11 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Mark } from '@/lib/api';
 import { schemeFromTotal } from '@/lib/grade-calculator';
 import { useSubjectRegistry } from '@/lib/subject-registry';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import SubjectMarksChart from './SubjectMarksChart';
 import GradeTargetTool from './GradeTargetTool';
 
@@ -15,6 +16,9 @@ function parseNum(v: string): number {
 
 export default function SubjectMarksCard({ subject, index }: { subject: Mark; index: number }) {
   const [expanded, setExpanded] = useState(true);
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const { getSubject } = useSubjectRegistry();
   const meta = getSubject(subject.courseCode);
   const overallTotal = parseNum(subject.overall?.total ?? '');
@@ -71,18 +75,18 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
             margin: 0,
           }}>
             {subject.overall?.scored || '0'}
-            <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'rgba(255,255,255,0.3)' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 400, color: W(0.3) }}>
               /{subject.overall?.total || '0'}
             </span>
           </p>
-          <p style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
+          <p style={{ fontSize: '0.62rem', color: W(0.3), marginTop: '2px' }}>
             {scheme === 'full' ? '100% internal' : '60+40 scheme'} {expanded ? '▾' : '▸'}
           </p>
         </div>
       </div>
 
       {expanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${WB(0.05)}` }}>
           <div style={{ paddingTop: '14px' }}>
             <SubjectMarksChart subject={subject} />
           </div>
@@ -90,10 +94,10 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
             marginTop: '14px',
             padding: '14px',
             borderRadius: '12px',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.05)',
+            background: WB(0.02),
+            border: `1px solid ${WB(0.05)}`,
           }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginBottom: '10px' }}>
+            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: W(0.5), marginBottom: '10px' }}>
               Grade Target Calculator
             </p>
             <GradeTargetTool subject={subject} />

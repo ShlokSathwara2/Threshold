@@ -19,7 +19,8 @@ import {
 import { useAttendance } from '@/hooks/useAttendance';
 import { useSubjectRegistry } from '@/lib/subject-registry';
 import { getCached, setCached } from '@/lib/cache';
-import { useTheme, hexToRgba } from '@/lib/theme';
+import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
+import { loadExams, nextExamDate, daysUntil, formatExamDate, type ExamEntry } from '@/lib/exams';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
@@ -63,7 +64,9 @@ function slotWindow(s: TimetableSlot): { start: number; end: number } {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, notif } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
   const [gradesKey, setGradesKey] = useState(0);
   const { getSubject } = useSubjectRegistry();
@@ -81,6 +84,12 @@ export default function DashboardPage() {
   const [internalMarks, setInternalMarks] = useState<InternalMark[] | null>(null);
   const [academiaKey, setAcademiaKey] = useState(0);
   const [staleAsOf, setStaleAsOf] = useState<number | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [exams, setExams] = useState<ExamEntry[]>([]);
+
+  useEffect(() => {
+    setExams(loadExams());
+  }, []);
 
   const loadTimetable = async () => {
     if (!isAcademiaLoggedIn()) return;
@@ -135,8 +144,10 @@ export default function DashboardPage() {
       setCached<CalendarResponse>('calendar', cal);
       applyToday(cal);
       setStaleAsOf(null);
+      setOffline(false);
     } else {
       applyToday(null);
+      setOffline(true);
     }
     if (imRes.status === 'fulfilled') {
       const im = imRes.value.internal_marks?.length ? imRes.value.internal_marks : null;
@@ -202,26 +213,18 @@ export default function DashboardPage() {
 
   const atRisk = subjects.filter((s) => s.isBelowThreshold);
 
-  // ── Alerts: upcoming holidays from the academic calendar ──
-  const upcomingHolidays = (() => {
-    if (!calendar || calendar.error || !calendar.calendar) return [];
-    const todayD = new Date();
-    todayD.setHours(0, 0, 0, 0);
-    const found: { date: Date; label: string }[] = [];
-    for (const month of calendar.calendar) {
-      for (const d of month.days) {
-        if (!(d.isHoliday === true || /holiday/i.test(d.event || ''))) continue;
-        const m = d.date.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-        if (!m) continue;
-        const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-        const diff = Math.round((dt.getTime() - todayD.getTime()) / 86400000);
-        if (diff >= 0 && diff <= 10) found.push({ date: dt, label: d.event || 'Holiday' });
-      }
-    }
-    return found.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 3);
-  })();
-
-  const holidayToday = upcomingHolidays.some((h) => h.date.getTime() === new Date().setHours(0, 0, 0, 0));
+  // ── Alerts: upcoming exams from the local exam tracker ──
+  const todayD = new Date();
+  todayD.setHours(0, 0, 0, 0);
+  const enrichedExams = exams
+    .map((e) => ({ entry: e, next: nextExamDate(e, todayD) }))
+    .filter((x): x is { entry: ExamEntry; next: Date } => !!x.next)
+    .sort((a, b) => a.next.getTime() - b.next.getTime());
+  const upcomingExams = enrichedExams
+    .filter((x) => daysUntil(x.next, todayD) <= 14)
+    .slice(0, 4);
+  const nextExam = enrichedExams[0] ?? null;
+  const upcomingCount = enrichedExams.length;
 
   // ── Current / next class ──
   const currentClass = todaysSlots.find((s) => {
@@ -302,7 +305,9 @@ export default function DashboardPage() {
           marginBottom: '16px',
           background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.16), rgba(59,130,246,0.10) 50%, rgba(217,70,239,0.10))',
           border: '1px solid rgba(var(--threshold-accent-rgb),0.25)',
-          boxShadow: '0 8px 32px rgba(88,28,135,0.25), inset 0 1px 0 rgba(255,255,255,0.06)',
+          boxShadow: theme.isLight
+            ? '0 8px 32px rgba(109,40,217,0.14), inset 0 1px 0 rgba(255,255,255,0.5)'
+            : '0 8px 32px rgba(88,28,135,0.25), inset 0 1px 0 rgba(255,255,255,0.06)',
           overflow: 'hidden',
         }}
       >
@@ -316,7 +321,7 @@ export default function DashboardPage() {
             <p style={{
               fontSize: '0.7rem',
               fontWeight: 600,
-              color: 'rgba(196,181,253,0.8)',
+              color: theme.isLight ? hexToRgba(theme.accent, 0.8) : 'rgba(196,181,253,0.8)',
               margin: 0,
               letterSpacing: '0.4px',
               textTransform: 'uppercase',
@@ -335,7 +340,7 @@ export default function DashboardPage() {
             }}>
               {greeting()}, {firstName}
             </h1>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', margin: 0 }}>
+            <p style={{ color: W(0.4), fontSize: '0.78rem', margin: 0 }}>
               Here&apos;s your academic pulse today
             </p>
           </div>
@@ -369,7 +374,7 @@ export default function DashboardPage() {
               border: '1px solid rgba(var(--threshold-accent-rgb),0.4)',
               fontSize: '1.4rem',
               fontWeight: 800,
-              color: '#e9d5ff',
+              color: (theme.isLight ? theme.accent : '#e9d5ff'),
             }}>
               {firstName[0]}
             </div>
@@ -401,7 +406,7 @@ export default function DashboardPage() {
                 background: 'var(--threshold-accent-text)',
                 boxShadow: '0 0 8px var(--threshold-accent-text)',
               }} />
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e9d5ff' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (theme.isLight ? theme.accent : '#e9d5ff') }}>
                 {todayDO} today
               </span>
             </div>
@@ -412,8 +417,8 @@ export default function DashboardPage() {
             gap: '8px',
             padding: '6px 12px',
             borderRadius: '999px',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: WB(0.05),
+            border: `1px solid ${WB(0.1)}`,
           }}>
             <span style={{
               width: 7,
@@ -422,7 +427,7 @@ export default function DashboardPage() {
               background: overallColor,
               boxShadow: `0 0 8px ${overallColor}`,
             }} />
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: W(0.8) }}>
               {loading ? '…' : `${overall.overallPercentage.toFixed(1)}%`} overall
             </span>
           </div>
@@ -432,16 +437,51 @@ export default function DashboardPage() {
               alignItems: 'center',
               padding: '6px 12px',
               borderRadius: '999px',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: WB(0.05),
+              border: `1px solid ${WB(0.1)}`,
             }}>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: W(0.8) }}>
                 Sem {profile.semester}
               </span>
             </div>
           )}
         </div>
       </motion.div>
+
+      {/* ── Offline banner ── */}
+      {offline && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '11px 14px',
+            borderRadius: '14px',
+            marginBottom: '16px',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.03))',
+            border: '1px solid rgba(245,158,11,0.3)',
+          }}
+        >
+          <span style={{ fontSize: '1rem', flexShrink: 0 }}>📡</span>
+          <p style={{ margin: 0, flex: 1, fontSize: '0.75rem', fontWeight: 600, color: 'var(--threshold-text)', lineHeight: 1.45 }}>
+            {staleAsOf ? (
+              <>
+                You&apos;re offline — showing data from{' '}
+                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
+                  {new Date(staleAsOf).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </span>
+                . Pull down to refresh when you&apos;re back online.
+              </>
+            ) : (
+              <>You&apos;re offline — connect to the internet to load your data.</>
+            )}
+          </p>
+        </motion.div>
+      )}
 
       {/* ── Quick Stats Grid ── */}
       <div style={{
@@ -470,7 +510,7 @@ export default function DashboardPage() {
         >
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
             <svg width="64" height="64" style={{ transform: 'rotate(-90deg)' }}>
-              <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5" />
+              <circle cx="32" cy="32" r="26" fill="none" stroke={WB(0.07)} strokeWidth="5" />
               <motion.circle
                 cx="32" cy="32" r="26" fill="none" stroke={overallColor} strokeWidth="5" strokeLinecap="round"
                 strokeDasharray={2 * Math.PI * 26}
@@ -592,8 +632,61 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
+      {/* ── Exams strip ── */}
+      {exams.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+          onClick={() => router.push('/dashboard/exams')}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '13px 16px',
+            borderRadius: '14px',
+            marginBottom: '16px',
+            background: 'linear-gradient(135deg, rgba(217,70,239,0.1), rgba(139,92,246,0.05))',
+            border: '1px solid rgba(217,70,239,0.25)',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{
+            flexShrink: 0,
+            width: '36px',
+            height: '36px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(217,70,239,0.15)',
+            border: '1px solid rgba(217,70,239,0.35)',
+            fontSize: '1rem',
+          }}>
+            📝
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
+              {nextExam
+                ? `Next exam: ${nextExam.entry.subjectTitle}`
+                : 'All exams done'}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.5) }}>
+              {nextExam
+                ? `${formatExamDate(nextExam.next)} · ${nextExam && daysUntil(nextExam.next, todayD) === 0 ? 'today' : nextExam && daysUntil(nextExam.next, todayD) === 1 ? 'tomorrow' : `in ${daysUntil(nextExam.next, todayD)} days`} · ${upcomingCount} upcoming`
+                : 'No upcoming exams — plan the next round'}
+            </p>
+          </div>
+          <span style={{ flexShrink: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--threshold-accent-text)' }}>
+            Manage →
+          </span>
+        </motion.div>
+      )}
+
       {/* ── Alerts ── */}
-      {(!loading || upcomingHolidays.length > 0) && (
+      {(!loading || upcomingExams.length > 0) && (
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -613,7 +706,7 @@ export default function DashboardPage() {
             alignItems: 'center',
             gap: '8px',
             padding: '14px 16px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            borderBottom: `1px solid ${WB(0.05)}`,
           }}>
             <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
               Alerts
@@ -621,13 +714,13 @@ export default function DashboardPage() {
             <span style={{ color: '#fbbf24', fontSize: '0.95rem' }}>⚡</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {!loading && overall.subjectsBelowThreshold > 0 && (
+            {!loading && notif.enabled && notif.attendanceRisk && overall.subjectsBelowThreshold > 0 && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
                 padding: '12px 16px',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                borderBottom: `1px solid ${WB(0.04)}`,
               }}>
                 <span style={{
                   flexShrink: 0,
@@ -648,7 +741,7 @@ export default function DashboardPage() {
                   <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
                     {overall.subjectsBelowThreshold} subject{overall.subjectsBelowThreshold > 1 ? 's' : ''} below 75%
                   </p>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: W(0.4) }}>
                     {atRisk.slice(0, 2).map((s) => s.courseCode).join(', ')}
                     {atRisk.length > 2 ? ` +${atRisk.length - 2} more` : ''}
                   </p>
@@ -669,43 +762,15 @@ export default function DashboardPage() {
                 </button>
               </div>
             )}
-            {holidayToday && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '12px 16px',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
-              }}>
-                <span style={{
-                  flexShrink: 0,
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(34,197,94,0.15)',
-                  border: '1px solid rgba(34,197,94,0.3)',
-                  color: '#86efac',
-                  fontSize: '0.95rem',
-                }}>
-                  🎉
-                </span>
-                <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)', flex: 1 }}>
-                  Holiday today
-                </p>
-              </div>
-            )}
-            {upcomingHolidays.filter((h) => h.date.getTime() !== new Date().setHours(0, 0, 0, 0)).map((h, i) => {
-              const daysAway = Math.round((h.date.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000);
+            {notif.enabled && notif.examDates && upcomingExams.map((x, i) => {
+              const days = daysUntil(x.next, todayD);
               return (
-                <div key={h.date.toISOString()} style={{
+                <div key={x.entry.id} style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
                   padding: '12px 16px',
-                  borderBottom: i < upcomingHolidays.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  borderBottom: i < upcomingExams.length - 1 ? `1px solid ${WB(0.04)}` : 'none',
                 }}>
                   <span style={{
                     flexShrink: 0,
@@ -715,44 +780,59 @@ export default function DashboardPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'rgba(59,130,246,0.15)',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    color: '#93c5fd',
+                    background: 'rgba(217,70,239,0.13)',
+                    border: '1px solid rgba(217,70,239,0.3)',
+                    color: '#e879f9',
                     fontSize: '0.95rem',
                   }}>
-                    📅
+                    📝
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                      {h.label}
+                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Exam: {x.entry.subjectTitle}
                     </p>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
-                      {h.date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: W(0.4) }}>
+                      {formatExamDate(x.next)}
+                      {x.entry.description ? ` · ${x.entry.description}` : ''}
                     </p>
                   </div>
                   <span style={{
                     flexShrink: 0,
                     padding: '3px 9px',
                     borderRadius: '999px',
-                    background: 'rgba(59,130,246,0.15)',
-                    border: '1px solid rgba(59,130,246,0.25)',
+                    background: days === 0 ? 'rgba(239,68,68,0.15)' : 'rgba(217,70,239,0.12)',
+                    border: `1px solid ${days === 0 ? 'rgba(239,68,68,0.35)' : 'rgba(217,70,239,0.3)'}`,
                     fontSize: '0.62rem',
                     fontWeight: 700,
-                    color: '#93c5fd',
+                    color: days === 0 ? '#f87171' : '#e879f9',
                   }}>
-                    {daysAway === 0 ? 'TODAY' : daysAway === 1 ? 'TOMORROW' : `IN ${daysAway}d`}
+                    {days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days}d`}
                   </span>
+                  <button
+                    onClick={() => router.push('/dashboard/exams')}
+                    style={{
+                      flexShrink: 0,
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--threshold-accent-text)',
+                      fontSize: '0.72rem',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    View →
+                  </button>
                 </div>
               );
             })}
-            {!loading && overall.subjectsBelowThreshold === 0 && upcomingHolidays.length === 0 && (
+            {!loading && overall.subjectsBelowThreshold === 0 && upcomingExams.length === 0 && (
               <p style={{
                 margin: 0,
                 padding: '16px',
                 color: 'var(--threshold-text-faint)',
                 fontSize: '0.75rem',
               }}>
-                All clear — no risks or holidays on the horizon.
+                All clear — nothing needs your attention.
               </p>
             )}
           </div>
@@ -768,7 +848,9 @@ export default function DashboardPage() {
           position: 'relative',
           zIndex: 1,
           borderRadius: '18px',
-          background: 'linear-gradient(165deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015))',
+          background: theme.isLight
+            ? 'linear-gradient(165deg, rgba(0,0,0,0.03), rgba(0,0,0,0.01))'
+            : 'linear-gradient(165deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015))',
           border: '1px solid rgba(var(--threshold-accent-rgb),0.18)',
           boxShadow: '0 6px 28px rgba(0,0,0,0.25)',
           marginBottom: '24px',
@@ -780,7 +862,7 @@ export default function DashboardPage() {
           alignItems: 'center',
           gap: '8px',
           padding: '14px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          borderBottom: `1px solid ${WB(0.05)}`,
           background: 'rgba(var(--threshold-accent-rgb),0.06)',
         }}>
           <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
@@ -794,7 +876,7 @@ export default function DashboardPage() {
               border: '1px solid rgba(var(--threshold-accent-rgb),0.5)',
               fontSize: '0.62rem',
               fontWeight: 700,
-              color: '#e9d5ff',
+              color: (theme.isLight ? theme.accent : '#e9d5ff'),
               boxShadow: '0 0 12px rgba(var(--threshold-accent-rgb),0.3)',
             }}>
               {todayDO}
@@ -804,7 +886,7 @@ export default function DashboardPage() {
             <span style={{
               fontSize: '0.58rem',
               fontWeight: 600,
-              color: 'rgba(255,255,255,0.35)',
+              color: W(0.35),
               letterSpacing: '0.3px',
             }}>
               as of {new Date(staleAsOf).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -847,7 +929,7 @@ export default function DashboardPage() {
               fontSize: '0.62rem',
               fontWeight: 800,
               letterSpacing: '0.6px',
-              color: currentClass ? '#f0abfc' : 'var(--threshold-accent-text)',
+              color: currentClass ? (theme.isLight ? '#d946ef' : '#f0abfc') : 'var(--threshold-accent-text)',
               textTransform: 'uppercase',
             }}>
               {currentClass ? '● In class now' : nextClass ? 'Up next' : ''}
@@ -906,7 +988,7 @@ export default function DashboardPage() {
             <div style={{ padding: '18px 16px', textAlign: 'center' }}>
               <p style={{
                 margin: 0,
-                color: 'rgba(255,255,255,0.4)',
+                color: W(0.4),
                 fontSize: '0.8rem',
                 fontWeight: 500,
               }}>
@@ -922,8 +1004,8 @@ export default function DashboardPage() {
                   position: 'relative',
                   height: '10px',
                   borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  background: WB(0.06),
+                  border: `1px solid ${WB(0.05)}`,
                   overflow: 'hidden',
                 }}>
                   {/* Elapsed fill */}
@@ -950,7 +1032,7 @@ export default function DashboardPage() {
                       width: '4px',
                       height: '16px',
                       borderRadius: '4px',
-                      background: '#fff',
+                      background: theme.text,
                       boxShadow: '0 0 12px #fff, 0 0 22px rgba(217,70,239,0.9)',
                       left: `${progress * 100}%`,
                       transform: 'translateX(-50%)',
@@ -978,7 +1060,7 @@ export default function DashboardPage() {
                         height: '12px',
                         borderRadius: '50%',
                         background: done ? 'rgba(var(--threshold-accent-rgb),0.45)' : ongoing ? '#e879f9' : 'var(--threshold-accent)',
-                        border: '2px solid #09090f',
+                        border: `2px solid ${theme.bg}`,
                         boxShadow: ongoing
                           ? '0 0 0 4px rgba(232,121,249,0.25), 0 0 12px rgba(232,121,249,0.8)'
                           : '0 0 8px rgba(var(--threshold-accent-rgb),0.5)',
@@ -995,7 +1077,7 @@ export default function DashboardPage() {
                 marginBottom: '14px',
                 fontSize: '0.62rem',
                 fontWeight: 700,
-                color: 'rgba(255,255,255,0.4)',
+                color: W(0.4),
                 letterSpacing: '0.3px',
               }}>
                 <span>START {fmtTime(dayStart)}</span>
@@ -1059,7 +1141,7 @@ export default function DashboardPage() {
                           : 'var(--threshold-surface)',
                         border: ongoing
                           ? '1px solid rgba(232,121,249,0.4)'
-                          : '1px solid rgba(255,255,255,0.07)',
+                          : `1px solid ${WB(0.07)}`,
                       }}>
                         <div style={{
                           display: 'flex',
@@ -1070,7 +1152,7 @@ export default function DashboardPage() {
                           <span style={{
                             fontSize: '0.62rem',
                             fontWeight: 700,
-                            color: ongoing ? '#f0abfc' : 'var(--threshold-text-dim)',
+                            color: ongoing ? (theme.isLight ? '#d946ef' : '#f0abfc') : 'var(--threshold-text-dim)',
                             letterSpacing: '0.3px',
                             whiteSpace: 'nowrap',
                           }}>
@@ -1085,7 +1167,7 @@ export default function DashboardPage() {
                               : s.slot.startsWith('P')
                                 ? 'rgba(34,197,94,0.15)'
                                 : 'rgba(var(--threshold-accent-rgb),0.2)',
-                            border: '1px solid rgba(255,255,255,0.1)',
+                            border: `1px solid ${WB(0.1)}`,
                             fontSize: '0.6rem',
                             fontWeight: 700,
                             color: 'rgba(255,255,255,0.75)',
@@ -1100,7 +1182,7 @@ export default function DashboardPage() {
                               background: 'rgba(232,121,249,0.25)',
                               fontSize: '0.58rem',
                               fontWeight: 800,
-                              color: '#f5d0fe',
+                              color: (theme.isLight ? '#d946ef' : '#f5d0fe'),
                               letterSpacing: '0.4px',
                             }}>
                               ● ONGOING
@@ -1111,7 +1193,7 @@ export default function DashboardPage() {
                               marginLeft: 'auto',
                               fontSize: '0.58rem',
                               fontWeight: 800,
-                              color: 'rgba(255,255,255,0.25)',
+                              color: W(0.25),
                               letterSpacing: '0.4px',
                             }}>
                               DONE
@@ -1121,7 +1203,7 @@ export default function DashboardPage() {
                         <p style={{
                           fontSize: '0.82rem',
                           fontWeight: 600,
-                          color: done ? 'rgba(255,255,255,0.5)' : 'white',
+                          color: done ? W(0.5) : theme.text,
                           margin: 0,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -1131,7 +1213,7 @@ export default function DashboardPage() {
                         </p>
                         <p style={{
                           fontSize: '0.68rem',
-                          color: 'rgba(255,255,255,0.4)',
+                          color: W(0.4),
                           margin: '2px 0 0',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -1165,7 +1247,7 @@ export default function DashboardPage() {
             alignItems: 'center',
             marginBottom: '12px',
           }}>
-            <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+            <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
               Subjects at Risk
             </h2>
             <button
@@ -1233,8 +1315,8 @@ export default function DashboardPage() {
                         style={{
                           padding: '1px 6px',
                           borderRadius: '5px',
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.06)',
+                          background: WB(0.05),
+                          border: `1px solid ${WB(0.06)}`,
                         }}
                       >
                         {chip}

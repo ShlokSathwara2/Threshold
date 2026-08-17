@@ -14,6 +14,7 @@ import {
   type TimetableSlot,
   type TimetableResponse,
 } from '@/lib/api';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const CACHE_PREFIX = 'threshold_timetable_cache';
@@ -58,6 +59,9 @@ function clearCache(username: string | null) {
 
 export default function TimetablePage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [academiaReady] = useState(() => isAcademiaLoggedIn());
   const [schedule, setSchedule] = useState<TimetableSlot[]>([]);
   const [batch, setBatch] = useState('');
@@ -222,7 +226,7 @@ export default function TimetablePage() {
           }}>
             Batch {batch}
             {savedAt && (
-              <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.66rem' }}>
+              <span style={{ color: W(0.4), fontWeight: 400, fontSize: '0.66rem' }}>
                 · saved {new Date(savedAt).toLocaleDateString()}
               </span>
             )}
@@ -248,7 +252,7 @@ export default function TimetablePage() {
             <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--threshold-text)', marginBottom: '4px' }}>
               Academia login needed
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
+            <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
               The timetable lives in academia, not the SP portal — and academia uses its own login
               (your SP credentials won&apos;t work here). It&apos;s per-user and not saved on this
               device — you&apos;ll be asked to log in again each time you open the app.
@@ -263,8 +267,8 @@ export default function TimetablePage() {
                 style={{
                   padding: '12px 14px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${WB(0.1)}`,
+                  background: WB(0.04),
                   color: 'var(--threshold-text)',
                   fontSize: '0.9rem',
                   outline: 'none',
@@ -278,8 +282,8 @@ export default function TimetablePage() {
                 style={{
                   padding: '12px 14px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${WB(0.1)}`,
+                  background: WB(0.04),
                   color: 'var(--threshold-text)',
                   fontSize: '0.9rem',
                   outline: 'none',
@@ -310,8 +314,8 @@ export default function TimetablePage() {
                       flex: 1,
                       padding: '10px 12px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      background: 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${WB(0.1)}`,
+                      background: WB(0.04),
                       color: 'var(--threshold-text)',
                       fontSize: '0.85rem',
                       outline: 'none',
@@ -350,7 +354,7 @@ export default function TimetablePage() {
           padding: '24px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -391,7 +395,7 @@ export default function TimetablePage() {
           padding: '20px',
           borderRadius: '16px',
           background: 'var(--threshold-surface)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: `1px solid ${WB(0.06)}`,
           textAlign: 'center',
         }}>
           <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
@@ -406,8 +410,8 @@ export default function TimetablePage() {
           animate={{ opacity: 1, y: 0 }}
           style={{
             borderRadius: '16px',
-            border: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(255,255,255,0.02)',
+            border: `1px solid ${WB(0.06)}`,
+            background: WB(0.02),
             overflow: 'hidden',
           }}
         >
@@ -441,13 +445,13 @@ export default function TimetablePage() {
                       minWidth: '104px',
                       padding: '10px 8px',
                       textAlign: 'center',
-                      borderLeft: '1px solid rgba(255,255,255,0.05)',
+                      borderLeft: `1px solid ${WB(0.05)}`,
                       background: isToday ? 'rgba(139, 92, 246, 0.18)' : 'transparent',
                     }}>
                       <span style={{
                         fontSize: '0.78rem',
                         fontWeight: 800,
-                        color: isToday ? 'var(--threshold-accent-text)' : 'white',
+                        color: isToday ? 'var(--threshold-accent-text)' : theme.text,
                       }}>
                         {day}
                       </span>
@@ -476,7 +480,7 @@ export default function TimetablePage() {
                     key={hour}
                     style={{
                       display: 'flex',
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      borderBottom: `1px solid ${WB(0.04)}`,
                     }}
                   >
                     <div style={{
@@ -489,11 +493,11 @@ export default function TimetablePage() {
                       gap: '2px',
                       fontSize: '0.62rem',
                       fontWeight: 700,
-                      color: 'rgba(255,255,255,0.45)',
+                      color: W(0.45),
                       letterSpacing: '0.3px',
                     }}>
                       <span>H{hour}</span>
-                      <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.25)' }}>
+                      <span style={{ fontWeight: 600, color: W(0.25) }}>
                         {timeLabel}
                       </span>
                     </div>
@@ -506,7 +510,7 @@ export default function TimetablePage() {
                             flex: 1,
                             minWidth: '104px',
                             padding: '8px',
-                            borderLeft: '1px solid rgba(255,255,255,0.04)',
+                            borderLeft: `1px solid ${WB(0.04)}`,
                             background: isToday ? 'rgba(139, 92, 246, 0.04)' : 'transparent',
                           }} />
                         );
@@ -516,7 +520,7 @@ export default function TimetablePage() {
                           flex: 1,
                           minWidth: '104px',
                           padding: '6px',
-                          borderLeft: '1px solid rgba(255,255,255,0.04)',
+                          borderLeft: `1px solid ${WB(0.04)}`,
                           background: isToday ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
                           display: 'flex',
                           flexDirection: 'column',
@@ -559,7 +563,7 @@ export default function TimetablePage() {
                               <span style={{
                                 display: 'block',
                                 fontSize: '0.58rem',
-                                color: 'rgba(255,255,255,0.4)',
+                                color: W(0.4),
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -592,7 +596,7 @@ export default function TimetablePage() {
               borderRadius: '10px',
               border: '1px solid var(--threshold-border)',
               background: 'var(--threshold-surface)',
-              color: 'rgba(255,255,255,0.4)',
+              color: W(0.4),
               fontSize: '0.8rem',
               cursor: loading ? 'wait' : 'pointer',
             }}

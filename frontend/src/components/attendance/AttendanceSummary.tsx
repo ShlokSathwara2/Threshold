@@ -2,12 +2,15 @@
 
 import { motion } from 'framer-motion';
 import type { OverallStats } from '@/lib/attendance-calculator';
+import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 interface Props {
   stats: OverallStats;
 }
 
 function RingChart({ percentage, size = 80, strokeWidth = 6 }: { percentage: number; size?: number; strokeWidth?: number }) {
+  const { theme } = useTheme();
+  const WB = (a: number) => overlayBg(theme, a);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
@@ -21,7 +24,7 @@ function RingChart({ percentage, size = 80, strokeWidth = 6 }: { percentage: num
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="rgba(255,255,255,0.06)"
+        stroke={WB(0.06)}
         strokeWidth={strokeWidth}
       />
       <motion.circle
@@ -43,6 +46,9 @@ function RingChart({ percentage, size = 80, strokeWidth = 6 }: { percentage: num
 
 export default function AttendanceSummary({ stats }: Props) {
   const { overallPercentage, totalPresent, totalAbsent, totalClasses, subjectsBelowThreshold } = stats;
+  const { theme } = useTheme();
+  const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
 
   const overallColor = overallPercentage >= 85 ? '#22c55e' : overallPercentage >= 75 ? '#eab308' : overallPercentage >= 60 ? '#f97316' : '#ef4444';
 
@@ -58,8 +64,8 @@ export default function AttendanceSummary({ stats }: Props) {
         alignItems: 'center',
         padding: '20px',
         borderRadius: '16px',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: WB(0.03),
+        border: `1px solid ${WB(0.06)}`,
         marginBottom: '24px',
       }}
     >
@@ -80,18 +86,18 @@ export default function AttendanceSummary({ stats }: Props) {
 
       {/* Stats */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>
+        <span style={{ fontSize: '0.95rem', fontWeight: 600, color: theme.text }}>
           Overall Attendance
         </span>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+          <span style={{ fontSize: '0.75rem', color: W(0.4) }}>
             <span style={{ color: '#22c55e', fontWeight: 600 }}>{totalPresent}</span> present
           </span>
-          <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+          <span style={{ fontSize: '0.75rem', color: W(0.4) }}>
             <span style={{ color: '#ef4444', fontWeight: 600 }}>{totalAbsent}</span> absent
           </span>
-          <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{totalClasses}</span> total
+          <span style={{ fontSize: '0.75rem', color: W(0.4) }}>
+            <span style={{ color: W(0.6), fontWeight: 600 }}>{totalClasses}</span> total
           </span>
         </div>
       </div>
