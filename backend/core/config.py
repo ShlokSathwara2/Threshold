@@ -91,5 +91,29 @@ class Settings(BaseSettings):
     def sp_academic_calendar_inner_url(self) -> str:
         return f"{self.sp_base_url}{self.sp_context_path}/students/report/AcademicCalenderDetailsInner.jsp"
 
+    @property
+    def sp_personal_details_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentPersonalDetails.jsp"
+
+    @property
+    def sp_course_status_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/studentCourseStatus.jsp"
+
+    @property
+    def sp_exam_hall_ticket_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/StudentHallticket.jsp"
+
+    @property
+    def sp_exam_hall_ticket_inner_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/report/StudentHallticketinner.jsp"
+
+    @property
+    def sp_exam_timetable_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/transaction/StudentExamTimeTable.jsp"
+
+    @property
+    def sp_provisional_results_url(self) -> str:
+        return f"{self.sp_base_url}{self.sp_context_path}/students/transaction/onlineResult.jsp"
+
 
 settings = Settings()

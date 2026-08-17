@@ -549,3 +549,138 @@ def fetch_internal_marks_detail(
         return []
     finally:
         client.close()
+
+
+def _post_sp_menu_page(
+    client: httpx.Client, url: str, iden: int
+) -> httpx.Response:
+    """POST an SP hamburger-menu page the way the portal's funShow() does."""
+    return client.post(
+        url,
+        data={
+            "iden": str(iden),
+            "filter": "",
+            "hdnFormDetails": "1",
+            "csrfPreventionSalt": "",
+        },
+    )
+
+
+def fetch_personal_details(cookie: str) -> dict[str, Any]:
+    """POST studentPersonalDetails.jsp and parse into labelled sections."""
+    print("[SP-DATA] fetch_personal_details — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = _post_sp_menu_page(client, settings.sp_personal_details_url, 17)
+        print(f"[SP-DATA] personal-details status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        result = StudentPortalParser().parse_personal_details(response.text)
+        print(f"[SP-DATA] personal-details parse success: {len(result.get('sections', []))} sections")
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] personal-details exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_course_status(cookie: str) -> dict[str, Any]:
+    """POST studentCourseStatus.jsp and parse course completion status."""
+    print("[SP-DATA] fetch_course_status — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = _post_sp_menu_page(client, settings.sp_course_status_url, 84)
+        print(f"[SP-DATA] course-status status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        result = StudentPortalParser().parse_course_status(response.text)
+        print(
+            f"[SP-DATA] course-status parse success: "
+            f"{len(result.get('courses', []))} courses, "
+            f"{len(result.get('category_summary', []))} categories, "
+            f"{len(result.get('semester_wise', []))} sem rows"
+        )
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] course-status exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_exam_hall_ticket(cookie: str) -> dict[str, Any]:
+    """POST StudentHallticket.jsp and parse the exam hall ticket state."""
+    print("[SP-DATA] fetch_exam_hall_ticket — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = _post_sp_menu_page(client, settings.sp_exam_hall_ticket_url, 42)
+        print(f"[SP-DATA] hall-ticket status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        result = StudentPortalParser().parse_exam_hall_ticket(response.text)
+        print(f"[SP-DATA] hall-ticket parse: available={result.get('available')}")
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] hall-ticket exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_exam_timetable(cookie: str) -> dict[str, Any]:
+    """POST StudentExamTimeTable.jsp and parse the exam timetable."""
+    print("[SP-DATA] fetch_exam_timetable — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = _post_sp_menu_page(client, settings.sp_exam_timetable_url, 126)
+        print(f"[SP-DATA] exam-timetable status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        result = StudentPortalParser().parse_exam_timetable(response.text)
+        print(f"[SP-DATA] exam-timetable parse: available={result.get('available')} rows={len(result.get('rows', []))}")
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] exam-timetable exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()
+
+
+def fetch_provisional_results(cookie: str) -> dict[str, Any]:
+    """POST onlineResult.jsp and parse the provisional exam results."""
+    print("[SP-DATA] fetch_provisional_results — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        response = _post_sp_menu_page(client, settings.sp_provisional_results_url, 24)
+        print(f"[SP-DATA] provisional-results status: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
+
+        result = StudentPortalParser().parse_provisional_results(response.text)
+        print(f"[SP-DATA] provisional-results parse: available={result.get('available')} rows={len(result.get('rows', []))}")
+        return result
+    except Exception as e:
+        print(f"[SP-DATA] provisional-results exception: {e}")
+        return {"error": str(e)}
+    finally:
+        client.close()

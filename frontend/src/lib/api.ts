@@ -417,6 +417,115 @@ export async function checkSpSession(): Promise<{ alive: boolean }> {
   }
 }
 
+// ── Student Portal: Personal Details / Course Status / Exams ────────────
+
+export interface PersonalDetailsField {
+  label: string;
+  value: string;
+}
+
+export interface PersonalDetailsSection {
+  title: string;
+  fields: PersonalDetailsField[];
+}
+
+export interface PersonalDetailsResponse {
+  sections?: PersonalDetailsSection[];
+  error?: string;
+}
+
+export async function fetchSpPersonalDetails(): Promise<PersonalDetailsResponse> {
+  return apiFetch('/sp/personal-details');
+}
+
+export interface CourseStatusRow {
+  category: string;
+  code: string;
+  description: string;
+  credit: string;
+  grade: string;
+  completed: string;
+  attempts: string;
+}
+
+export interface CategorySummaryRow {
+  category: string;
+  required: string;
+  acquired: string;
+  subjects_required?: string;
+  subjects_completed?: string;
+}
+
+export interface SemesterCategoryRow {
+  semester: number;
+  category: string;
+  required: string;
+  acquired: string;
+  subjects_required?: string;
+  subjects_completed?: string;
+}
+
+export interface CourseStatusResponse {
+  courses?: CourseStatusRow[];
+  category_summary?: CategorySummaryRow[];
+  semester_wise?: SemesterCategoryRow[];
+  error?: string;
+}
+
+export async function fetchSpCourseStatus(): Promise<CourseStatusResponse> {
+  return apiFetch('/sp/course-status');
+}
+
+export interface HallTicketSubject {
+  code: string;
+  description: string;
+  date: string;
+  session: string;
+  hall: string;
+  seat: string;
+}
+
+export interface HallTicketResponse {
+  available: boolean;
+  student: Record<string, string>;
+  subjects: HallTicketSubject[];
+  error?: string;
+}
+
+export async function fetchSpHallTicket(): Promise<HallTicketResponse> {
+  return apiFetch('/sp/exam/hall-ticket');
+}
+
+export interface ExamTimetableRow {
+  sem_year_trim?: string;
+  subject_code: string;
+  subject_description?: string;
+  date_session?: string;
+  hall_no?: string;
+  seat_no?: string;
+  [key: string]: string | undefined;
+}
+
+export interface ExamTimetableResponse {
+  available: boolean;
+  rows: ExamTimetableRow[];
+  error?: string;
+}
+
+export async function fetchSpExamTimetable(): Promise<ExamTimetableResponse> {
+  return apiFetch('/sp/exam/timetable');
+}
+
+export interface ProvisionalResultsResponse {
+  available: boolean;
+  rows: Record<string, string>[];
+  error?: string;
+}
+
+export async function fetchSpProvisionalResults(): Promise<ProvisionalResultsResponse> {
+  return apiFetch('/sp/exam/provisional-results');
+}
+
 export interface SmartResponse {
   source: 'academia' | 'student_portal';
   attendance: AttendanceResponse;

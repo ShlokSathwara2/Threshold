@@ -403,3 +403,184 @@ class StudentPortalParser:
             marks=marks_list,
             status=200,
         )
+
+    def parse_personal_details(self, html: str) -> dict:
+        """Parse the SP Personal Details page into labelled sections.
+
+        The page is a set of cards ("General Details", "Personal Details",
+        "Parent Details", "Address for communication"...) whose tables are
+        label/value rows.
+        """
+        soup = BeautifulSoup(html, "lxml")
+        sections: list[dict] = []
+
+        for card in soup.find_all("div", class_="card"):
+            header = card.find("div", class_="card-header")
+            if not header:
+                continue
+            title = header.get_text(strip=True)
+            if not title:
+                continue
+            fields: list[dict] = []
+            for tr in card.find_all("tr"):
+                cells = tr.find_all("td")
+                if len(cells) < 2:
+                    continue
+                label = cells[0].get_text(strip=True)
+                value = cells[-1].get_text(" ", strip=True)
+                if label and label != value:
+                    fields.append({"label": label, "value": value})
+            if fields:
+                sections.append({"title": title, "fields": fields})
+
+        return {"sections": sections}
+
+    def parse_course_status(self, html: str) -> dict:
+        """Parse the SP Course Status page.
+
+        Tables: per-course completion rows, category-wise credit summary and
+        semester-wise category summaries.
+        """
+        soup = BeautifulSoup(html, "lxml")
+        result: dict = {"courses": [], "category_summary": [], "semester_wise": []}
+
+        for table in soup.find_all("table"):
+            rows = table.find_all("tr")
+            if len(rows) < 2:
+                continue
+            headers = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"])]
+            joined = " ".join(h.lower() for h in headers)
+
+            if "code" in joined and "grade" in joined and "credit" in joined:
+                for row in rows[1:]:
+                    cells = row.find_all("td")
+                    if len(cells) < 6:
+                        continue
+                    code = cells[1].get_text(strip=True)
+                    if not code:
+                        continue
+                    result["courses"].append({
+                        "category": cells[0].get_text(strip=True),
+                        "code": code,
+                        "description": cells[2].get_text(strip=True),
+                        "credit": cells[3].get_text(strip=True),
+                        "grade": cells[4].get_text(strip=True),
+                        "completed": cells[5].get_text(strip=True),
+                        "attempts": cells[6].get_text(strip=True) if len(cells) > 6 else "",
+                    })
+            elif "course category" in joined and "required credits" in joined and "acquired credits" in joined:
+                for row in rows[1:]:
+                    cells = row.find_all("td")
+                    if len(cells) < 3:
+                        continue
+                    result["category_summary"].append({
+                        "category": cells[0].get_text(strip=True),
+                        "required": cells[1].get_text(strip=True),
+                        "acquired": cells[2].get_text(strip=True),
+                        "subjects_required": cells[3].get_text(strip=True) if len(cells) > 3 else "",
+                        "subjects_completed": cells[4].get_text(strip=True) if len(cells) > 4 else "",
+                    })
+            else:
+                # Semester-wise category tables: rows start with a
+                # "Semester : N" header row, then label/td data rows.
+                current_sem: int | None = None
+                for row in rows:
+                    m = re.search(r"Semester\s*:\s*(\d+)", row.get_text(" ", strip=True))
+                    if m:
+                        current_sem = int(m.group(1))
+                        continue
+                    cells = row.find_all("td")
+                    if current_sem is not None and len(cells) >= 3:
+                        category = cells[0].get_text(strip=True)
+                        if category:
+                            result["semester_wise"].append({
+                                "semester": current_sem,
+                                "category": category,
+                                "required": cells[1].get_text(strip=True),
+                                "acquired": cells[2].get_text(strip=True),
+                                "subjects_required": cells[3].get_text(strip=True) if len(cells) > 3 else "",
+                                "subjects_completed": cells[4].get_text(strip=True) if len(cells) > 4 else "",
+                            })
+
+        return result
+
+    def parse_exam_hall_ticket(self, html: str) -> dict:
+        """Parse the SP Exam Hall Ticket page (empty or populated state)."""
+        soup = BeautifulSoup(html, "lxml")
+        text = soup.get_text(" ", strip=True)
+        if "no online hall ticket found" in text.lower():
+            return {"available": False, "student": {}, "subjects": []}
+
+        student: dict = {}
+        subjects: list[dict] = []
+        for table in soup.find_all("table"):
+            for tr in table.find_all("tr"):
+                cells = tr.find_all("td")
+                if len(cells) == 2:
+                    label = cells[0].get_text(strip=True)
+                    value = cells[1].get_text(" ", strip=True)
+                    if label and label != value:
+                        student[label] = value
+                elif len(cells) >= 4:
+                    code = cells[1].get_text(strip=True) if len(cells) > 1 else ""
+                    if code and code not in ("Subject Code",):
+                        subjects.append({
+                            "code": code,
+                            "description": cells[2].get_text(strip=True) if len(cells) > 2 else "",
+                            "date": cells[3].get_text(" ", strip=True) if len(cells) > 3 else "",
+                            "session": cells[4].get_text(strip=True) if len(cells) > 4 else "",
+                            "hall": cells[5].get_text(strip=True) if len(cells) > 5 else "",
+                            "seat": cells[6].get_text(strip=True) if len(cells) > 6 else "",
+                        })
+
+        return {"available": True, "student": student, "subjects": subjects}
+
+    def parse_exam_timetable(self, html: str) -> dict:
+        """Parse the SP Exam Time Table page."""
+        soup = BeautifulSoup(html, "lxml")
+        text = soup.get_text(" ", strip=True)
+        if "no subjects found" in text.lower():
+            return {"available": False, "rows": []}
+
+        rows: list[dict] = []
+        for table in soup.find_all("table"):
+            trs = table.find_all("tr")
+            if len(trs) < 2:
+                continue
+            headers = [th.get_text(strip=True) for th in trs[0].find_all(["th", "td"])]
+            for tr in trs[1:]:
+                cells = tr.find_all("td")
+                if len(cells) < 4:
+                    continue
+                row = {headers[i].lower().replace(" ", "_") if i < len(headers) else f"col{i}": c.get_text(" ", strip=True)
+                       for i, c in enumerate(cells)}
+                if row.get("subject_code"):
+                    rows.append(row)
+
+        return {"available": bool(rows), "rows": rows}
+
+    def parse_provisional_results(self, html: str) -> dict:
+        """Parse the SP Exam Provisional Results page."""
+        soup = BeautifulSoup(html, "lxml")
+        text = soup.get_text(" ", strip=True)
+        if "no record found" in text.lower():
+            return {"available": False, "rows": []}
+
+        rows: list[dict] = []
+        for table in soup.find_all("table"):
+            trs = table.find_all("tr")
+            if len(trs) < 2:
+                continue
+            headers = [th.get_text(strip=True) for th in trs[0].find_all(["th", "td"])]
+            if not headers:
+                continue
+            for tr in trs[1:]:
+                cells = tr.find_all("td")
+                if not cells:
+                    continue
+                row = {headers[i].lower().replace(" ", "_") if i < len(headers) else f"col{i}": c.get_text(" ", strip=True)
+                       for i, c in enumerate(cells)}
+                if any(v for v in row.values()):
+                    rows.append(row)
+
+        return {"available": bool(rows), "rows": rows}

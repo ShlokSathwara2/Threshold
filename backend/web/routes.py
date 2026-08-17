@@ -21,6 +21,11 @@ from scraper.student_portal.data import (
     fetch_internal_marks_detail,
     fetch_profile,
     fetch_academic_calendar,
+    fetch_personal_details,
+    fetch_course_status,
+    fetch_exam_hall_ticket,
+    fetch_exam_timetable,
+    fetch_provisional_results,
 )
 
 router = APIRouter()
@@ -345,6 +350,51 @@ def sp_calendar(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     return fetch_academic_calendar(cookie).model_dump()
+
+
+@router.get("/sp/personal-details")
+def sp_personal_details(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Personal Details (General / Personal / Parent / Address) from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_personal_details(cookie)
+
+
+@router.get("/sp/course-status")
+def sp_course_status(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Course completion status from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_course_status(cookie)
+
+
+@router.get("/sp/exam/hall-ticket")
+def sp_exam_hall_ticket(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Exam Hall Ticket from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_exam_hall_ticket(cookie)
+
+
+@router.get("/sp/exam/timetable")
+def sp_exam_timetable(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Exam Time Table from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_exam_timetable(cookie)
+
+
+@router.get("/sp/exam/provisional-results")
+def sp_exam_provisional_results(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Exam Provisional Results from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_provisional_results(cookie)
 
 
 @router.get("/sp/get")

@@ -12,11 +12,40 @@ import { SubjectRegistryProvider } from '@/lib/subject-registry';
 import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
 import Lenis from 'lenis';
 
-const navItems = [
-  { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
-  { label: 'CGPA Calc', path: '/dashboard/cgpa', icon: '▣' },
-  { label: 'Internal Marks', path: '/dashboard/internal-marks', icon: '✸' },
-  { label: 'Settings', path: '/dashboard/settings', icon: '⚙' },
+type NavItem = { label: string; path: string; icon: string };
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+  expandable?: boolean;
+};
+
+const navGroups: NavGroup[] = [
+  {
+    label: 'Academics',
+    items: [
+      { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
+      { label: 'CGPA Calc', path: '/dashboard/cgpa', icon: '▣' },
+      { label: 'Internal Marks', path: '/dashboard/internal-marks', icon: '✸' },
+      { label: 'Course Status', path: '/dashboard/course-status', icon: '✓' },
+    ],
+  },
+  {
+    label: 'Examination',
+    expandable: true,
+    items: [
+      { label: 'Hall Ticket', path: '/dashboard/exam/hall-ticket', icon: '⚑' },
+      { label: 'Exam Timetable', path: '/dashboard/exam/timetable', icon: '▧' },
+      { label: 'Provisional Results', path: '/dashboard/exam/provisional-results', icon: '★' },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [{ label: 'Analytics', path: '/dashboard/analytics', icon: '◉' }],
+  },
+  {
+    label: 'App',
+    items: [{ label: 'Settings', path: '/dashboard/settings', icon: '⚙' }],
+  },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -29,6 +58,11 @@ const pageTitles: Record<string, string> = {
   '/dashboard/calendar': 'Calendar',
   '/dashboard/profile': 'Profile',
   '/dashboard/settings': 'Settings',
+  '/dashboard/course-status': 'Course Status',
+  '/dashboard/exam/hall-ticket': 'Hall Ticket',
+  '/dashboard/exam/timetable': 'Exam Timetable',
+  '/dashboard/exam/provisional-results': 'Provisional Results',
+  '/dashboard/analytics': 'Analytics',
 };
 
 function NoiseOverlay() {
@@ -56,7 +90,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const WB = (a: number) => overlayBg(theme, a);
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [examOpen, setExamOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/exam/')) setExamOpen(true);
+  }, [pathname]);
 
   useEffect(() => {
     if (!isSpLoggedIn()) {
@@ -282,34 +321,122 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
 
-        {navItems.map((item) => {
-          const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
+        {navGroups.map((group) => {
+          const groupActive = group.items.some(
+            (i) => pathname === i.path || pathname.startsWith(i.path + '/')
+          );
+          const isOpen = !group.expandable || examOpen;
           return (
-            <button
-              key={item.path}
-              onClick={() => {
-                router.push(item.path);
-                setSidebarOpen(false);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '13px 14px',
-                borderRadius: '12px',
-                border: isActive ? `1px solid ${theme.accent}40` : '1px solid transparent',
-                background: isActive ? theme.accentDim : 'transparent',
-                color: isActive ? theme.accentText : theme.textDim,
-                fontSize: '0.9rem',
-                fontWeight: isActive ? 600 : 400,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-            >
-              <span style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-              {item.label}
-            </button>
+            <div key={group.label}>
+              {group.expandable ? (
+                <button
+                  onClick={() => setExamOpen(!examOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '13px 14px',
+                    borderRadius: '12px',
+                    border: groupActive ? `1px solid ${theme.accent}40` : '1px solid transparent',
+                    background: groupActive ? theme.accentDim : 'transparent',
+                    color: groupActive ? theme.accentText : theme.textDim,
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    width: '100%',
+                  }}
+                >
+                  <span style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}>⚑</span>
+                  {group.label}
+                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: W(0.4), transition: 'transform 0.25s', transform: examOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                </button>
+              ) : (
+                <p style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  letterSpacing: '1.2px',
+                  textTransform: 'uppercase',
+                  color: W(0.32),
+                  margin: '16px 14px 6px',
+                }}>
+                  {group.label}
+                </p>
+              )}
+
+              {group.expandable ? (
+                <motion.div
+                  initial={false}
+                  animate={{ height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0 }}
+                  transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
+                    return (
+                      <button
+                        key={item.path}
+                        onClick={() => {
+                          router.push(item.path);
+                          setSidebarOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '11px 14px 11px 40px',
+                          borderRadius: '12px',
+                          border: isActive ? `1px solid ${theme.accent}40` : '1px solid transparent',
+                          background: isActive ? theme.accentDim : 'transparent',
+                          color: isActive ? theme.accentText : theme.textDim,
+                          fontSize: '0.86rem',
+                          fontWeight: isActive ? 600 : 400,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.2s',
+                          width: '100%',
+                        }}
+                      >
+                        <span style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              ) : (
+                group.items.map((item) => {
+                  const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        router.push(item.path);
+                        setSidebarOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '13px 14px',
+                        borderRadius: '12px',
+                        border: isActive ? `1px solid ${theme.accent}40` : '1px solid transparent',
+                        background: isActive ? theme.accentDim : 'transparent',
+                        color: isActive ? theme.accentText : theme.textDim,
+                        fontSize: '0.9rem',
+                        fontWeight: isActive ? 600 : 400,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <span style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                      {item.label}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           );
         })}
 

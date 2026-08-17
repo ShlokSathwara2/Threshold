@@ -6,9 +6,11 @@ import { motion } from 'framer-motion';
 import {
   isSpLoggedIn,
   fetchSpProfile,
+  fetchSpPersonalDetails,
   fetchUser,
   isAcademiaLoggedIn,
   type SpProfile,
+  type PersonalDetailsResponse,
   type User,
 } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
@@ -42,6 +44,7 @@ export default function ProfilePage() {
   const WB = (a: number) => overlayBg(theme, a);
   const [profile, setProfile] = useState<SpProfile | null>(null);
   const [academia, setAcademia] = useState<User | null>(null);
+  const [personal, setPersonal] = useState<PersonalDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,17 +52,21 @@ export default function ProfilePage() {
     setLoading(true);
     setError(null);
     try {
-      const [spRes, acaRes] = await Promise.allSettled([
+      const [spRes, acaRes, pdRes] = await Promise.allSettled([
         fetchSpProfile(),
         isAcademiaLoggedIn()
           ? fetchUser()
           : Promise.resolve(null as User | null),
+        fetchSpPersonalDetails(),
       ]);
       if (spRes.status === 'fulfilled' && spRes.value.profile) {
         setProfile(spRes.value.profile);
       }
       if (acaRes.status === 'fulfilled' && acaRes.value) {
         setAcademia(acaRes.value);
+      }
+      if (pdRes.status === 'fulfilled' && !pdRes.value.error) {
+        setPersonal(pdRes.value);
       }
       if (spRes.status === 'rejected' && acaRes.status === 'rejected') {
         throw new Error('Could not load profile data');
@@ -230,6 +237,56 @@ export default function ProfilePage() {
           <InfoRow label="Faculty Advisor" value={profile?.faculty_advisor} />
           <InfoRow label="Academic Advisor" value={profile?.academic_advisor} />
           <InfoRow label="Mobile" value={academia?.mobile} />
+        </motion.div>
+      )}
+
+      {personal?.sections && personal.sections.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <h2 style={{
+            fontSize: '1.05rem',
+            fontWeight: 800,
+            color: 'var(--threshold-text)',
+            margin: '22px 0 10px',
+          }}>
+            Additional Personal Details
+          </h2>
+          {personal.sections.map((section, si) => {
+            const fields = section.fields.filter((f) => f.value && f.value.trim());
+            if (fields.length === 0) return null;
+            return (
+              <motion.div
+                key={section.title}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + si * 0.05 }}
+                style={{
+                  borderRadius: '18px',
+                  background: WB(0.02),
+                  border: `1px solid ${WB(0.06)}`,
+                  padding: '6px 16px',
+                  marginBottom: '12px',
+                }}
+              >
+                <p style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: 'var(--threshold-accent-text)',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  paddingTop: '12px',
+                }}>
+                  {section.title}
+                </p>
+                {fields.map((f) => (
+                  <InfoRow key={f.label} label={f.label} value={f.value} />
+                ))}
+              </motion.div>
+            );
+          })}
         </motion.div>
       )}
 
