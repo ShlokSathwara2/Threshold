@@ -71,7 +71,7 @@ export default function WelcomePage() {
   const handleGetStarted = () => {
     if (starting) return;
     setStarting(true);
-    window.setTimeout(() => router.push('/sp-login'), 750);
+    window.setTimeout(() => router.push('/login'), 750);
   };
 
   return (

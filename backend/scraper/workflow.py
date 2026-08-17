@@ -70,26 +70,30 @@ class AcademiaScraper:
         """Build a timetable by matching course slot codes to the unified grid.
 
         Grid layout: (day_num, hour_num) → [slot_codes]
-        Course slot: "A+X" → look up "A" and "X" in the grid
+        Course slot field: "A", "L51-L52-", "A1+TA1", "L11-2", "P29-P30-"
+        — tokenise on "+" and "-" so compound 2-hour blocks (L51+L52, P29+P30)
+        and batch-suffixed slots (L11-2 → L11, 2) resolve against the grid.
         """
         from core.schemas.models import TimetableSlot
 
-        course_by_code = {c.code: c for c in courses.courses if c.code}
-
-        # Build slot→courses reverse map: each course declares slot parts like ["A", "X"]
-        # We need to find which (day, hour) those slot parts appear in the grid
-        slot_to_courses: dict[str, list[str]] = {}  # slot_code → [course_codes]
+        # Merge duplicate course rows (same code can appear once per part:
+        # e.g. theory "A" row + practical "P29-P30-" row for the same course).
+        course_parts: dict[str, list[str]] = {}
         for course in courses.courses:
             if not course.code:
                 continue
-            raw_slot = course.slot.rstrip("-")
-            parts = raw_slot.split("+")
-            for part in parts:
-                part = part.strip()
-                if not part:
-                    continue
-                base_slot = part.split("-")[0]
-                slot_to_courses.setdefault(base_slot, []).append(course.code)
+            tokens = []
+            for group in (course.slot or "").rstrip("-").split("+"):
+                for token in group.split("-"):
+                    token = token.strip()
+                    if token and not token.isdigit() and token != "X":
+                        tokens.append(token)
+            if not tokens:
+                continue
+            existing = course_parts.setdefault(course.code, [])
+            for t in tokens:
+                if t not in existing:
+                    existing.append(t)
 
         targets = [(batch, False), (batch, True), (1, False), (2, False)]
 
@@ -115,23 +119,17 @@ class AcademiaScraper:
 
             schedule: list = []
             placed: set[tuple] = set()
+            unmatched: list[str] = []
 
             for course in courses.courses:
                 if not course.code:
                     continue
-                raw_slot = course.slot.rstrip("-")
-                parts = raw_slot.split("+")
-                for part in parts:
-                    part = part.strip()
-                    if not part:
+                tokens = course_parts.get(course.code, [])
+                for token in tokens:
+                    positions = slot_positions.get(token, [])
+                    if not positions:
+                        unmatched.append(f"{course.code}:{token}")
                         continue
-                    base_slot = part.split("-")[0]
-
-                    # For lab slots, check batch
-                    if base_slot.startswith("L") and not TimetableBuilder._batch_matches(part, batch):
-                        continue
-
-                    positions = slot_positions.get(base_slot, [])
                     for day, hour in positions:
                         day_name = DAY_NAMES.get(day, f"Day{day}")
                         key = (course.code, day_name, hour)
@@ -145,7 +143,7 @@ class AcademiaScraper:
                                 time=times.get(hour, ""),
                                 courseCode=course.code,
                                 courseTitle=course.title,
-                                slot=base_slot,
+                                slot=token,
                                 faculty=course.faculty,
                                 room=course.room,
                             )
@@ -154,6 +152,11 @@ class AcademiaScraper:
             if schedule:
                 day_order = {"DO-1": 0, "DO-2": 1, "DO-3": 2, "DO-4": 3, "DO-5": 4}
                 schedule.sort(key=lambda s: (day_order.get(s.day, 99), s.hour))
+                print(
+                    f"[SCRAPER] unified grid {url.split('/')[-1]}: "
+                    f"{len(grid)} cells, {len(schedule)} slots, "
+                    f"unmatched: {unmatched or 'none'}"
+                )
                 return schedule
 
         return []

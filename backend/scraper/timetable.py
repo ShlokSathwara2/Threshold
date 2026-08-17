@@ -53,38 +53,36 @@ DAY_NAMES = {1: "DO-1", 2: "DO-2", 3: "DO-3", 4: "DO-4", 5: "DO-5"}
 
 
 class TimetableBuilder:
-    """Derive timetable from course slot assignments and batch number."""
+    """Derive timetable from course slot assignments and batch number.
+
+    Fallback path only — used when the unified batch grid can't be fetched.
+    Slot fields are tokenised the same way as the unified path ("L51-L52-"
+    → ["L51", "L52"]); tokens that aren't in the matrix are skipped.
+    """
 
     def build(self, courses: CourseResponse, batch: int) -> list[TimetableSlot]:
         schedule: list[TimetableSlot] = []
 
         for course in courses.courses:
-            raw_slot = course.slot.rstrip("-")
-            # Parse compound slot like "A1+TA1" or "L3+L4"
-            parts = raw_slot.split("+")
-            for part in parts:
-                part = part.strip()
-                if not part:
-                    continue
+            tokens: list[str] = []
+            for group in (course.slot or "").rstrip("-").split("+"):
+                for token in group.split("-"):
+                    token = token.strip()
+                    if token and token != "X" and token not in tokens:
+                        tokens.append(token)
+            if not tokens:
+                continue
 
-                # Remove batch suffix if present (e.g. "A1-1" → "A1")
-                base_slot = part.split("-")[0]
-
-                # Look up in matrix
-                time_slots = SLOT_MATRIX.get(base_slot, [])
+            for token in tokens:
+                time_slots = SLOT_MATRIX.get(token, [])
                 for day, hour in time_slots:
-                    # For lab slots, check batch assignment
-                    if base_slot.startswith("L"):
-                        if not self._batch_matches(part, batch):
-                            continue
-
                     schedule.append(
                         TimetableSlot(
                             day=DAY_NAMES.get(day, f"Day{day}"),
                             hour=hour,
                             courseCode=course.code,
                             courseTitle=course.title,
-                            slot=part,
+                            slot=token,
                             faculty=course.faculty,
                             room=course.room,
                         )
@@ -94,14 +92,3 @@ class TimetableBuilder:
         day_order = {"DO-1": 0, "DO-2": 1, "DO-3": 2, "DO-4": 3, "DO-5": 4}
         schedule.sort(key=lambda s: (day_order.get(s.day, 99), s.hour))
         return schedule
-
-    @staticmethod
-    def _batch_matches(slot_str: str, batch: int) -> bool:
-        """Check if a lab slot matches the student's batch."""
-        if "-" not in slot_str:
-            return True  # No batch filter
-        try:
-            slot_batch = int(slot_str.split("-")[1])
-            return slot_batch == batch
-        except (ValueError, IndexError):
-            return True
