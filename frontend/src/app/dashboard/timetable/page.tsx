@@ -9,6 +9,7 @@ import {
   setAcademiaCookies,
   academiaLogin,
   fetchTimetable,
+  fetchCalendar,
   type TimetableSlot,
   type TimetableResponse,
 } from '@/lib/api';
@@ -22,7 +23,7 @@ interface TimetableCache {
   schedule: TimetableSlot[];
 }
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DAYS = ['DO-1', 'DO-2', 'DO-3', 'DO-4', 'DO-5'];
 
 function loadCache(): TimetableCache | null {
   try {
@@ -150,15 +151,30 @@ export default function TimetablePage() {
 
   const needsLogin = !isAcademiaLoggedIn();
 
-  const todayIndex = (() => {
-    const d = new Date().getDay();
-    return d >= 1 && d <= 5 ? d - 1 : -1;
-  })();
-
-  const byDay = (day: string) =>
-    schedule
-      .filter((s) => s.day === day)
-      .sort((a, b) => a.hour - b.hour);
+  // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
+  // SP academic calendar's real day order so the highlight stays correct
+  // even when holidays shift the sequence.
+  const [todayIndex, setTodayIndex] = useState(-1);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCalendar()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.error || !res.today) {
+          setTodayIndex(-1);
+          return;
+        }
+        const m = res.today.dayOrder?.match(/Day\s*(\d)/i);
+        const n = m ? parseInt(m[1], 10) : NaN;
+        setTodayIndex(n >= 1 && n <= 5 ? n - 1 : -1);
+      })
+      .catch(() => {
+        if (!cancelled) setTodayIndex(-1);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const allHours = [...new Set(schedule.map((s) => s.hour))].sort((a, b) => a - b);
 
@@ -354,7 +370,7 @@ export default function TimetablePage() {
         </div>
       )}
 
-      {/* ── Day cards ── */}
+      {/* ── AcadLoop-style grid: hours × DO columns ── */}
       {!needsLogin && schedule.length === 0 && !loading && !error && (
         <div style={{
           padding: '20px',
@@ -369,156 +385,187 @@ export default function TimetablePage() {
         </div>
       )}
 
-      {DAYS.map((day, di) => {
-        const sessions = byDay(day);
-        const isToday = di === todayIndex;
-        return (
-          <motion.div
-            key={day}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: di * 0.05 }}
-            style={{
-              borderRadius: '16px',
-              background: isToday ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255,255,255,0.02)',
-              border: isToday ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.06)',
-              marginBottom: '12px',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
-            }}>
-              <h2 style={{
-                fontSize: '0.9rem',
-                fontWeight: 700,
-                color: isToday ? '#c4b5fd' : 'white',
-                margin: 0,
+      {schedule.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            borderRadius: '16px',
+            border: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.02)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: '640px', display: 'flex', flexDirection: 'column' }}>
+              {/* Header: corner + day columns */}
+              <div style={{
+                display: 'flex',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(139, 92, 246, 0.08)',
               }}>
-                {day}
-              </h2>
-              {isToday && (
-                <span style={{
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  background: 'rgba(139, 92, 246, 0.2)',
-                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                <div style={{
+                  flexShrink: 0,
+                  width: '92px',
+                  padding: '10px 10px',
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  color: '#c4b5fd',
+                  color: 'rgba(255,255,255,0.35)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}>
-                  TODAY
-                </span>
-              )}
-              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.25)', fontSize: '0.72rem' }}>
-                {sessions.length} class{sessions.length === 1 ? '' : 'es'}
-              </span>
-            </div>
-
-            {sessions.length === 0 ? (
-              <p style={{
-                padding: '14px 16px',
-                margin: 0,
-                color: 'rgba(255,255,255,0.2)',
-                fontSize: '0.75rem',
-              }}>
-                No classes
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {allHours.map((hour) => {
-                  const inHour = sessions.filter((s) => s.hour === hour);
-                  if (inHour.length === 0) return null;
+                  Time / DO
+                </div>
+                {DAYS.map((day, di) => {
+                  const isToday = di === todayIndex;
                   return (
-                    <div
-                      key={hour}
-                      style={{
-                        display: 'flex',
-                        gap: '12px',
-                        padding: '12px 16px',
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      }}
-                    >
-                      <div style={{
-                        flexShrink: 0,
-                        width: '52px',
-                        paddingTop: '2px',
-                        fontSize: '0.66rem',
-                        fontWeight: 700,
-                        color: 'rgba(255,255,255,0.35)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.4px',
+                    <div key={day} style={{
+                      flex: 1,
+                      minWidth: '104px',
+                      padding: '10px 8px',
+                      textAlign: 'center',
+                      borderLeft: '1px solid rgba(255,255,255,0.05)',
+                      background: isToday ? 'rgba(139, 92, 246, 0.18)' : 'transparent',
+                    }}>
+                      <span style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        color: isToday ? '#c4b5fd' : 'white',
                       }}>
-                        Hour {hour}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {inHour.map((s) => (
-                          <div
-                            key={`${s.courseCode}-${hour}`}
-                            style={{
-                              padding: '10px 12px',
-                              borderRadius: '12px',
-                              background: 'rgba(139, 92, 246, 0.07)',
-                              border: '1px solid rgba(139, 92, 246, 0.18)',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                              <span style={{
-                                fontSize: '0.66rem',
-                                fontWeight: 700,
-                                color: '#c4b5fd',
-                                background: 'rgba(139, 92, 246, 0.15)',
-                                padding: '2px 8px',
-                                borderRadius: '6px',
-                                letterSpacing: '0.3px',
-                              }}>
-                                {s.courseCode}
-                              </span>
-                              <span style={{
-                                marginLeft: 'auto',
-                                fontSize: '0.68rem',
-                                color: 'rgba(255,255,255,0.45)',
-                              }}>
-                                {s.slot}
-                              </span>
-                            </div>
-                            <p style={{
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              color: 'white',
-                              margin: 0,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}>
-                              {s.courseTitle}
-                            </p>
-                            <p style={{
-                              fontSize: '0.68rem',
-                              color: 'rgba(255,255,255,0.35)',
-                              margin: '3px 0 0',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}>
-                              {s.faculty && s.faculty !== 'N/A' ? `${s.faculty} · ` : ''}
-                              {s.room && s.room !== 'N/A' ? `Room ${s.room}` : ''}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+                        {day}
+                      </span>
+                      {isToday && (
+                        <span style={{
+                          display: 'block',
+                          marginTop: '2px',
+                          fontSize: '0.55rem',
+                          fontWeight: 700,
+                          color: '#a78bfa',
+                        }}>
+                          TODAY
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            )}
-          </motion.div>
-        );
-      })}
+
+              {/* Hour rows */}
+              {allHours.map((hour) => {
+                const timeLabel =
+                  schedule.find((s) => s.hour === hour)?.time || `Hour ${hour}`;
+                return (
+                  <div
+                    key={hour}
+                    style={{
+                      display: 'flex',
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <div style={{
+                      flexShrink: 0,
+                      width: '92px',
+                      padding: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      gap: '2px',
+                      fontSize: '0.62rem',
+                      fontWeight: 700,
+                      color: 'rgba(255,255,255,0.45)',
+                      letterSpacing: '0.3px',
+                    }}>
+                      <span>H{hour}</span>
+                      <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.25)' }}>
+                        {timeLabel}
+                      </span>
+                    </div>
+                    {DAYS.map((day, di) => {
+                      const inCell = schedule.filter((s) => s.day === day && s.hour === hour);
+                      const isToday = di === todayIndex;
+                      if (inCell.length === 0) {
+                        return (
+                          <div key={day} style={{
+                            flex: 1,
+                            minWidth: '104px',
+                            padding: '8px',
+                            borderLeft: '1px solid rgba(255,255,255,0.04)',
+                            background: isToday ? 'rgba(139, 92, 246, 0.04)' : 'transparent',
+                          }} />
+                        );
+                      }
+                      return (
+                        <div key={day} style={{
+                          flex: 1,
+                          minWidth: '104px',
+                          padding: '6px',
+                          borderLeft: '1px solid rgba(255,255,255,0.04)',
+                          background: isToday ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '5px',
+                        }}>
+                          {inCell.map((s) => (
+                            <div
+                              key={`${s.courseCode}-${hour}-${s.slot}`}
+                              style={{
+                                padding: '7px 8px',
+                                borderRadius: '10px',
+                                background:
+                                  s.slot.startsWith('L')
+                                    ? 'rgba(59, 130, 246, 0.12)'
+                                    : s.slot.startsWith('P')
+                                      ? 'rgba(34, 197, 94, 0.1)'
+                                      : 'rgba(139, 92, 246, 0.12)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                              }}
+                            >
+                              <span style={{
+                                display: 'block',
+                                fontSize: '0.62rem',
+                                fontWeight: 700,
+                                color: '#c4b5fd',
+                                letterSpacing: '0.2px',
+                              }}>
+                                {s.courseCode}
+                              </span>
+                              <span style={{
+                                display: 'block',
+                                fontSize: '0.68rem',
+                                fontWeight: 600,
+                                color: 'white',
+                                margin: '2px 0',
+                                lineHeight: 1.2,
+                              }}>
+                                {s.courseTitle}
+                              </span>
+                              <span style={{
+                                display: 'block',
+                                fontSize: '0.58rem',
+                                color: 'rgba(255,255,255,0.4)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}>
+                                {s.faculty && s.faculty !== 'N/A'
+                                  ? s.faculty.split('(')[0].trim()
+                                  : ''}
+                                {s.room && s.room !== 'N/A' ? ` · ${s.room}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {schedule.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>

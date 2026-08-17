@@ -53,6 +53,8 @@ class Course(BaseModel):
     type: str
     slotType: str
     faculty: str
+    facultyName: str = ""
+    facultyId: str = ""
     slot: str
     room: str
     academicYear: str

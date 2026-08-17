@@ -178,6 +178,14 @@ class AcademiaParser:
             room = room[:1].upper() + room[1:]
         slot = values[8].removesuffix("-")
 
+        faculty_raw = values[7] or "N/A"
+        faculty_name = faculty_raw
+        faculty_id = ""
+        m = re.search(r"\(([A-Za-z0-9]+)\)\s*$", faculty_raw)
+        if m:
+            faculty_id = m.group(1)
+            faculty_name = faculty_raw[: m.start()].strip() or "N/A"
+
         return Course(
             code=code,
             title=values[2].split(" \u2013")[0],
@@ -186,7 +194,9 @@ class AcademiaParser:
             courseCategory=values[5],
             type=values[6] or "N/A",
             slotType="Practical" if "P" in slot else "Theory",
-            faculty=values[7] or "N/A",
+            faculty=faculty_raw,
+            facultyName=faculty_name,
+            facultyId=faculty_id,
             slot=slot,
             room=room,
             academicYear=values[10],

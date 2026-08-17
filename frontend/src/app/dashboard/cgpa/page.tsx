@@ -7,6 +7,7 @@ import { isSpLoggedIn, fetchCourses, type Mark } from '@/lib/api';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
 import { GRADE_POINTS, computeSgpa, type CgpaRow } from '@/lib/grade-calculator';
 import GradeTargetTool from '@/components/marks/GradeTargetTool';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 const GRADE_OPTIONS = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F'];
 
@@ -45,6 +46,7 @@ function SectionHeader({ color, title, subtitle }: { color: string; title: strin
 export default function CgpaCalculatorPage() {
   const router = useRouter();
   const { marks, loading: marksLoading, error: marksError, semester, refetch: refetchMarks } = useSubjectMarks();
+  usePullToRefresh(refetchMarks);
 
   const [rows, setRows] = useState<CgpaRow[]>([]);
   const [history, setHistory] = useState<CgpaRow[][]>([]);

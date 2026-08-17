@@ -5,6 +5,7 @@ export interface SubjectAttendance {
   courseTitle: string;
   category: string;
   facultyName: string;
+  facultyId?: string;
   slot: string;
   present: number;
   absent: number;
@@ -44,13 +45,12 @@ export function calculateSubjectAttendance(a: Attendance): SubjectAttendance {
   let mustAttend = 0;
 
   if (percentage >= THRESHOLD) {
-    // How many can we skip and still stay >= 75%?
-    // (present - x) / (total + x) >= 0.75
-    // present - x >= 0.75 * (total + x)
-    // present - x >= 0.75*total + 0.75*x
-    // present - 0.75*total >= 1.75*x
-    // x <= (present - 0.75*total) / 1.75
-    canBunk = Math.floor((present - THRESHOLD / 100 * total) / (1 + THRESHOLD / 100));
+    // How many classes can we skip and still stay >= 75%?
+    // present / (total + x) >= 0.75
+    // present >= 0.75 * total + 0.75 * x
+    // 0.75 * x <= present - 0.75 * total
+    // x <= (present - 0.75 * total) / 0.75
+    canBunk = Math.floor((present - THRESHOLD / 100 * total) / (THRESHOLD / 100));
   } else {
     // How many consecutive classes must be attended to reach 75%?
     // (present + x) / (total + x) >= 0.75

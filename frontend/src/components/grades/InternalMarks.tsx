@@ -85,6 +85,62 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
         Internal Marks
       </h2>
 
+      {/* ── Combined total: all subjects → total obtained ── */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '14px 16px',
+        borderRadius: '14px',
+        background: 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(59,130,246,0.06))',
+        border: '1px solid rgba(139,92,246,0.25)',
+        marginBottom: '14px',
+      }}>
+        <div>
+          <p style={{
+            margin: 0,
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            color: '#c4b5fd',
+            letterSpacing: '0.4px',
+            textTransform: 'uppercase',
+          }}>
+            Total Marks
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)' }}>
+            Combined across {marks.length} subject{marks.length > 1 ? 's' : ''}
+          </p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'white' }}>
+            {marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0).toFixed(1)}
+            <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 500, fontSize: '0.85rem' }}>
+              {' / '}
+            </span>
+            <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+              {marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0).toFixed(0)}
+            </span>
+          </span>
+          <p style={{
+            margin: '3px 0 0',
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: (() => {
+              const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
+              const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
+              const pct = max > 0 ? (total / max) * 100 : 0;
+              return pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#ef4444';
+            })(),
+          }}>
+            {(() => {
+              const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
+              const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
+              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : '—';
+            })()}
+          </p>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {marks.map((m, i) => {
           const scored = parseFloat(m.scored);

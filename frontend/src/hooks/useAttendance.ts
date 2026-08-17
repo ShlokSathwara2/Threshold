@@ -120,6 +120,8 @@ export function useAttendance(): UseAttendanceResult {
             courseType: c.type,
             courseCategory: c.courseCategory,
             academicYear: c.academicYear,
+            facultyName: c.facultyName || s.facultyName,
+            facultyId: c.facultyId,
           };
         });
       }

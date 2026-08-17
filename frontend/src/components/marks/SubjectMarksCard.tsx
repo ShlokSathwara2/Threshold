@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Mark } from '@/lib/api';
 import { schemeFromTotal } from '@/lib/grade-calculator';
+import { useSubjectRegistry } from '@/lib/subject-registry';
 import SubjectMarksChart from './SubjectMarksChart';
 import GradeTargetTool from './GradeTargetTool';
 
@@ -14,6 +15,8 @@ function parseNum(v: string): number {
 
 export default function SubjectMarksCard({ subject, index }: { subject: Mark; index: number }) {
   const [expanded, setExpanded] = useState(true);
+  const { getSubject } = useSubjectRegistry();
+  const meta = getSubject(subject.courseCode);
   const overallTotal = parseNum(subject.overall?.total ?? '');
   const scheme = schemeFromTotal(overallTotal);
 
@@ -44,6 +47,9 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#a78bfa', marginBottom: '2px' }}>
             {subject.courseCode} · {subject.courseType}
+            {meta && meta.category ? ` · ${meta.category}` : ''}
+            {meta && meta.credit && meta.credit !== 'N/A' ? ` · ${meta.credit} cr` : ''}
+            {meta && meta.facultyName ? ` · ${meta.facultyName}` : ''}
           </p>
           <h3 style={{
             fontSize: '0.9rem',

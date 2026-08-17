@@ -7,6 +7,7 @@ import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession 
 import PullRefresh from '@/components/ui/PullRefresh';
 import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
+import { SubjectRegistryProvider } from '@/lib/subject-registry';
 
 const navItems = [
   { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
@@ -268,19 +269,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content */}
       <PullRefresh mainRef={mainRef}>
-        <main
-          ref={mainRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            padding: '10px 16px',
-            paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
-          }}
-        >
-          {children}
-        </main>
+        <SubjectRegistryProvider>
+          <main
+            ref={mainRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              padding: '10px 16px',
+              paddingBottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
+            }}
+          >
+            {children}
+          </main>
+        </SubjectRegistryProvider>
       </PullRefresh>
 
       {/* Bottom navigation */}

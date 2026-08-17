@@ -260,6 +260,8 @@ export interface Course {
   type: string;
   slotType: string;
   faculty: string;
+  facultyName?: string;
+  facultyId?: string;
   slot: string;
   room: string;
   academicYear: string;

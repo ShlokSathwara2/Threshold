@@ -244,6 +244,11 @@ export default function SubjectAttendanceCard({ subject, index }: Props) {
                     {subject.courseCategory}
                   </span>
                 )}
+                {subject.facultyId && subject.facultyId !== 'N/A' && (
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
+                    Faculty ID: {subject.facultyId}
+                  </span>
+                )}
                 {subject.academicYear && (
                   <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)' }}>
                     {subject.academicYear}

@@ -7,10 +7,12 @@ import { isLoggedIn } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
+import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
 export default function AttendancePage() {
   const router = useRouter();
   const { subjects, overall, loading, error, refetch } = useAttendance();
+  usePullToRefresh(refetch);
 
   useEffect(() => {
     if (!isLoggedIn()) {
