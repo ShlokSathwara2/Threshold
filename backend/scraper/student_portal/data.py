@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import re
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -355,58 +356,72 @@ def fetch_profile(cookie: str) -> dict[str, Any]:
                         break
 
         # ── Photo ───────────────────────────────────────────────
-        # Dashboard is where the student photo lives
-        for soup_src in (dash_soup, grades_soup):
+        # The student photo lives on the profile page as a relative src like
+        # "../../resources/sphotos/<hash>.jpg" — it MUST be resolved against
+        # the page URL (urljoin), not the portal base, or the path breaks.
+        photo_src = None
+        photo_page_url = dash_url
+        for soup_src, page_url in ((dash_soup, dash_url), (grades_soup, settings.sp_grades_url)):
             if not soup_src:
                 continue
-            for img in soup_src.find_all("img"):
-                src = img.get("src") or img.get("data-src") or ""
-                if not src:
-                    continue
-                low = src.lower()
-                if "captcha" in low or "logo" in low or "icon" in low:
-                    continue
-                # On the dashboard, student photos are usually in a specific location
-                if (
-                    "photo" in low
-                    or "student" in low
-                    or "profile" in low
-                    or "image" in low
-                    or "pic" in low
-                    or "avatar" in low
-                    or "display" in low
-                    or "/data:image" in src
-                    or "getstudentphoto" in low
-                    or "showimage" in low
-                    or "photograph" in low
-                    or low.endswith((".jpg", ".jpeg", ".png", ".gif"))
-                ):
-                    # Skip tiny icons/badges
-                    width = img.get("width", "")
-                    height = img.get("height", "")
-                    try:
-                        w = int(str(width).replace("px", ""))
-                        h = int(str(height).replace("px", ""))
-                        if w < 20 or h < 20:
-                            continue
-                    except (ValueError, TypeError):
-                        pass
-                    photo_src = src
-                    break
-            if profile.get("photo"):
+            # Preferred: explicit student-photo markers
+            # (SRM renders <img class="imgPhoto" alt="Student Photo">)
+            img = soup_src.select_one("img[class*='photo' i], img[alt*='photo' i]")
+            if img:
+                photo_src = img.get("src") or img.get("data-src") or ""
+            if not photo_src:
+                for img in soup_src.find_all("img"):
+                    src = img.get("src") or img.get("data-src") or ""
+                    if not src:
+                        continue
+                    low = src.lower()
+                    if "captcha" in low or "logo" in low or "icon" in low:
+                        continue
+                    # On the dashboard, student photos are usually in a specific location
+                    if (
+                        "photo" in low
+                        or "student" in low
+                        or "profile" in low
+                        or "image" in low
+                        or "pic" in low
+                        or "avatar" in low
+                        or "display" in low
+                        or "getstudentphoto" in low
+                        or "showimage" in low
+                        or "photograph" in low
+                        or low.endswith((".jpg", ".jpeg", ".png", ".gif"))
+                    ):
+                        # Skip tiny icons/badges
+                        width = img.get("width", "")
+                        height = img.get("height", "")
+                        try:
+                            w = int(str(width).replace("px", ""))
+                            h = int(str(height).replace("px", ""))
+                            if w < 20 or h < 20:
+                                continue
+                        except (ValueError, TypeError):
+                            pass
+                        photo_src = src
+                        break
+            if photo_src:
+                photo_page_url = page_url
                 break
-        else:
-            photo_src = None
 
-        if photo_src and "photo" not in profile:
+        if photo_src:
             try:
-                url = photo_src if photo_src.startswith("http") else f"{settings.sp_base_url}{photo_src}"
-                img_resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                if img_resp.status_code == 200 and img_resp.content and len(img_resp.content) > 200:
-                    profile["photo"] = (
-                        "data:image/jpeg;base64," + base64.b64encode(img_resp.content).decode()
+                if photo_src.startswith("data:"):
+                    profile["photo"] = photo_src
+                else:
+                    url = urljoin(photo_page_url, photo_src)
+                    img_resp = client.get(
+                        url,
+                        headers={"User-Agent": "Mozilla/5.0", "Referer": photo_page_url},
                     )
-                    print(f"[SP-DATA] profile photo fetched: {len(img_resp.content)} bytes")
+                    if img_resp.status_code == 200 and img_resp.content and len(img_resp.content) > 200:
+                        profile["photo"] = (
+                            "data:image/jpeg;base64," + base64.b64encode(img_resp.content).decode()
+                        )
+                        print(f"[SP-DATA] profile photo fetched: {len(img_resp.content)} bytes")
             except Exception as e:
                 print(f"[SP-DATA] profile photo fetch failed: {e}")
 
