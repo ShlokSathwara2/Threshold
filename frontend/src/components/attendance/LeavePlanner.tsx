@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fromInputValue, toDate, toDateStr, displayDate } from '@/lib/day-order';
+import { fromInputValue, toDate, toDateStr, displayDate, type OverallReachPlan, type ReachPlan } from '@/lib/day-order';
 import { useTheme, overlay, overlayBg, type ThemePalette } from '@/lib/theme';
 
 interface Props {
@@ -24,6 +24,13 @@ interface Props {
     mustAttend: number;
     below75: boolean;
   } | null;
+  overallReach?: OverallReachPlan | null;
+  projectedReachList?: {
+    courseCode: string;
+    courseTitle: string;
+    projectedPercentage: number;
+    plan: ReachPlan | null;
+  }[];
 }
 
 const inputStyle = (theme: ThemePalette): React.CSSProperties => ({
@@ -63,6 +70,8 @@ export default function LeavePlanner({
   missedTotal,
   subjectsDropping,
   overall,
+  overallReach,
+  projectedReachList,
 }: Props) {
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -338,6 +347,126 @@ export default function LeavePlanner({
                       <>You can still skip <span style={{ fontWeight: 800 }}>{overall.canBunk}</span> more class{overall.canBunk === 1 ? '' : 'es'} (+{overall.margin.toFixed(1)}% margin)</>
                     )}
                   </p>
+                  {overallReach && overallReach.hasSchedule && (
+                    <div style={{
+                      padding: '9px 11px',
+                      borderRadius: '10px',
+                      background:
+                        overallReach.mode === 'spare'
+                          ? 'rgba(34, 197, 94, 0.08)'
+                          : overallReach.mode === 'recover'
+                            ? 'rgba(251, 191, 36, 0.08)'
+                            : 'rgba(239, 68, 68, 0.14)',
+                      border: `1px solid ${
+                        overallReach.mode === 'spare'
+                          ? 'rgba(34, 197, 94, 0.3)'
+                          : overallReach.mode === 'recover'
+                            ? 'rgba(251, 191, 36, 0.3)'
+                            : 'rgba(239, 68, 68, 0.4)'
+                      }`,
+                    }}>
+                      {overallReach.mode === 'recover' && overallReach.reachDate ? (
+                        <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#fde68a', lineHeight: 1.5 }}>
+                          After your leave, attend every class till{' '}
+                          <span style={{ fontWeight: 800, color: '#fbbf24' }}>{displayDate(overallReach.reachDate)}</span>{' '}
+                          to secure 75% — {overallReach.needed} classes needed
+                          {overallReach.lastWorkingDay && (
+                            <> · semester ends {displayDate(overallReach.lastWorkingDay)}</>
+                          )}
+                        </p>
+                      ) : overallReach.mode === 'impossible' ? (
+                        <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#fca5a5', lineHeight: 1.5 }}>
+                          ⚠️ Don't take this many holidays — you'd need{' '}
+                          <span style={{ fontWeight: 800 }}>{overallReach.needed}</span> classes to secure 75%, but only{' '}
+                          <span style={{ fontWeight: 800 }}>{overallReach.futureClasses}</span> class{overallReach.futureClasses === 1 ? '' : 'es'} remain
+                          {overallReach.lastWorkingDay && (
+                            <> before the semester ends on {displayDate(overallReach.lastWorkingDay)}</>
+                          )}
+                          . You won't be able to secure 75% — and could get <span style={{ fontWeight: 800 }}>detained</span> this semester. Be careful!
+                        </p>
+                      ) : overallReach.mode === 'spare' && overallReach.reachDate ? (
+                        <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#86efac', lineHeight: 1.5 }}>
+                          After your leave you're still above 75% — you can keep skipping classes till{' '}
+                          <span style={{ fontWeight: 800, color: '#4ade80' }}>{displayDate(overallReach.reachDate)}</span>{' '}
+                          before hitting 75% ({overallReach.needed} class{overallReach.needed === 1 ? '' : 'es'} of margin)
+                          {overallReach.lastWorkingDay && (
+                            <> · semester ends {displayDate(overallReach.lastWorkingDay)}</>
+                          )}
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#86efac', lineHeight: 1.5 }}>
+                          Even after this leave you can skip every remaining class and still stay above 75% — enjoy your semester 🎉
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {projectedReachList && projectedReachList.length > 0 && (
+                    <div style={{
+                      marginTop: '10px',
+                      borderRadius: '10px',
+                      border: `1px solid ${WB(0.08)}`,
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        padding: '8px 11px',
+                        fontSize: '0.66rem',
+                        fontWeight: 800,
+                        letterSpacing: '0.5px',
+                        color: W(0.5),
+                        textTransform: 'uppercase',
+                        background: WB(0.04),
+                        borderBottom: `1px solid ${WB(0.06)}`,
+                      }}>
+                        {projectedReachList.length} subject{projectedReachList.length === 1 ? '' : 's'} drop{projectedReachList.length === 1 ? 's' : ''} below 75% after this leave
+                      </div>
+                      {projectedReachList.map((item) => {
+                        const p = item.plan;
+                        const recoverable = !!p && p.reachable && !!p.reachDate;
+                        return (
+                          <div key={item.courseCode} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 11px',
+                            borderBottom: `1px solid ${WB(0.04)}`,
+                            background: recoverable ? 'rgba(251, 191, 36, 0.05)' : 'rgba(239, 68, 68, 0.07)',
+                          }}>
+                            <span style={{
+                              flexShrink: 0,
+                              fontSize: '0.62rem',
+                              fontWeight: 800,
+                              color: '#fbbf24',
+                              background: 'rgba(251,191,36,0.12)',
+                              padding: '2px 6px',
+                              borderRadius: '5px',
+                            }}>
+                              {item.courseCode}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{
+                                margin: 0,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                color: 'var(--threshold-text)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}>
+                                {item.courseTitle}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.66rem', fontWeight: 600, color: recoverable ? '#fde68a' : '#fca5a5', lineHeight: 1.4 }}>
+                                {recoverable && p && p.reachDate ? (
+                                  <>→ {item.projectedPercentage.toFixed(1)}% · attend every class till <span style={{ fontWeight: 800 }}>{displayDate(p.reachDate)}</span></>
+                                ) : (
+                                  <>→ {item.projectedPercentage.toFixed(1)}% · can't recover before semester end ⚠️</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               <button

@@ -1,10 +1,19 @@
 ﻿"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { fetchSpInternalMarks, type InternalMark } from '@/lib/api';
+import { fetchSpInternalMarks, fetchAcademiaMarks, isAcademiaLoggedIn } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+import {
+  mergeInternalMarks,
+  combinedTotal,
+  subjectPct,
+  gradeFor,
+  Ring,
+  pctColor,
+  type MergedSubjectMark,
+} from '@/lib/internal-marks';
 
 export default function InternalMarks({
   refreshKey = 0,
@@ -13,9 +22,10 @@ export default function InternalMarks({
   refreshKey?: number;
   subjects?: SubjectAttendance[];
 }) {
-  const [marks, setMarks] = useState<InternalMark[]>([]);
+  const [marks, setMarks] = useState<MergedSubjectMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [academiaOn, setAcademiaOn] = useState(false);
 
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -26,9 +36,18 @@ export default function InternalMarks({
     (async () => {
       setLoading(true);
       setError(null);
+      const sp = isAcademiaLoggedIn();
+      setAcademiaOn(sp);
       try {
-        const res = await fetchSpInternalMarks();
-        if (!cancelled) setMarks(res.internal_marks || []);
+        const spRes = fetchSpInternalMarks();
+        const acRes = sp ? fetchAcademiaMarks() : Promise.resolve(null);
+        const [spOut, acOut] = await Promise.all([spRes, acRes]);
+        if (cancelled) return;
+        const merged = mergeInternalMarks(
+          spOut.internal_marks || [],
+          acOut?.marks || [],
+        );
+        setMarks(merged);
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load internal marks');
       } finally {
@@ -75,10 +94,18 @@ export default function InternalMarks({
         border: `1px solid ${WB(0.06)}`,
         textAlign: 'center',
       }}>
-        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>No internal marks data available</p>
+        <p style={{ color: W(0.3), fontSize: '0.8rem' }}>
+          No internal marks published yet{academiaOn ? ' on the portal or Academia' : ''}.
+        </p>
       </div>
     );
   }
+
+  const totals = combinedTotal(marks);
+  const overallPct = totals.maxMark > 0 ? (totals.scored / totals.maxMark) * 100 : null;
+  const best = [...marks].sort((a, b) => (subjectPct(b) ?? -1) - (subjectPct(a) ?? -1))[0] ?? null;
+  const worst = [...marks].sort((a, b) => (subjectPct(a) ?? 999) - (subjectPct(b) ?? 999))[0] ?? null;
+  const overallColor = pctColor(overallPct);
 
   return (
     <motion.div
@@ -93,11 +120,32 @@ export default function InternalMarks({
         marginBottom: '24px',
       }}
     >
-      <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: W(0.7), marginBottom: '16px' }}>
-        Internal Marks
-      </h2>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        marginBottom: '16px',
+      }}>
+        <div>
+          <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
+            Internal Marks
+          </h2>
+          <p style={{ fontSize: '0.68rem', color: W(0.4), margin: '4px 0 0' }}>
+            {academiaOn ? 'SP totals + Academia test-wise breakdown' : 'Student Portal totals'}
+            {academiaOn && marks.some((m) => m.tests.length > 0) ? ' · every component shown' : ''}
+          </p>
+        </div>
+        {overallPct !== null && (
+          <Ring pct={overallPct} size={64} stroke={6} color={overallColor} track={WB(0.08)}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: overallColor }}>
+              {overallPct.toFixed(0)}%
+            </span>
+          </Ring>
+        )}
+      </div>
 
-      {/* ── Combined total: all subjects → total obtained ── */}
+      {/* Combined total strip */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -125,41 +173,28 @@ export default function InternalMarks({
         </div>
         <div style={{ textAlign: 'right' }}>
           <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--threshold-text)' }}>
-            {marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0).toFixed(1)}
-            <span style={{ color: 'var(--threshold-text-faint)', fontWeight: 500, fontSize: '0.85rem' }}>
-              {' / '}
-            </span>
-            <span style={{ fontSize: '0.9rem', color: W(0.5), fontWeight: 600 }}>
-              {marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0).toFixed(0)}
-            </span>
+            {totals.scored.toFixed(1)}
+            <span style={{ color: 'var(--threshold-text-faint)', fontWeight: 500, fontSize: '0.85rem' }}> / </span>
+            <span style={{ fontSize: '0.9rem', color: W(0.5), fontWeight: 600 }}>{totals.maxMark.toFixed(0)}</span>
           </span>
-          <p style={{
-            margin: '3px 0 0',
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            color: (() => {
-              const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
-              const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
-              const pct = max > 0 ? (total / max) * 100 : 0;
-              return pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#ef4444';
-            })(),
-          }}>
-            {(() => {
-              const total = marks.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
-              const max = marks.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
-              return max > 0 ? `${((total / max) * 100).toFixed(1)}%` : '—';
-            })()}
+          <p style={{ margin: '3px 0 0', fontSize: '0.7rem', fontWeight: 700, color: overallColor }}>
+            {overallPct !== null ? `${overallPct.toFixed(1)}%` : '—'}
+            {best && worst && best.code !== worst.code
+              ? ` · best ${best.code} · lowest ${worst.code}`
+              : ''}
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {marks.map((m, i) => {
-          const scored = parseFloat(m.scored);
-          const max = parseFloat(m.maxMark);
-          const pct = max > 0 ? (scored / max) * 100 : 0;
-          const barColor = pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#ef4444';
+          const pct = subjectPct(m);
+          const color = pctColor(pct);
           const att = subjects.find((s) => s.courseCode === m.code);
+          const testTotal = m.tests.reduce((acc, t) => acc + (parseFloat(t.marks.total) || 0), 0);
+          const testScored = m.tests.reduce((acc, t) => acc + (parseFloat(t.marks.scored) || 0), 0);
+          const testsPct = testTotal > 0 ? (testScored / testTotal) * 100 : null;
+          const effectivePct = testsPct !== null ? testsPct : pct;
 
           return (
             <motion.div
@@ -168,35 +203,65 @@ export default function InternalMarks({
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03 }}
               style={{
-                padding: '12px 14px',
-                borderRadius: '12px',
+                padding: '14px',
+                borderRadius: '14px',
                 background: WB(0.02),
-                border: `1px solid ${WB(0.04)}`,
+                border: `1px solid ${WB(0.05)}`,
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              {/* Header: ring + code + totals */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Ring pct={effectivePct} size={56} stroke={5} color={color} track={WB(0.08)}>
+                  <span style={{ fontSize: '0.66rem', fontWeight: 800, color }}>
+                    {effectivePct !== null ? `${effectivePct.toFixed(0)}%` : '—'}
+                  </span>
+                </Ring>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                    {m.code}
-                  </span>
-                  <span style={{ color: W(0.25), margin: '0 6px', fontSize: '0.7rem' }}>·</span>
-                  <span style={{ fontSize: '0.72rem', color: W(0.4) }}>
-                    {m.description.length > 30 ? m.description.slice(0, 28) + '…' : m.description}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
+                      {m.code}
+                    </span>
+                    {pct !== null && (
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '5px',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        background: `${color}1a`,
+                        color,
+                      }}>
+                        {gradeFor(pct / 100)}
+                      </span>
+                    )}
+                    {m.tests.length > 0 && (
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '5px',
+                        fontSize: '0.58rem',
+                        fontWeight: 700,
+                        background: 'rgba(139,92,246,0.14)',
+                        color: '#a78bfa',
+                      }}>
+                        {m.tests.length} component{m.tests.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '0.72rem', color: W(0.4), margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.description}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', fontWeight: 700, color, margin: '3px 0 0' }}>
+                    {m.scored.toFixed(1)}
+                    <span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.68rem' }}> / {m.maxMark.toFixed(0)}</span>
+                    <span style={{ color: W(0.35), fontWeight: 400, fontSize: '0.66rem', marginLeft: '6px' }}>
+                      {m.academiaOnly ? 'from Academia' : 'SP total'}
+                    </span>
+                  </p>
                 </div>
-                <span style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  color: barColor,
-                  flexShrink: 0,
-                  marginLeft: '8px',
-                }}>
-                  {m.scored}<span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.75rem' }}>/{m.maxMark}</span>
-                </span>
               </div>
 
+              {/* Attendance context */}
               {att && (
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
                   <span style={{
                     padding: '2px 8px',
                     borderRadius: '6px',
@@ -228,33 +293,98 @@ export default function InternalMarks({
                     border: `1px solid ${att.isBelowThreshold ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
                     color: att.isBelowThreshold ? '#f87171' : '#4ade80',
                   }}>
-                    {att.percentage.toFixed(1)}%
+                    {att.percentage.toFixed(1)}% attendance
                   </span>
                 </div>
               )}
 
-              {/* Progress bar */}
+              {/* Overall progress bar */}
               <div style={{
                 height: '3px',
                 borderRadius: '2px',
                 background: WB(0.06),
                 overflow: 'hidden',
+                marginTop: '10px',
               }}>
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${pct}%` }}
+                  animate={{ width: `${effectivePct ?? 0}%` }}
                   transition={{ duration: 0.8, delay: 0.2 + i * 0.03 }}
-                  style={{
-                    height: '100%',
-                    borderRadius: '2px',
-                    background: barColor,
-                  }}
+                  style={{ height: '100%', borderRadius: '2px', background: color }}
                 />
               </div>
+
+              {/* Dynamic per-test breakdown — any number of components, any names */}
+              {m.tests.length > 0 && (
+                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {m.tests.map((t, ti) => {
+                    const s = parseFloat(t.marks.scored) || 0;
+                    const mx = parseFloat(t.marks.total) || 0;
+                    const tp = mx > 0 ? (s / mx) * 100 : 0;
+                    const tc = pctColor(tp);
+                    const wt = t.weightage ? parseFloat(t.weightage) : NaN;
+                    return (
+                      <div key={`${t.test}-${ti}`} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                      }}>
+                        <span style={{
+                          fontSize: '0.68rem',
+                          color: W(0.5),
+                          minWidth: '88px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {t.test}
+                        </span>
+                        <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: WB(0.06), overflow: 'hidden' }}>
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${tp}%` }}
+                            transition={{ duration: 0.7, delay: 0.3 + ti * 0.05 }}
+                            style={{ height: '100%', borderRadius: '3px', background: tc }}
+                          />
+                        </div>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: tc, flexShrink: 0 }}>
+                          {s}<span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.68rem' }}>/{mx}</span>
+                        </span>
+                        {!isNaN(wt) && (
+                          <span style={{ fontSize: '0.58rem', color: W(0.35), flexShrink: 0, minWidth: '34px', textAlign: 'right' }}>
+                            {wt}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           );
         })}
       </div>
+
+      {!academiaOn && (
+        <p style={{
+          margin: '12px 0 0',
+          fontSize: '0.68rem',
+          color: W(0.35),
+          textAlign: 'center',
+        }}>
+          Log in with Academia for the per-test breakdown (FT-1, quizzes, assignments — every component).
+        </p>
+      )}
+      {academiaOn && marks.some((m) => m.tests.length === 0) && (
+        <p style={{
+          margin: '12px 0 0',
+          fontSize: '0.68rem',
+          color: W(0.35),
+          textAlign: 'center',
+        }}>
+          Academia is connected — component-wise breakdowns appear here once marks are published.
+        </p>
+      )}
     </motion.div>
   );
 }

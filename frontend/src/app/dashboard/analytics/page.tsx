@@ -38,6 +38,7 @@ export default function AnalyticsPage() {
   const [internals, setInternals] = useState<InternalMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSem, setSelectedSem] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,18 +82,24 @@ export default function AnalyticsPage() {
     [grades]
   );
 
+  const allSemesters = useMemo(() => grades?.semesters || [], [grades]);
+  const activeSem = useMemo(() => {
+    if (selectedSem === null) return latestSem ?? null;
+    return allSemesters.find((s) => s.semester === selectedSem) ?? latestSem ?? null;
+  }, [selectedSem, allSemesters, latestSem]);
+
   const gradeCounts = useMemo(() => {
     const counts: { grade: string; count: number }[] = [];
-    if (!latestSem) return counts;
+    if (!activeSem) return counts;
     const map = new Map<string, number>();
-    for (const g of latestSem.grades) {
+    for (const g of activeSem.grades) {
       map.set(g.grade, (map.get(g.grade) || 0) + 1);
     }
     for (const [grade, count] of map.entries()) {
       counts.push({ grade, count });
     }
     return counts.sort((a, b) => (GRADE_POINTS[b.grade] || 0) - (GRADE_POINTS[a.grade] || 0));
-  }, [latestSem]);
+  }, [activeSem]);
 
   const maxSgpa = useMemo(
     () => Math.max(10, ...semesters.map((s) => s.sgpa ?? 0)),
@@ -119,13 +126,25 @@ export default function AnalyticsPage() {
       const h = ((s.sgpa ?? 0) / maxSgpa) * plotH;
       const x = plotX + i * slot + (slot - barW) / 2;
       const isBest = s.sgpa === bestSem;
-      return { x, y: plotTop + plotH - h, w: barW, h, sem: s.semester, sgpa: s.sgpa, isBest };
+      const isSelected = activeSem?.semester === s.semester;
+      return { x, y: plotTop + plotH - h, w: barW, h, sem: s.semester, sgpa: s.sgpa, isBest, isSelected };
     });
-  }, [semesters, maxSgpa, bestSem]);
+  }, [semesters, maxSgpa, bestSem, activeSem]);
 
   const totalScored = internals.reduce((acc, m) => acc + (parseFloat(m.scored) || 0), 0);
   const totalMax = internals.reduce((acc, m) => acc + (parseFloat(m.maxMark) || 0), 0);
   const internalPct = totalMax > 0 ? (totalScored / totalMax) * 100 : null;
+
+  function gradeFor(avg: number): string {
+    if (avg >= 0.9) return 'O';
+    if (avg >= 0.85) return 'A+';
+    if (avg >= 0.8) return 'A';
+    if (avg >= 0.75) return 'B+';
+    if (avg >= 0.7) return 'B';
+    if (avg >= 0.6) return 'C';
+    if (avg >= 0.5) return 'D';
+    return 'F';
+  }
 
   const stats = [
     { label: 'Semesters', value: String(semesters.length) },
@@ -286,60 +305,72 @@ export default function AnalyticsPage() {
               </p>
             </div>
             {chart ? (
-              <svg viewBox="0 0 328 150" style={{ width: '100%', height: 'auto', display: 'block' }}>
-                {[0.25, 0.5, 0.75, 1].map((f) => (
-                  <line
-                    key={f}
-                    x1={8}
-                    x2={320}
-                    y1={14 + 104 * (1 - f)}
-                    y2={14 + 104 * (1 - f)}
-                    stroke={WB(0.06)}
-                    strokeWidth={1}
-                  />
-                ))}
-                {chart.map((b) => (
-                  <g key={b.sem}>
-                    <motion.rect
-                      x={b.x}
-                      width={b.w}
-                      initial={{ scaleY: 0 }}
-                      animate={{ scaleY: 1 }}
-                      transition={{ duration: 0.6, ease: 'easeOut' }}
-                      style={{ transformOrigin: `${b.x + b.w / 2}px ${b.y + b.h}px` }}
-                      rx={6}
-                      fill={b.isBest ? 'url(#sgpaGrad)' : W(0.22)}
-                      y={b.y}
-                      height={Math.max(b.h, 2)}
+              <>
+                <p style={{ fontSize: '0.66rem', color: W(0.35), marginBottom: '8px', textAlign: 'center' }}>
+                  Tap a bar to view that semester
+                </p>
+                <svg viewBox="0 0 328 150" style={{ width: '100%', height: 'auto', display: 'block' }}>
+                  {[0.25, 0.5, 0.75, 1].map((f) => (
+                    <line
+                      key={f}
+                      x1={8}
+                      x2={320}
+                      y1={14 + 104 * (1 - f)}
+                      y2={14 + 104 * (1 - f)}
+                      stroke={WB(0.06)}
+                      strokeWidth={1}
                     />
-                    <text
-                      x={b.x + b.w / 2}
-                      y={b.y - 5}
-                      textAnchor="middle"
-                      fontSize="8.5"
-                      fontWeight={b.isBest ? 800 : 600}
-                      fill={b.isBest ? 'var(--threshold-accent-text)' : W(0.5)}
+                  ))}
+                  {chart.map((b) => (
+                    <g
+                      key={b.sem}
+                      onClick={() => setSelectedSem(b.sem)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      {b.sgpa?.toFixed(2)}
-                    </text>
-                    <text
-                      x={b.x + b.w / 2}
-                      y={140}
-                      textAnchor="middle"
-                      fontSize="8"
-                      fill={W(0.35)}
-                    >
-                      S{b.sem}
-                    </text>
-                  </g>
-                ))}
-                <defs>
-                  <linearGradient id="sgpaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#d946ef" />
-                    <stop offset="100%" stopColor="var(--threshold-accent)" />
-                  </linearGradient>
-                </defs>
-              </svg>
+                      <motion.rect
+                        x={b.x}
+                        width={b.w}
+                        initial={{ scaleY: 0 }}
+                        animate={{ scaleY: 1 }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        style={{ transformOrigin: `${b.x + b.w / 2}px ${b.y + b.h}px` }}
+                        rx={6}
+                        fill={b.isSelected ? 'url(#sgpaGrad)' : b.isBest ? W(0.3) : W(0.22)}
+                        y={b.y}
+                        height={Math.max(b.h, 2)}
+                        stroke={b.isSelected ? 'var(--threshold-accent-text)' : 'none'}
+                        strokeWidth={b.isSelected ? 1.5 : 0}
+                      />
+                      <text
+                        x={b.x + b.w / 2}
+                        y={b.y - 5}
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fontWeight={b.isSelected || b.isBest ? 800 : 600}
+                        fill={b.isSelected ? 'var(--threshold-accent-text)' : W(0.5)}
+                      >
+                        {b.sgpa?.toFixed(2)}
+                      </text>
+                      <text
+                        x={b.x + b.w / 2}
+                        y={140}
+                        textAnchor="middle"
+                        fontSize="8"
+                        fontWeight={b.isSelected ? 800 : 600}
+                        fill={b.isSelected ? 'var(--threshold-accent-text)' : W(0.35)}
+                      >
+                        S{b.sem}
+                      </text>
+                    </g>
+                  ))}
+                  <defs>
+                    <linearGradient id="sgpaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#d946ef" />
+                      <stop offset="100%" stopColor="var(--threshold-accent)" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </>
             ) : (
               <p style={{ fontSize: '0.78rem', color: W(0.35), textAlign: 'center', padding: '20px 0' }}>
                 No semester results yet — results appear after your first exams.
@@ -347,8 +378,8 @@ export default function AnalyticsPage() {
             )}
           </motion.div>
 
-          {/* Latest semester grade distribution */}
-          {gradeCounts.length > 0 && (
+          {/* Selected semester grade distribution */}
+          {activeSem && activeSem.grades.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -361,15 +392,24 @@ export default function AnalyticsPage() {
                 marginBottom: '16px',
               }}
             >
-              <p style={{
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: 'var(--threshold-text)',
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
                 marginBottom: '12px',
               }}>
-                Semester {latestSem?.semester} grades
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <p style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: 'var(--threshold-text)',
+                }}>
+                  Semester {activeSem.semester} grades
+                </p>
+                <p style={{ fontSize: '0.68rem', color: W(0.35) }}>
+                  SGPA {activeSem.sgpa?.toFixed(2) ?? '—'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
                 {gradeCounts.map((g) => (
                   <div
                     key={g.grade}
@@ -396,6 +436,42 @@ export default function AnalyticsPage() {
                       fontWeight: 600,
                     }}>
                       ×{g.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {activeSem.grades.map((g) => (
+                  <div
+                    key={g.code}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '12px',
+                      background: WB(0.02),
+                      border: `1px solid ${WB(0.05)}`,
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      color: W(0.6),
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {g.description}
+                    </span>
+                    <span style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: GRADE_COLORS[g.grade] || W(0.6),
+                      flexShrink: 0,
+                    }}>
+                      {g.grade}
                     </span>
                   </div>
                 ))}
@@ -493,6 +569,78 @@ export default function AnalyticsPage() {
               </p>
             )}
           </motion.div>
+
+          {/* Grade projection */}
+          {internals.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18 }}
+              style={{
+                borderRadius: '18px',
+                background: WB(0.02),
+                border: `1px solid ${WB(0.06)}`,
+                padding: '18px 16px',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginBottom: '14px',
+              }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
+                  Grade projection
+                </p>
+                <p style={{ fontSize: '0.68rem', color: W(0.35) }}>
+                  what your next assessment needs
+                </p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {internals.map((m) => {
+                  const scored = parseFloat(m.scored);
+                  const max = parseFloat(m.maxMark);
+                  if (isNaN(scored) || isNaN(max) || max <= 0) return null;
+                  const avg = scored / max;
+                  const pctA = Math.max(0, 0.8 * (max + 100) - scored);
+                  const pctO = Math.max(0, 0.9 * (max + 100) - scored);
+                  return (
+                    <div key={m.code} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '11px 13px',
+                      borderRadius: '12px',
+                      background: WB(0.02),
+                      border: `1px solid ${WB(0.05)}`,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {m.description}
+                        </p>
+                        <p style={{ fontSize: '0.66rem', color: W(0.4), margin: '3px 0 0' }}>
+                          {m.scored}/{m.maxMark} · avg {(avg * 100).toFixed(0)}% · {gradeFor(avg)}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontSize: '0.62rem', fontWeight: 600, color: '#fbbf24', margin: 0 }}>
+                          A (80%): {Math.ceil(pctA)}/100
+                        </p>
+                        <p style={{ fontSize: '0.62rem', fontWeight: 600, color: '#34d399', margin: '3px 0 0' }}>
+                          O (90%): {Math.ceil(pctO)}/100
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: '0.62rem', color: W(0.3), margin: '12px 0 0', lineHeight: 1.5 }}>
+                Assumes one remaining assessment worth 100 marks of equal weight. Grades follow SRM&apos;s
+                O/A+/A/B+/B/C/D/F banding.
+              </p>
+            </motion.div>
+          )}
 
           <p style={{
             textAlign: 'center',

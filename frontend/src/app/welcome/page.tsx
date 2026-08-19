@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
-import InstallApp from '@/components/ui/InstallApp';
 
 const ThresholdText = dynamic(() => import('@/components/effects/ThresholdText'), { ssr: false });
 const RippleDistortion = dynamic(() => import('@/components/effects/RippleDistortion'), { ssr: false });
@@ -294,16 +293,6 @@ export default function WelcomePage() {
                 </svg>
               </div>
             </div>
-          </motion.div>
-
-          {/* Install as app (web only) */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 3.4, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-            style={{ marginTop: '14px', maxWidth: 288 }}
-          >
-            <InstallApp />
           </motion.div>
         </section>
 

@@ -4,8 +4,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { App } from '@capacitor/app';
-import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser } from '@/lib/api';
-import { clearAllCaches } from '@/lib/cache';
+import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser, clearAcademiaCookies } from '@/lib/api';
+import { clearAllScopedData } from '@/lib/user-scope';
 import PullRefresh from '@/components/ui/PullRefresh';
 import AppLockGate from '@/components/ui/AppLockGate';
 import BottomNav from '@/components/nav/BottomNav';
@@ -125,6 +125,27 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [examOpen, setExamOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
+  const navScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the sidebar's active/expanded section in view: when the sidebar
+  // opens (or the Examination group expands), scroll the scroll container so
+  // the highlighted item is never hidden below the fold.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const t = window.setTimeout(() => {
+      const el = navScrollRef.current;
+      if (!el) return;
+      const active = el.querySelector<HTMLElement>('[data-active="true"]');
+      const target = active ?? (examOpen ? el.querySelector<HTMLElement>('[data-exam-toggle="true"]') : null);
+      if (!target) return;
+      const top = target.offsetTop;
+      const bottom = top + target.offsetHeight;
+      if (top < el.scrollTop || bottom > el.scrollTop + el.clientHeight) {
+        el.scrollTo({ top: Math.max(0, top - 14), behavior: 'smooth' });
+      }
+    }, 420);
+    return () => window.clearTimeout(t);
+  }, [sidebarOpen, examOpen, pathname]);
 
   useEffect(() => {
     if (pathname.startsWith('/dashboard/exam/')) setExamOpen(true);
@@ -228,7 +249,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     clearSession();
-    clearAllCaches();
+    clearAllScopedData();
+    clearAcademiaCookies();
     router.push('/welcome');
   };
 
@@ -426,19 +448,21 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <motion.div
           key={sidebarOpen ? 'open' : 'closed'}
+          ref={navScrollRef}
           variants={navContainer}
           initial="hidden"
           animate={sidebarOpen ? 'show' : 'hidden'}
           style={{
-            flex: 1,
+            flex: '1 1 0%',
             minHeight: 0,
             overflowY: 'auto',
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'thin',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
-            paddingBottom: '8px',
+            paddingBottom: '24px',
           }}
         >
         {navGroups.map((group) => {
@@ -452,6 +476,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setExamOpen(!examOpen)}
+                  data-exam-toggle="true"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -507,6 +532,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                           router.push(item.path);
                           setSidebarOpen(false);
                         }}
+                        data-active={isActive ? 'true' : undefined}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -545,6 +571,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                         router.push(item.path);
                         setSidebarOpen(false);
                       }}
+                      data-active={isActive ? 'true' : undefined}
                       style={{
                         display: 'flex',
                         alignItems: 'center',

@@ -44,3 +44,9 @@ next-env.d.ts
 /android/
 /ios/
 /.capacitor/
+
+.vercel
+.env*
+
+# debug helpers
+/cdp.js

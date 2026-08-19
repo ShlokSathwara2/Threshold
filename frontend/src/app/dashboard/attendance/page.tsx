@@ -8,19 +8,24 @@ import { useAttendance } from '@/hooks/useAttendance';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
 import LeavePlanner from '@/components/attendance/LeavePlanner';
+import ShareCard from '@/components/dashboard/ShareCard';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import {
   buildDayOrderSchedule,
   buildDayOrderLookup,
   computeReachPlan,
   computeLeaveImpact,
+  computeOverallReachPlan,
   projectSubject,
+  toDate,
   toDateStr,
   displayDate,
   type DayOrderSchedule,
   type ReachPlan,
   type LeaveProjection,
+  type OverallReachPlan,
 } from '@/lib/day-order';
 
 export default function AttendancePage() {
@@ -119,6 +124,63 @@ export default function AttendancePage() {
     };
   }, [leaveDates, subjects, scheduleByCourse, dayOrderLookup, todayStr]);
 
+  // Per-subject recovery dates AFTER the leave: for every subject that drops
+  // below 75% once the leave is over, compute "attend every class till X" —
+  // exactly like the normal recovery plan, but from the projected state and
+  // starting the day after the last leave date.
+  const projectedReachPlans = useMemo(() => {
+    const plans = new Map<string, ReachPlan | null>();
+    if (!projection) return plans;
+    let fromDate = todayStr;
+    if (projection.leaveTo) {
+      const d = toDate(projection.leaveTo);
+      if (d) {
+        d.setDate(d.getDate() + 1);
+        fromDate = toDateStr(d);
+      }
+    }
+    for (const s of subjects) {
+      const p = projection.perSubject.get(s.courseCode);
+      if (!p || !p.dropsBelow75) {
+        plans.set(s.courseCode, null);
+        continue;
+      }
+      const virtual: SubjectAttendance = {
+        ...s,
+        present: p.projectedPresent,
+        absent: p.projectedAbsent,
+        total: p.projectedTotal,
+        isBelowThreshold: true,
+        mustAttend: p.projectedMustAttend,
+      };
+      plans.set(s.courseCode, computeReachPlan(virtual, scheduleByCourse, dayOrderLookup, fromDate));
+    }
+    return plans;
+  }, [projection, subjects, scheduleByCourse, dayOrderLookup, todayStr]);
+
+  // Display list of subjects dropping below 75% after the leave, with their
+  // post-leave recovery date (or "can't recover" flag).
+  const projectedReachList = useMemo(() => {
+    const list: {
+      courseCode: string;
+      courseTitle: string;
+      projectedPercentage: number;
+      plan: ReachPlan | null;
+    }[] = [];
+    if (!projection) return list;
+    for (const s of subjects) {
+      const p = projection.perSubject.get(s.courseCode);
+      if (!p || !p.dropsBelow75) continue;
+      list.push({
+        courseCode: s.courseCode,
+        courseTitle: s.courseTitle,
+        projectedPercentage: p.projectedPercentage,
+        plan: projectedReachPlans.get(s.courseCode) ?? null,
+      });
+    }
+    return list.sort((a, b) => a.projectedPercentage - b.projectedPercentage);
+  }, [projection, subjects, projectedReachPlans]);
+
   // Overall projected present/absent/total + margin across all subjects,
   // so the leave planner summary shows the whole-picture effect.
   const overallProjection = useMemo(() => {
@@ -157,6 +219,24 @@ export default function AttendancePage() {
       below75: percentage < 75,
     };
   }, [projection, subjects]);
+
+  // After the leave: what does the rest of the semester look like? If the
+  // projected overall is below 75% → the date to recover it (or a detention
+  // warning when it can't fit before the semester ends). If still above 75% →
+  // the last date you could keep skipping before hitting 75%.
+  const overallReach = useMemo<OverallReachPlan | null>(() => {
+    if (!projection || !overallProjection) return null;
+    let fromDate = todayStr;
+    if (projection.leaveTo) {
+      const d = toDate(projection.leaveTo);
+      if (d) {
+        d.setDate(d.getDate() + 1);
+        fromDate = toDateStr(d);
+      }
+    }
+    const needed = overallProjection.below75 ? overallProjection.mustAttend : -overallProjection.canBunk;
+    return computeOverallReachPlan(scheduleByCourse, dayOrderLookup, fromDate, needed);
+  }, [projection, overallProjection, scheduleByCourse, dayOrderLookup, todayStr]);
 
   const belowThreshold = subjects.filter((s) => s.isBelowThreshold);
   const hasMeta = metaReady && scheduleByCourse.size > 0 && dayOrderLookup.size > 0;
@@ -244,11 +324,39 @@ export default function AttendancePage() {
           fontWeight: 800,
           color: 'var(--threshold-text)',
           marginBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
         }}>
           Attendance
+          <ShareCard
+            subjects={subjects}
+            overall={overall}
+            label="📤 Share"
+            style={{
+              padding: '8px 14px',
+              borderRadius: '999px',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              color: 'var(--threshold-text)',
+              fontSize: '0.76rem',
+              whiteSpace: 'nowrap',
+            }}
+          />
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           {subjects.length} subjects tracked • Sorted by risk (lowest margin first)
+        </p>
+        <p style={{
+          color: 'var(--threshold-accent-text)',
+          fontSize: '0.7rem',
+          marginTop: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          👆 Tap any card to expand full details — margin, recovery plan &amp; class schedule
         </p>
       </motion.div>
 
@@ -266,6 +374,8 @@ export default function AttendancePage() {
         missedTotal={projection?.missedTotal ?? 0}
         subjectsDropping={projection?.subjectsDropping ?? 0}
         overall={overallProjection}
+        overallReach={overallReach}
+        projectedReachList={projectedReachList}
       />
 
       {/* 75% Recovery Plan */}
@@ -384,6 +494,7 @@ export default function AttendancePage() {
               dayOrders={scheduleByCourse.get(subject.courseCode)}
               reachPlan={reachPlans.get(subject.courseCode) ?? null}
               projection={projection?.perSubject.get(subject.courseCode) ?? null}
+              projectedReachPlan={projectedReachPlans.get(subject.courseCode) ?? null}
             />
           </div>
         ))}

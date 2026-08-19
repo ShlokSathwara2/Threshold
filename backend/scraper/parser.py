@@ -104,22 +104,25 @@ class AcademiaParser:
             mark = marks_map.setdefault(
                 course_code,
                 Mark(
+                    courseName=cols[2] if len(cols) > 2 else "",
                     courseCode=course_code,
-                    courseTitle=cols[2] if len(cols) > 2 else "",
-                    slot=cols[3] if len(cols) > 3 else "",
-                    details=[],
+                    courseType="",
+                    overall=MarksDetail(scored="", total=""),
+                    testPerformance=[],
                 ),
             )
 
             test_name = cols[6] if len(cols) > 6 else ""
             if test_name:
-                mark.details.append(
-                    MarksDetail(
-                        testName=test_name,
-                        internalMark=_parse_float(cols[7]),
-                        externalMark=_parse_float(cols[8]) if len(cols) > 8 else 0.0,
-                        totalMark=_parse_float(cols[4]),
-                        weightage=_parse_float(cols[5]),
+                mark.testPerformance.append(
+                    TestPerformance(
+                        test=test_name,
+                        marks=MarksDetail(
+                            scored=_fmt_float(_parse_float(cols[7])),
+                            total=_fmt_float(_parse_float(cols[4])),
+                        ),
+                        external=_fmt_float(_parse_float(cols[8]) if len(cols) > 8 else 0.0),
+                        weightage=_fmt_float(_parse_float(cols[5])),
                     )
                 )
 
@@ -363,6 +366,10 @@ def _parse_float(s: str) -> float:
         return float(s)
     except (ValueError, TypeError):
         return 0.0
+
+
+def _fmt_float(v: float) -> str:
+    return f"{v:g}" if v else ""
 
 
 def _parse_int(s: str) -> int:

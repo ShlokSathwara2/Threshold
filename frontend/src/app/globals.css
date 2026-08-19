@@ -342,6 +342,14 @@ input:focus, button:focus-visible {
     transform: rotate(360deg);
   }
 }
+@keyframes thr-btn-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
 .arrow-btn--primary.arrow-btn--animating {
   box-shadow: 0 0 0 6px #8b5cf6;
   border-radius: 12px;

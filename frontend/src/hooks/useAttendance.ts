@@ -58,6 +58,7 @@ export interface UseAttendanceResult {
   loading: boolean;
   error: string | null;
   source: string;
+  stale: boolean;
   refetch: () => void;
 }
 
@@ -79,6 +80,7 @@ export function useAttendance(): UseAttendanceResult {
   );
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [source, setSource] = useState('academia');
   const hasDataRef = useRef((cached?.data.raw.length ?? 0) > 0);
 
@@ -142,6 +144,7 @@ export function useAttendance(): UseAttendanceResult {
       }
 
       hasDataRef.current = calculated.length > 0;
+      setStale(false);
       setSubjects(calculated);
       setOverall(calculateOverallStats(calculated));
       setCached<AttendanceCache>(CACHE_NS, {
@@ -154,6 +157,8 @@ export function useAttendance(): UseAttendanceResult {
       // when there is nothing cached to show.
       if (!hasDataRef.current) {
         setError(e instanceof Error ? e.message : 'Failed to fetch attendance');
+      } else {
+        setStale(true);
       }
     } finally {
       setLoading(false);
@@ -164,5 +169,5 @@ export function useAttendance(): UseAttendanceResult {
     load();
   }, [load]);
 
-  return { subjects, overall, raw, loading, error, source, refetch: load };
+  return { subjects, overall, raw, loading, error, source, stale, refetch: load };
 }

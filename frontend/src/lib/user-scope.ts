@@ -27,7 +27,30 @@ const SCOPED_PREFIXES = [
   'threshold_delta_raw',
   'threshold_sync_log',
   'threshold_notif_prefs',
+  'threshold_timetable_cache',
 ];
+
+// Hard wipe of every user-scoped key on this device — used on explicit logout
+// so the next person signing in (e.g. a friend on the same phone) starts with
+// zero leftovers: no old timetable, no old exams, no old attendance snapshots.
+export function clearAllScopedData() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      for (const p of SCOPED_PREFIXES) {
+        if (k.startsWith(p)) {
+          keys.push(k);
+          break;
+        }
+      }
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
 
 // Placeholder identities that every login used to share (hardcoded "student"
 // in the session). Real per-login scoping starts once the session carries an

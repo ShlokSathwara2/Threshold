@@ -27,6 +27,8 @@ class MarksDetail(BaseModel):
 class TestPerformance(BaseModel):
     test: str
     marks: MarksDetail
+    external: str = ""
+    weightage: str = ""
 
 
 class Mark(BaseModel):

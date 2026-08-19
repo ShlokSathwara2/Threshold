@@ -699,3 +699,59 @@ def fetch_provisional_results(cookie: str) -> dict[str, Any]:
         return {"error": str(e)}
     finally:
         client.close()
+
+
+def _looks_like_date(text: str) -> bool:
+    return bool(re.search(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", text))
+
+
+def fetch_announcements(cookie: str) -> dict[str, Any]:
+    """Probe candidate notification-board pages and parse announcement rows.
+
+    The portal has no stable announcements endpoint, so we walk a list of
+    known page names, POST each like the hamburger menu does, and use the
+    first page that yields date-stamped rows.
+    """
+    print("[SP-DATA] fetch_announcements — cookie present:", bool(cookie))
+
+    client = _build_client(cookie)
+    try:
+        _init_session(client)
+        for url in settings.sp_announcements_candidates:
+            try:
+                response = _post_sp_menu_page(client, url, 1)
+                if response.status_code != 200:
+                    print(f"[SP-DATA] announcements {url}: HTTP {response.status_code}")
+                    continue
+                rows: list[dict[str, str]] = []
+                soup = BeautifulSoup(response.text, "lxml")
+                for table in soup.find_all("table"):
+                    for tr in table.find_all("tr"):
+                        cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
+                        cells = [" ".join(c.split()) for c in cells if " ".join(c.split())]
+                        if not cells:
+                            continue
+                        date_idx = next((i for i, c in enumerate(cells) if _looks_like_date(c)), -1)
+                        if date_idx < 0:
+                            continue
+                        title = cells[date_idx + 1] if date_idx + 1 < len(cells) else ""
+                        body = cells[date_idx + 2] if date_idx + 2 < len(cells) else ""
+                        rows.append(
+                            {
+                                "date": cells[date_idx],
+                                "title": title[:200],
+                                "body": body[:500],
+                            }
+                        )
+                if rows:
+                    print(f"[SP-DATA] announcements {url}: {len(rows)} rows")
+                    return {"rows": rows, "source": url}
+                print(f"[SP-DATA] announcements {url}: page ok but no rows")
+            except Exception as e:
+                print(f"[SP-DATA] announcements {url}: exception {e}")
+        return {"rows": [], "source": None}
+    except Exception as e:
+        print(f"[SP-DATA] fetch_announcements exception: {e}")
+        return {"rows": [], "source": None, "error": str(e)}
+    finally:
+        client.close()

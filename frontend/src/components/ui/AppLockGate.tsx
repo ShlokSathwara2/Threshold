@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { App } from '@capacitor/app';
 import { BiometricLock, appLockEnabled } from '@/lib/applock';
-import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 type GateState = 'idle' | 'locked' | 'unlocking' | 'error';
@@ -40,9 +39,6 @@ export default function AppLockGate() {
       disposed = true;
     };
   }, []);
-
-  // Web has no Capacitor biometrics — the lock only exists in the native app.
-  if (!isNativePlatform()) return null;
 
   const attemptUnlock = async () => {
     if (state === 'unlocking') return;

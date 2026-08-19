@@ -8,7 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "build:mobile": "CAPACITOR_BUILD=true next build",
-    "build:web": "WEB_BUILD=true next build",
     "cap:sync": "npm run build:mobile && npx cap sync android",
     "cap:open": "npx cap open android",
     "cap:run": "npx cap run android"

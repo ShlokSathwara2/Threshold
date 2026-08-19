@@ -212,6 +212,84 @@ export function computeReachPlan(
   return { hasSchedule: true, reachable: false, reachDate: null, futureClasses, needed: subject.mustAttend };
 }
 
+export interface OverallReachPlan {
+  hasSchedule: boolean;
+  mode: 'recover' | 'spare' | 'impossible';
+  reachDate: string | null;
+  futureClasses: number;
+  needed: number;
+  lastWorkingDay: string | null;
+}
+
+// Forecast what the rest of the semester looks like AFTER a leave.
+//   needed > 0  → the user must attend that many classes to get back to 75%
+//                 (mode 'recover': reachDate = first date they cross 75%).
+//   needed < 0  → the user still has that many skips to spare
+//                 (mode 'spare': reachDate = last date they can skip until
+//                  before overall would hit exactly 75%).
+// In both cases any subject's class counts toward the overall total, and the
+// semester's last working day is reported so an impossible plan gets flagged.
+export function computeOverallReachPlan(
+  scheduleByCourse: DayOrderSchedule,
+  lookup: Map<string, string | null>,
+  fromDate: string,
+  needed: number
+): OverallReachPlan {
+  const hasSchedule = scheduleByCourse.size > 0;
+  const recover = needed > 0;
+  const target = Math.abs(needed);
+
+  let lastWorkingDay: string | null = null;
+  for (const [ds, doName] of lookup) {
+    if (doName === null) continue;
+    const dt = toDate(ds);
+    if (!dt) continue;
+    if (!lastWorkingDay || dt.getTime() > (toDate(lastWorkingDay)?.getTime() ?? 0)) {
+      lastWorkingDay = ds;
+    }
+  }
+
+  const from = toDate(fromDate);
+  const dates = [...lookup.keys()]
+    .map((ds) => ({ ds, date: toDate(ds) }))
+    .filter(
+      (x): x is { ds: string; date: Date } =>
+        !!x.date && !!from && x.date.getTime() >= from.getTime() && lookup.get(x.ds) !== null
+    )
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let count = 0;
+  let futureClasses = 0;
+  for (const { ds } of dates) {
+    const doName = lookup.get(ds);
+    let dayClasses = 0;
+    for (const per of scheduleByCourse.values()) {
+      dayClasses += doName ? (per.get(doName) ?? 0) : 0;
+    }
+    if (dayClasses === 0) continue;
+    futureClasses += dayClasses;
+    count += dayClasses;
+    if (count >= target) {
+      return {
+        hasSchedule,
+        mode: recover ? 'recover' : 'spare',
+        reachDate: ds,
+        futureClasses,
+        needed: target,
+        lastWorkingDay,
+      };
+    }
+  }
+  return {
+    hasSchedule,
+    mode: recover ? 'impossible' : 'spare',
+    reachDate: null,
+    futureClasses,
+    needed: target,
+    lastWorkingDay,
+  };
+}
+
 export interface LeaveImpact {
   missed: number;
   attendedBefore: number;
@@ -230,6 +308,7 @@ export function computeLeaveImpact(
   todayStr: string
 ): { from: string | null; to: string | null; perSubject: Map<string, LeaveImpact> } {
   const today = toDate(todayStr);
+  const leaveSet = new Set(leaveDates);
   const future = leaveDates
     .map(toDate)
     .filter((d): d is Date => !!d && !!today && d.getTime() >= today.getTime())
@@ -240,10 +319,8 @@ export function computeLeaveImpact(
   let to: string | null = null;
 
   if (future.length > 0) {
-    const leaveStart = future[0];
-    const leaveEnd = future[future.length - 1];
-    from = toDateStr(leaveStart);
-    to = toDateStr(leaveEnd);
+    from = toDateStr(future[0]);
+    to = toDateStr(future[future.length - 1]);
 
     const dates = [...lookup.keys()]
       .map((ds) => ({ ds, date: toDate(ds) }))
@@ -260,10 +337,11 @@ export function computeLeaveImpact(
       for (const { ds, date } of dates) {
         const cls = count(ds);
         if (cls === 0) continue;
-        if (date.getTime() < leaveStart.getTime()) attendedBefore += cls;
-        else if (date.getTime() <= leaveEnd.getTime()) missed += cls;
-        // After the leave ends the semester continues but stays out of the
-        // projection — only up to the leave's end is forecast.
+        if (date.getTime() < future[0].getTime()) attendedBefore += cls;
+        // Only classes on the EXACT dates the user picked count as missed —
+        // non-adjacent single days (24 Aug + 1 Sep) must not swallow the
+        // classes in between.
+        else if (leaveSet.has(ds)) missed += cls;
       }
       perSubject.set(code, { missed, attendedBefore });
     }

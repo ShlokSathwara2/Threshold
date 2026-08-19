@@ -12,6 +12,7 @@ interface Props {
   dayOrders?: Map<string, number>;
   reachPlan?: ReachPlan | null;
   projection?: LeaveProjection | null;
+  projectedReachPlan?: ReachPlan | null;
 }
 
 const statusColors: Record<SubjectAttendance['status'], { bg: string; border: string; text: string; accent: string }> = {
@@ -71,7 +72,7 @@ function StatPill({ label, value, color }: { label: string; value: number | stri
   );
 }
 
-export default function SubjectAttendanceCard({ subject, index, dayOrders, reachPlan, projection }: Props) {
+export default function SubjectAttendanceCard({ subject, index, dayOrders, reachPlan, projection, projectedReachPlan }: Props) {
   const [expanded, setExpanded] = useState(false);
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -325,6 +326,29 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
                   ) : (
                     <p style={{ fontSize: '0.78rem', color: '#fca5a5', margin: 0, fontWeight: 500 }}>
                       Can't reach 75% this semester — only <span style={{ fontWeight: 800 }}>{reachPlan.futureClasses}</span> classes left on schedule
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Post-leave recovery — this subject drops below 75% after the planned leave */}
+              {projectedReachPlan && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: projectedReachPlan.reachable ? 'rgba(234, 179, 8, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                  border: `1px solid ${projectedReachPlan.reachable ? 'rgba(234, 179, 8, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                }}>
+                  {projectedReachPlan.reachable && projectedReachPlan.reachDate ? (
+                    <p style={{ fontSize: '0.78rem', color: '#fde68a', margin: 0, fontWeight: 500 }}>
+                      After leave: attend every class till <span style={{ fontWeight: 800, color: '#fbbf24' }}>{displayDate(projectedReachPlan.reachDate)}</span> to cross 75% again
+                      <span style={{ color: W(0.45) }}>
+                        {' '}— {projectedReachPlan.needed} needed, {projectedReachPlan.futureClasses} on schedule
+                      </span>
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: '0.78rem', color: '#fca5a5', margin: 0, fontWeight: 500 }}>
+                      ⚠️ After this leave you can't reach 75% again — only <span style={{ fontWeight: 800 }}>{projectedReachPlan.futureClasses}</span> classes left on schedule
                     </p>
                   )}
                 </div>

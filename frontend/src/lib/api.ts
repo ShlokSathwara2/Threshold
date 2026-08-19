@@ -338,6 +338,8 @@ export interface MarksDetail {
 export interface TestPerformance {
   test: string;
   marks: MarksDetail;
+  external?: string;
+  weightage?: string;
 }
 
 export interface Mark {
@@ -357,6 +359,12 @@ export interface MarksResponse {
 
 export async function fetchMarks(): Promise<MarksResponse> {
   return apiFetch('/sp/marks');
+}
+
+// Academia's per-test internal-mark breakdown (FT-1, FT-2, quizzes — any
+// names/count the portal reports). Uses the in-memory academia session.
+export async function fetchAcademiaMarks(): Promise<MarksResponse> {
+  return apiFetch('/marks');
 }
 
 export interface GradeCourse {
@@ -648,6 +656,22 @@ export interface ProvisionalResultsResponse {
 
 export async function fetchSpProvisionalResults(): Promise<ProvisionalResultsResponse> {
   return apiFetch('/sp/exam/provisional-results');
+}
+
+export interface AnnouncementRow {
+  date: string;
+  title: string;
+  body: string;
+}
+
+export interface AnnouncementsResponse {
+  rows: AnnouncementRow[];
+  source?: string | null;
+  error?: string;
+}
+
+export async function fetchSpAnnouncements(): Promise<AnnouncementsResponse> {
+  return apiFetch('/sp/announcements');
 }
 
 export interface SmartResponse {

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_origins: str = (
         "http://localhost:3000,https://localhost,capacitor://localhost,"
-        "https://threshold-jet.vercel.app,https://threshold20.vercel.app"
+        "https://threshold-jet.vercel.app"
     )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     @property
     def sp_provisional_results_url(self) -> str:
         return f"{self.sp_base_url}{self.sp_context_path}/students/transaction/onlineResult.jsp"
+
+    @property
+    def sp_announcements_candidates(self) -> list[str]:
+        # The portal ships a notification board under several names —
+        # probe them in order and use the first one that yields rows.
+        base = f"{self.sp_base_url}{self.sp_context_path}"
+        return [
+            f"{base}/students/report/studentNotificationBoard.jsp",
+            f"{base}/students/report/StudentNotificationBoard.jsp",
+            f"{base}/students/transaction/StudentNotificationBoard.jsp",
+            f"{base}/students/report/studentNotifications.jsp",
+        ]
 
 
 settings = Settings()

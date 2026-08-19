@@ -30,6 +30,7 @@ from scraper.student_portal.data import (
     fetch_exam_hall_ticket,
     fetch_exam_timetable,
     fetch_provisional_results,
+    fetch_announcements,
 )
 
 router = APIRouter()
@@ -464,6 +465,15 @@ def sp_exam_provisional_results(x_csrf_token: str = Header(default="", alias="X-
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     return fetch_provisional_results(cookie)
+
+
+@router.get("/sp/announcements")
+def sp_announcements(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+    """Notification-board announcements from the SP."""
+    cookie = _get_sp_cookie(x_csrf_token)
+    if not cookie:
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    return fetch_announcements(cookie)
 
 
 @router.get("/sp/get")

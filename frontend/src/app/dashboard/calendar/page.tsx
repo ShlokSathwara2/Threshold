@@ -59,6 +59,18 @@ export default function CalendarPage() {
     .toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     .replace(/\//g, '-');
 
+  // ── Auto-scroll to today's date once the calendar loads, so the user
+  //    never lands on the first day of the opening month. ──
+  useEffect(() => {
+    if (months.length === 0) return;
+    const el = document.getElementById(`cal-day-${todayStr}`);
+    if (!el) return;
+    const t = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [months, todayStr]);
+
 const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
     d.isHoliday === true || /holiday/i.test(d.event || '');
 
@@ -215,6 +227,7 @@ const isHoliday = (d: { event?: string; isHoliday?: boolean }) =>
                 return (
                   <div
                     key={d.date}
+                    id={`cal-day-${d.date}`}
                     style={{
                       display: 'flex',
                       alignItems: 'center',

@@ -5,12 +5,14 @@ import { useTheme, THEMES, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isSpLoggedIn } from '@/lib/api';
-import { clearAllCaches } from '@/lib/cache';
+import { clearAllScopedData } from '@/lib/user-scope';
 import { clearSkipLog } from '@/lib/habits';
 import { clearOptionalHours } from '@/lib/optional-hours';
 import { BiometricLock, appLockEnabled, setAppLockEnabled } from '@/lib/applock';
-import { isNativePlatform } from '@/lib/capacitor';
-import InstallApp from '@/components/ui/InstallApp';
+import { SOUND_OPTIONS, getSoundPref, setSoundPref, playClickSound } from '@/lib/sounds';
+import type { SoundId } from '@/lib/sounds';
+import { exportBackup, importBackup } from '@/lib/backup';
+import { useRef } from 'react';
 
 function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () => void; accent: string }) {
   const { theme } = useTheme();
@@ -56,6 +58,9 @@ export default function SettingsPage() {
   const [flash, setFlash] = useState('');
   const [lockOn, setLockOn] = useState(false);
   const [bioAvailable, setBioAvailable] = useState<boolean | null>(null);
+  const [sound, setSound] = useState<SoundId>('mechanical');
+  const [busy, setBusy] = useState<'export' | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isSpLoggedIn()) router.push('/sp-login');
@@ -63,6 +68,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setLockOn(appLockEnabled());
+    setSound(getSoundPref());
     let mounted = true;
     BiometricLock.isAvailable()
       .then((r) => {
@@ -85,10 +91,6 @@ export default function SettingsPage() {
 
   const handleLockToggle = async () => {
     if (!lockOn) {
-      if (!isNativePlatform()) {
-        flashDone('App lock is only available in the Android app');
-        return;
-      }
       if (bioAvailable === false) {
         flashDone('Set up fingerprint / face / PIN in Android settings first');
         return;
@@ -242,6 +244,9 @@ export default function SettingsPage() {
           {[
             { key: 'attendanceRisk' as const, label: 'Attendance-risk alerts', desc: 'Subjects below 75% — shown in dashboard alerts' },
             { key: 'examDates' as const, label: 'Exam-date reminders', desc: 'Exams within the next few days' },
+            { key: 'classAlerts' as const, label: '"Attend this class" alerts', desc: 'Reminders 30 min before classes of subjects below 75%' },
+            { key: 'bunkAlerts' as const, label: 'Bunk-window alerts', desc: 'Tell you when today\u2019s remaining class is safe to skip' },
+            { key: 'weeklyReport' as const, label: 'Weekly report card', desc: 'Sunday summary of attendance, misses and next week' },
             { key: 'holidays' as const, label: 'Holiday alerts', desc: 'Upcoming academic holidays' },
           ].map((c) => (
             <div
@@ -274,6 +279,140 @@ export default function SettingsPage() {
               />
             </div>
           ))}
+        </div>
+      </motion.section>
+
+      {/* Sound & haptics */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        style={{
+          padding: '18px',
+          borderRadius: '18px',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
+          marginBottom: '14px',
+        }}
+      >
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px' }}>
+          Tap sound &amp; haptics
+        </h2>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
+          Plays a click when you tap anything — pick your favourite
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {SOUND_OPTIONS.map((o) => {
+            const active = sound === o.id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => {
+                  setSoundPref(o.id);
+                  setSound(o.id);
+                  playClickSound();
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '2px',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: active ? `1.5px solid ${theme.accent}` : `1px solid ${WB(0.08)}`,
+                  background: active ? theme.accentDim : WB(0.02),
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: theme.text }}>
+                  {o.label} {active ? '✓' : ''}
+                </span>
+                <span style={{ fontSize: '0.64rem', color: W(0.4), lineHeight: 1.35 }}>{o.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.section>
+
+      {/* Data backup */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.13 }}
+        style={{
+          padding: '18px',
+          borderRadius: '18px',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
+          marginBottom: '14px',
+        }}
+      >
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px' }}>
+          Backup &amp; restore
+        </h2>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
+          Your attendance, marks, plans and settings — exported as one JSON file
+        </p>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={async () => {
+              setBusy('export');
+              const msg = await exportBackup();
+              setBusy(null);
+              flashDone(msg);
+            }}
+            disabled={busy !== null}
+            style={{
+              flex: 1,
+              padding: '13px',
+              borderRadius: '12px',
+              border: 'none',
+              background: theme.accent,
+              color: '#fff',
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              cursor: busy !== null ? 'wait' : 'pointer',
+            }}
+          >
+            {busy === 'export' ? 'Exporting…' : '⬇ Export data'}
+          </button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={busy !== null}
+            style={{
+              flex: 1,
+              padding: '13px',
+              borderRadius: '12px',
+              border: `1px solid ${WB(0.12)}`,
+              background: WB(0.03),
+              color: theme.text,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              cursor: busy !== null ? 'wait' : 'pointer',
+            }}
+          >
+            ⬆ Import data
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              const text = await f.text();
+              const res = importBackup(text);
+              flashDone(res.message);
+              if (res.ok) {
+                setLockOn(appLockEnabled());
+                setSound(getSoundPref());
+              }
+            }}
+          />
         </div>
       </motion.section>
 
@@ -313,13 +452,7 @@ export default function SettingsPage() {
           />
         </div>
 
-        {!lockOn && !isNativePlatform() && (
-          <p style={{ margin: '12px 0 0', fontSize: '0.66rem', fontWeight: 600, color: '#fbbf24', lineHeight: 1.5 }}>
-            App lock uses the phone&apos;s biometrics — available in the Android app. On web, it stays off.
-          </p>
-        )}
-
-        {!lockOn && isNativePlatform() && bioAvailable === false && (
+        {!lockOn && bioAvailable === false && (
           <p style={{ margin: '12px 0 0', fontSize: '0.66rem', fontWeight: 600, color: '#fbbf24', lineHeight: 1.5 }}>
             Not available — set up a screen lock (fingerprint / face / PIN) in Android
             Settings, then come back here.
@@ -406,7 +539,7 @@ export default function SettingsPage() {
 
           <button
             onClick={() => {
-              clearAllCaches();
+              clearAllScopedData();
               flashDone('Cached data cleared ✓');
             }}
             style={{
@@ -467,21 +600,6 @@ export default function SettingsPage() {
           lock and instant refresh — all from the Student Portal &amp; Academia,
           interpreted into decisions. Your password never touches our servers.
         </p>
-      </motion.section>
-
-      {/* Install as app (web only) */}
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.24 }}
-        style={{
-          padding: '14px',
-          borderRadius: '18px',
-          background: WB(0.03),
-          border: `1px solid ${WB(0.08)}`,
-        }}
-      >
-        <InstallApp />
       </motion.section>
     </div>
   );

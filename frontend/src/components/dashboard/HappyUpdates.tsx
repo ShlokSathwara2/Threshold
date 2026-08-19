@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { TimetableSlot } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import { computeConsequences, computeDayRecommendations } from '@/lib/bunk-planner';
@@ -31,6 +31,7 @@ export default function HappyUpdates({
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
+  const [showSafeDetail, setShowSafeDetail] = useState(false);
 
   const recs = useMemo(
     () => computeDayRecommendations(schedule, subjects, optedOut),
@@ -47,6 +48,18 @@ export default function HappyUpdates({
     [subjects]
   );
   const hasSchedule = schedule.some((s) => s.courseCode && s.day);
+
+  // Detailed per-day class list for the safe days (what you'd actually skip)
+  const safeDayDetails = useMemo(
+    () =>
+      safeDays.map((r) => ({
+        day: r.day,
+        slots: schedule
+          .filter((s) => s.day === r.day && s.courseCode)
+          .sort((a, b) => (a.hour ?? 0) - (b.hour ?? 0)),
+      })),
+    [safeDays, schedule]
+  );
 
   if (!hasSchedule || subjects.length === 0) return null;
 
@@ -80,50 +93,166 @@ export default function HappyUpdates({
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {safeDays.length > 0 ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '12px 16px',
-            borderBottom: `1px solid ${WB(0.04)}`,
-          }}>
-            <span style={{
-              flexShrink: 0,
-              width: '30px',
-              height: '30px',
-              borderRadius: '10px',
+          <div style={{ borderBottom: `1px solid ${WB(0.04)}` }}>
+            <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(34,197,94,0.14)',
-              border: '1px solid rgba(34,197,94,0.3)',
-              color: '#4ade80',
-              fontSize: '0.95rem',
+              gap: '10px',
+              padding: '12px 16px',
             }}>
-              🎉
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                You can skip class on {safeDays.map((d) => d.day).join(', ')}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.45), lineHeight: 1.4 }}>
-                Every class that day stays above 75% — but skip wisely; it uses your spare margin.
-              </p>
-            </div>
-            <button
-              onClick={onOpenTimetable}
-              style={{
+              <span style={{
                 flexShrink: 0,
-                background: 'none',
-                border: 'none',
+                width: '30px',
+                height: '30px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(34,197,94,0.14)',
+                border: '1px solid rgba(34,197,94,0.3)',
                 color: '#4ade80',
-                fontSize: '0.72rem',
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
-            >
-              View →
-            </button>
+                fontSize: '0.95rem',
+              }}>
+                🎉
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
+                  You can skip class on {safeDays.map((d) => d.day).join(', ')}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.45), lineHeight: 1.4 }}>
+                  Every class that day stays above 75% — but skip wisely; it uses your spare margin.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSafeDetail(!showSafeDetail)}
+                aria-expanded={showSafeDetail}
+                style={{
+                  flexShrink: 0,
+                  background: showSafeDetail ? 'rgba(34,197,94,0.15)' : 'none',
+                  border: `1px solid ${showSafeDetail ? 'rgba(34,197,94,0.4)' : 'rgba(34,197,94,0.25)'}`,
+                  borderRadius: '8px',
+                  color: '#4ade80',
+                  fontSize: '0.72rem',
+                  padding: '5px 10px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                {showSafeDetail ? 'Hide ▲' : 'Details ▼'}
+              </button>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {showSafeDetail && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {safeDayDetails.map((d) => (
+                      <div key={d.day} style={{
+                        borderRadius: '10px',
+                        background: 'rgba(34,197,94,0.05)',
+                        border: '1px solid rgba(34,197,94,0.15)',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '8px 12px',
+                          background: 'rgba(34,197,94,0.1)',
+                          borderBottom: '1px solid rgba(34,197,94,0.15)',
+                        }}>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            color: '#4ade80',
+                            letterSpacing: '0.3px',
+                          }}>
+                            {d.day}
+                          </span>
+                          <span style={{
+                            marginLeft: 'auto',
+                            fontSize: '0.62rem',
+                            color: W(0.45),
+                          }}>
+                            {d.slots.length} class{d.slots.length === 1 ? '' : 'es'} you can skip
+                          </span>
+                        </div>
+                        {d.slots.length === 0 ? (
+                          <p style={{ margin: 0, padding: '10px 12px', fontSize: '0.68rem', color: W(0.35) }}>
+                            No scheduled classes found for this day.
+                          </p>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {d.slots.map((s, i) => (
+                              <div key={`${s.courseCode}-${s.hour}`} style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '8px 12px',
+                                borderBottom: i < d.slots.length - 1 ? '1px solid rgba(34,197,94,0.08)' : 'none',
+                              }}>
+                                <span style={{
+                                  flexShrink: 0,
+                                  width: '72px',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  color: W(0.5),
+                                }}>
+                                  {s.time || `Hour ${s.hour}`}
+                                </span>
+                                <span style={{
+                                  flexShrink: 0,
+                                  padding: '2px 7px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.6rem',
+                                  fontWeight: 700,
+                                  background: 'rgba(34,197,94,0.12)',
+                                  border: '1px solid rgba(34,197,94,0.25)',
+                                  color: '#4ade80',
+                                }}>
+                                  {s.courseCode}
+                                </span>
+                                <span style={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  fontSize: '0.68rem',
+                                  fontWeight: 600,
+                                  color: 'var(--threshold-text)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {s.courseTitle}
+                                </span>
+                                {s.faculty && s.faculty !== 'N/A' && (
+                                  <span style={{
+                                    flexShrink: 0,
+                                    fontSize: '0.6rem',
+                                    color: W(0.4),
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '80px',
+                                  }}>
+                                    {s.faculty.split('(')[0].trim()}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
           <div style={{

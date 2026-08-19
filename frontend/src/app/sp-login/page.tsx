@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,9 +28,23 @@ export default function SpLoginPage() {
   const [sessionId, setSessionId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [step, setStep] = useState<'credentials' | 'captcha'>('credentials');
   const [activeAnimation, setActiveAnimation] = useState<AnimType | null>(null);
   const captchaRef = useRef<HTMLInputElement>(null);
+  const animDoneRef = useRef(false);
+
+  // Live elapsed-seconds ticker while the portal is being verified
+  useEffect(() => {
+    if (!verifying) return;
+    const t0 = Date.now();
+    setElapsed(0);
+    const iv = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - t0) / 1000));
+    }, 250);
+    return () => window.clearInterval(iv);
+  }, [verifying]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -90,14 +104,26 @@ export default function SpLoginPage() {
     }
     setError('');
     setLoading(true);
+    animDoneRef.current = false;
     const randomAnim = animations[Math.floor(Math.random() * animations.length)];
     setActiveAnimation(randomAnim);
+    // Fallback: if the animation component never fires onComplete, force it.
+    window.setTimeout(() => {
+      if (!animDoneRef.current) onCompleteRef.current();
+    }, 9000);
   }, [captcha]);
 
   const onAnimationComplete = useCallback(async () => {
+    if (animDoneRef.current) return;
+    animDoneRef.current = true;
     setActiveAnimation(null);
+    setVerifying(true);
     try {
-      const data = await spLoginVerify(sessionId, username.trim(), password, captcha.trim());
+      const [data] = await Promise.all([
+        spLoginVerify(sessionId, username.trim(), password, captcha.trim()),
+        // Minimum 3s so the shimmer button, timer and progress bar are always visible
+        new Promise<void>((resolve) => window.setTimeout(resolve, 3000)),
+      ]);
       if (data.success && data.cookies) {
         await saveSession(data.cookies, username.trim());
         router.push('/dashboard');
@@ -112,8 +138,15 @@ export default function SpLoginPage() {
       setError('Failed to connect to server');
       setLoading(false);
       setStep('captcha');
+    } finally {
+      setVerifying(false);
     }
   }, [sessionId, username, password, captcha, router, refreshCaptcha]);
+
+  const onCompleteRef = useRef(onAnimationComplete);
+  useEffect(() => {
+    onCompleteRef.current = onAnimationComplete;
+  }, [onAnimationComplete]);
 
   return (
     <div style={{ position: 'relative', minHeight: '100dvh', background: '#09090f', overflow: 'hidden' }}>
@@ -423,19 +456,128 @@ export default function SpLoginPage() {
                   type="submit"
                   disabled={loading || activeAnimation !== null}
                   whileTap={{ scale: 0.95 }}
+                  animate={verifying ? { scale: [1, 1.03, 1] } : {}}
+                  transition={verifying ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : {}}
                   className={`arrow-btn arrow-btn--primary${loading ? ' arrow-btn--disabled' : ''}`}
-                  style={{ flex: 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                  style={{
+                    flex: 1,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    background: verifying
+                      ? 'linear-gradient(120deg, #7c3aed, #d946ef, #7c3aed)'
+                      : undefined,
+                    backgroundSize: '200% 100%',
+                    animation: verifying ? 'thr-btn-shimmer 1.4s linear infinite' : undefined,
+                    boxShadow: verifying
+                      ? '0 0 22px rgba(217, 70, 239, 0.55), 0 0 44px rgba(139, 92, 246, 0.35)'
+                      : undefined,
+                    transition: 'all 0.3s',
+                  }}
                 >
                   <div className="arrow-btn__slider" />
-                  <svg className="arrow-btn__svg--arr1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                  <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                  <span className="arrow-btn__text">{loading ? 'Logging in...' : 'Log In'}</span>
+                  {verifying ? (
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                      style={{
+                        display: 'inline-flex',
+                        width: '15px',
+                        height: '15px',
+                        borderRadius: '50%',
+                        border: '2px solid rgba(255,255,255,0.35)',
+                        borderTopColor: '#fff',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <svg className="arrow-btn__svg--arr1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                      <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    </>
+                  )}
+                  <span className="arrow-btn__text">
+                    {verifying
+                      ? `Verifying… ${elapsed}s`
+                      : loading
+                        ? 'Logging in...'
+                        : 'Log In'}
+                  </span>
                 </motion.button>
               </div>
+
+              {/* Verify progress: timer + slow-network notice */}
+              <AnimatePresence>
+                {verifying && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div style={{ marginTop: '14px' }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '8px',
+                      }}>
+                        <motion.span
+                          animate={{ opacity: [1, 0.35, 1] }}
+                          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#a78bfa',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <p style={{ margin: 0, color: W(0.6), fontSize: '0.8rem' }}>
+                          Fetching your portal data…
+                          <span style={{ fontWeight: 800, color: 'var(--threshold-accent-text)', marginLeft: '6px' }}>
+                            {elapsed}s
+                          </span>
+                        </p>
+                      </div>
+                      <div style={{
+                        height: '4px',
+                        borderRadius: '999px',
+                        background: 'rgba(139,92,246,0.15)',
+                        overflow: 'hidden',
+                      }}>
+                        <motion.div
+                          animate={{ x: ['-100%', '250%'] }}
+                          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                          style={{
+                            width: '40%',
+                            height: '100%',
+                            borderRadius: '999px',
+                            background: 'linear-gradient(90deg, transparent, #a78bfa, transparent)',
+                          }}
+                        />
+                      </div>
+                      {elapsed >= 8 && (
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          style={{
+                            margin: '10px 0 0',
+                            color: '#fbbf24',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          ⚠ Taking longer than usual — this may be a poor internet connection. Hang on, don&apos;t close the app…
+                        </motion.p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </form>
           )}
         </motion.div>

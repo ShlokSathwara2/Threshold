@@ -124,6 +124,33 @@ export function clearSkipLog(): void {
   localStorage.removeItem(SNAP_KEY());
 }
 
+function dateKey(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${dd}-${mm}-${d.getFullYear()}`;
+}
+
+// Clean-streak: full days elapsed since the most recent attributed skip
+// (log is newest-first). Zero when no skips have ever been tracked, so the
+// chip only appears once there is real tracking history.
+export function computeStreak(): number {
+  const attributions = loadAttributions();
+  if (!attributions.length) return 0;
+  const lastSkip = new Date(attributions[0].date);
+  const now = new Date();
+  const lastKey = dateKey(lastSkip);
+  const todayKey = dateKey(now);
+  if (lastKey === todayKey) return 0;
+  let streak = 0;
+  const day = new Date(now);
+  for (let i = 0; i < 365; i++) {
+    if (dateKey(day) <= lastKey) break;
+    streak++;
+    day.setDate(day.getDate() - 1);
+  }
+  return streak;
+}
+
 export function computeHabitInsights(
   subjects: SubjectAttendance[],
   schedule: TimetableSlot[]

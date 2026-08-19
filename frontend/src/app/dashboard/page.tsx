@@ -22,15 +22,19 @@ import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
 import { lastSyncTime } from '@/lib/api';
 import { refreshNotifications } from '@/lib/notifications';
+import { checkForUpdate, type UpdateInfo } from '@/lib/update-check';
+import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import HappyUpdates from '@/components/dashboard/HappyUpdates';
+import Announcements from '@/components/dashboard/Announcements';
 import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
 import { recordAttendanceSnapshot } from '@/lib/habits';
 import { toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
+import { syncWidget } from '@/lib/widget-sync';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -73,7 +77,7 @@ export default function DashboardPage() {
   const { theme, notif } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
-  const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
+  const { subjects, overall, loading, stale, refetch: refetchAttendance } = useAttendance();
   const [gradesKey, setGradesKey] = useState(0);
   usePullToRefresh(async () => {
     await refetchAttendance();
@@ -93,6 +97,19 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<ExamEntry[]>([]);
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+
+  // In-app update check: newer version on GitHub → show the update popup
+  // once (per version, unless dismissed).
+  useEffect(() => {
+    let mounted = true;
+    checkForUpdate().then((info) => {
+      if (mounted && info) setUpdateInfo(info);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     setLastSyncAt(lastSyncTime());
@@ -108,15 +125,19 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // Smart local notifications: morning brief + exam reminders. Rescheduled
-  // whenever attendance/exams/preferences change (debounced).
+  // Smart local notifications: morning brief + exam reminders + per-class
+  // "attend this class" alerts. Rescheduled whenever attendance, exams,
+  // timetable, calendar or preferences change (debounced).
   useEffect(() => {
     if (subjects.length === 0) return;
     const t = window.setTimeout(() => {
-      void refreshNotifications(subjects, exams, notif);
+      void refreshNotifications(subjects, exams, notif, {
+        slots: todayClasses ?? [],
+        months: calendar?.calendar ?? [],
+      });
     }, 1500);
     return () => window.clearTimeout(t);
-  }, [subjects, exams, notif]);
+  }, [subjects, exams, notif, todayClasses, calendar]);
 
   // Log skip attributions once per day (powers habit insights).
   useEffect(() => {
@@ -239,6 +260,10 @@ export default function DashboardPage() {
         .sort((a, b) => a.hour - b.hour)
     : [];
 
+  useEffect(() => {
+    syncWidget(overall, subjects, todayClasses, isSpLoggedIn());
+  }, [overall, subjects, todayClasses]);
+
   // Timeline geometry: classes positioned between day start and day end
   const dayStart = todaysSlots.length ? Math.min(...todaysSlots.map((s) => slotWindow(s).start)) : 0;
   const dayEnd = todaysSlots.length ? Math.max(...todaysSlots.map((s) => slotWindow(s).end)) : 0;
@@ -292,6 +317,110 @@ export default function DashboardPage() {
     const att = subjects.find((x) => x.courseCode === s.courseCode);
     return (att?.canBunk ?? 0) > 0;
   }).length;
+
+  // ── Dynamic briefs: what matters most RIGHT NOW, ranked by severity ──
+  const slotByCode = (code: string) =>
+    todaysSlots.find((s) => s.courseCode === code && slotWindow(s).end > nowMin);
+  const nextHoliday = (calendar?.calendar ?? [])
+    .flatMap((m) => m.days)
+    .find((d) => d.date >= toDateStr(todayD) && (d.isHoliday === true || /holiday/i.test(d.event || '')));
+  const tomorrowDO = (calendar?.calendar ?? [])
+    .flatMap((m) => m.days)
+    .find((d) => {
+      const t = new Date(todayD);
+      t.setDate(t.getDate() + 1);
+      return d.date === toDateStr(t);
+    });
+  type Brief = {
+    icon: string;
+    tone: 'danger' | 'warn' | 'good' | 'info';
+    title: string;
+    body: string;
+    route: string;
+  };
+  const briefs: Brief[] = [];
+  const ovBelow = overall.overallPercentage < 75;
+  const ovMustAttend = Math.ceil((0.75 * overall.totalClasses - overall.totalPresent) / 0.25);
+  if (ovBelow) {
+    briefs.push({
+      icon: '🚨',
+      tone: 'danger',
+      title: 'Detention risk — below 75% overall',
+      body: `You're at ${overall.overallPercentage.toFixed(1)}% overall. Attend ${ovMustAttend} more class${ovMustAttend === 1 ? '' : 'es'} to secure 75%.`,
+      route: '/dashboard/attendance',
+    });
+  }
+  for (const s of atRiskToday) {
+    const slot = slotByCode(s.courseCode);
+    briefs.push({
+      icon: '⚠️',
+      tone: 'danger',
+      title: `Attend ${s.courseCode} today`,
+      body: `${s.courseTitle}${slot ? ` at ${fmtTime(slotWindow(slot).start)} (${todayDO})` : ` (${todayDO})`} — you're at ${s.percentage.toFixed(1)}%. ${s.mustAttend} more class${s.mustAttend === 1 ? '' : 'es'} to 75%. Don't skip!`,
+      route: '/dashboard/attendance',
+    });
+  }
+  const atRiskNotToday = subjects
+    .filter((s) => s.isBelowThreshold && !todayCodes.has(s.courseCode))
+    .sort((a, b) => a.percentage - b.percentage);
+  for (const s of atRiskNotToday.slice(0, 2)) {
+    briefs.push({
+      icon: '📉',
+      tone: 'warn',
+      title: `${s.courseCode} below 75% (${s.percentage.toFixed(1)}%)`,
+      body: `${s.courseTitle} — attend ${s.mustAttend} more class${s.mustAttend === 1 ? '' : 'es'} to recover. No class today, next chance is ${s.slot || 'soon'}.`,
+      route: '/dashboard/attendance',
+    });
+  }
+  if (upcomingExams.length > 0) {
+    const e = upcomingExams[0];
+    const days = daysUntil(e.next, todayD);
+    briefs.push({
+      icon: '📝',
+      tone: 'info',
+      title: `Exam ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}: ${e.entry.subjectTitle}`,
+      body: `${e.entry.subjectCode || ''} — ${days === 0 ? 'give it your best!' : days === 1 ? 'one last revision tonight.' : `you still have ${days} days — plan your revision.`}`.trim(),
+      route: '/dashboard/exams',
+    });
+  }
+  if (todayBunkable > 0 && briefs.filter((b) => b.tone === 'danger').length === 0) {
+    briefs.push({
+      icon: '🕊️',
+      tone: 'good',
+      title: `You can skip ${todayBunkable} class${todayBunkable === 1 ? '' : 'es'} today`,
+      body: 'These subjects are above 75% with spare margin — safe to bunk if you need the time.',
+      route: '/dashboard/attendance',
+    });
+  }
+  if (nextHoliday && briefs.length < 4) {
+    briefs.push({
+      icon: '🎉',
+      tone: 'good',
+      title: `Holiday coming: ${nextHoliday.event || 'academic break'}`,
+      body: `On ${new Date(nextHoliday.date.split('-').reverse().join('-')).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' })} — plan your leave around it.`,
+      route: '/dashboard/calendar',
+    });
+  }
+  if (tomorrowDO?.dayOrder && briefs.length < 5) {
+    const m = tomorrowDO.dayOrder.match(/Day\s*(\d)/i);
+    briefs.push({
+      icon: '🗓️',
+      tone: 'info',
+      title: `Tomorrow: ${m ? `DO-${m[1]}` : tomorrowDO.dayOrder}`,
+      body: `${tomorrowDO.isHoliday === true ? 'Holiday — no classes.' : `Plan tonight — ${tomorrowDO.event ? `${tomorrowDO.event}. ` : ''}classes start with your ${tomorrowDO.dayOrder} timetable.`}`,
+      route: '/dashboard/timetable',
+    });
+  }
+  if (briefs.length === 0) {
+    briefs.push({
+      icon: '✨',
+      tone: 'good',
+      title: 'All clear — everything above 75%',
+      body: 'No attendance risks, no exams in the next 4 days. Enjoy your day!',
+      route: '/dashboard/attendance',
+    });
+  }
+  const shownBriefs = briefs.slice(0, 4);
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', position: 'relative' }}>
@@ -480,11 +609,11 @@ export default function DashboardPage() {
               </span>
             </div>
           )}
-        </div>
+          </div>
       </motion.div>
 
       {/* ── Offline banner ── */}
-      {offline && (
+      {(offline || stale) && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -541,8 +670,8 @@ export default function DashboardPage() {
         </p>
       )}
 
-      {/* ── Today at a glance (morning brief, item 18) ── */}
-      {(todayDO || todaysSlots.length > 0) && (
+      {/* ── Today's briefs: live, ranked by what matters most ── */}
+      {shownBriefs.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -565,102 +694,69 @@ export default function DashboardPage() {
             borderBottom: `1px solid ${WB(0.05)}`,
           }}>
             <span style={{ fontSize: '1rem', flexShrink: 0 }}>☀️</span>
-            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
-              Today at a Glance
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0, flex: 1 }}>
+              Today's briefs
             </h2>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <button
-              onClick={() => router.push('/dashboard/timetable')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '11px 16px',
-                background: 'none',
-                border: 'none',
-                borderBottom: `1px solid ${WB(0.04)}`,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>📅</span>
-              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                {todayDO ? `${todayDO} schedule` : 'Schedule unavailable'}
-              </span>
+            {todayDO && (
               <span style={{
-                flexShrink: 0,
-                padding: '3px 9px',
+                fontSize: '0.62rem',
+                fontWeight: 700,
+                letterSpacing: '0.4px',
+                color: 'var(--threshold-accent-text)',
+                padding: '3px 8px',
                 borderRadius: '999px',
                 background: 'rgba(var(--threshold-accent-rgb),0.15)',
                 border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
-                fontSize: '0.62rem',
-                fontWeight: 700,
-                color: 'var(--threshold-accent-text)',
               }}>
-                {todaysSlots.length} class{todaysSlots.length === 1 ? '' : 'es'}
-                {todayBunkable > 0 ? ` · ${todayBunkable} spare` : ''}
+                {todayDO} · {todaysSlots.length} CLASS{todaysSlots.length === 1 ? '' : 'ES'}
               </span>
-            </button>
-            <button
-              onClick={() => router.push('/dashboard/attendance')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '11px 16px',
-                background: 'none',
-                border: 'none',
-                borderBottom: `1px solid ${WB(0.04)}`,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>⚠️</span>
-              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                {atRiskToday.length > 0
-                  ? `${atRiskToday.length} subject${atRiskToday.length > 1 ? 's' : ''} below 75% today`
-                  : "Today's subjects are all above 75%"}
-              </span>
-              <span style={{
-                flexShrink: 0,
-                fontSize: '0.66rem',
-                fontWeight: 800,
-                color: atRiskToday.length > 0 ? '#f87171' : '#4ade80',
-              }}>
-                {atRiskToday.length > 0 ? atRiskToday.map((s) => s.courseCode).join(', ') : '✓'}
-              </span>
-            </button>
-            <button
-              onClick={() => router.push('/dashboard/exams')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '11px 16px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>📝</span>
-              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
-                {nextExam
-                  ? `Next exam: ${nextExam.entry.subjectTitle}`
-                  : 'No upcoming exams'}
-              </span>
-              <span style={{
-                flexShrink: 0,
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                color: '#e879f9',
-              }}>
-                {nextExam
-                  ? daysUntil(nextExam.next, todayD) === 0 ? 'TODAY' : daysUntil(nextExam.next, todayD) === 1 ? 'TOMORROW' : `IN ${daysUntil(nextExam.next, todayD)}d`
-                  : ''}
-              </span>
-            </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {shownBriefs.map((b, i) => (
+              <button
+                key={i}
+                onClick={() => router.push(b.route)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '11px 16px',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: i < shownBriefs.length - 1 ? `1px solid ${WB(0.04)}` : 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ flexShrink: 0, fontSize: '0.9rem', lineHeight: 1.4 }}>{b.icon}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{
+                    display: 'block',
+                    fontSize: '0.76rem',
+                    fontWeight: 800,
+                    color:
+                      b.tone === 'danger' ? '#f87171'
+                      : b.tone === 'warn' ? '#fbbf24'
+                      : b.tone === 'good' ? '#4ade80'
+                      : 'var(--threshold-text)',
+                  }}>
+                    {b.title}
+                  </span>
+                  <span style={{
+                    display: 'block',
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    color: W(0.5),
+                    lineHeight: 1.45,
+                    marginTop: '2px',
+                  }}>
+                    {b.body}
+                  </span>
+                </span>
+                <span style={{ flexShrink: 0, fontSize: '0.7rem', color: W(0.3), marginTop: '2px' }}>›</span>
+              </button>
+            ))}
           </div>
         </motion.div>
       )}
@@ -1025,6 +1121,9 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       )}
+
+      {/* ── Announcements (from the student portal notification board) ── */}
+      <Announcements />
 
       {/* ── Happy updates: bunk planner + spare classes ── */}
       <HappyUpdates
@@ -1436,6 +1535,8 @@ export default function DashboardPage() {
       <div style={{ position: 'relative', zIndex: 1 }}>
         <GradesSummary refreshKey={gradesKey} />
       </div>
+
+      <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />
     </div>
   );
 }

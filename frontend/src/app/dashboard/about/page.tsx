@@ -95,10 +95,42 @@ export default function AboutPage() {
         <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: theme.text }}>
           Shlok Sathwara
         </h1>
-        <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: W(0.45), lineHeight: 1.55, maxWidth: '280px' }}>
-          Student · SRM Institute of Science &amp; Technology
+        <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: W(0.45), lineHeight: 1.55, maxWidth: '300px' }}>
+          Student &amp; product engineer · SRM Institute of Science &amp; Technology
           <br />
-          Built <strong style={{ color: theme.accentText }}>Threshold</strong> — your semester, decoded.
+          I build tools that turn campus data into decisions.
+        </p>
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.04 }}
+        style={{
+          padding: '18px',
+          borderRadius: '18px',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
+        }}
+      >
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '10px' }}>
+          Why I built this
+        </h2>
+        <p style={{ margin: 0, fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
+          Every SRM student has asked the same two questions: <em>how many classes can I skip today</em>,
+          and <em>exactly how many do I need to attend to stay above 75%</em>. The portal answers with
+          raw numbers — you're left doing the math in your head, and one wrong weekend can cost you a
+          detention notice.
+        </p>
+        <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
+          Threshold exists to remove that mental math. It reads your timetable, day orders and
+          attendance, then answers in decisions: <strong style={{ color: theme.accentText }}>attend till this date</strong>,{' '}
+          <strong style={{ color: theme.accentText }}>skip this class safely</strong>,{' '}
+          <strong style={{ color: theme.accentText }}>this leave will put you at risk</strong> — before they happen, not after.
+        </p>
+        <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
+          Built during my own semester, as a student who needed it. Offline-first and private by design:
+          your password never touches the server, and everything runs on this device.
         </p>
       </motion.section>
 
