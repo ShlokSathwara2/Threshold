@@ -14,7 +14,7 @@ from core.schemas.models import (
 )
 from scraper.client import AcademiaClient
 from scraper.parser import AcademiaParser
-from scraper.timetable import TimetableBuilder
+from scraper.timetable import TimetableBuilder, SLOT_MATRIX, normalize_token
 
 
 DAY_NAMES = {1: "DO-1", 2: "DO-2", 3: "DO-3", 4: "DO-4", 5: "DO-5"}
@@ -78,7 +78,10 @@ class AcademiaScraper:
 
         # Merge duplicate course rows (same code can appear once per part:
         # e.g. theory "A" row + practical "P29-P30-" row for the same course).
+        # Record which row declared each token so room/faculty come from the
+        # right part — otherwise the practical would inherit the theory room.
         course_parts: dict[str, list[str]] = {}
+        token_owner: dict[tuple[str, str], Course] = {}
         for course in courses.courses:
             if not course.code:
                 continue
@@ -94,6 +97,7 @@ class AcademiaScraper:
             for t in tokens:
                 if t not in existing:
                     existing.append(t)
+                    token_owner[(course.code, t)] = course
 
         targets = [(batch, False), (batch, True), (1, False), (2, False)]
 
@@ -121,18 +125,24 @@ class AcademiaScraper:
             placed: set[tuple] = set()
             unmatched: list[str] = []
 
-            for course in courses.courses:
-                if not course.code:
-                    continue
-                tokens = course_parts.get(course.code, [])
+            for code, tokens in course_parts.items():
                 for token in tokens:
-                    positions = slot_positions.get(token, [])
+                    owner = token_owner.get((code, token))
+                    if not owner:
+                        continue
+                    positions = slot_positions.get(token)
                     if not positions:
-                        unmatched.append(f"{course.code}:{token}")
+                        # Token missing from the batch grid (e.g. tutorial
+                        # slots "TA1" or section-specific codes) — fall back
+                        # to the standard slot matrix so the class still
+                        # shows up instead of silently vanishing.
+                        positions = SLOT_MATRIX.get(normalize_token(token))
+                    if not positions:
+                        unmatched.append(f"{code}:{token}")
                         continue
                     for day, hour in positions:
                         day_name = DAY_NAMES.get(day, f"Day{day}")
-                        key = (course.code, day_name, hour)
+                        key = (code, day_name, hour)
                         if key in placed:
                             continue
                         placed.add(key)
@@ -141,11 +151,11 @@ class AcademiaScraper:
                                 day=day_name,
                                 hour=hour,
                                 time=times.get(hour, ""),
-                                courseCode=course.code,
-                                courseTitle=course.title,
+                                courseCode=code,
+                                courseTitle=owner.title,
                                 slot=token,
-                                faculty=course.faculty,
-                                room=course.room,
+                                faculty=owner.faculty,
+                                room=owner.room,
                             )
                         )
 

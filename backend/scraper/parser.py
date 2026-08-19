@@ -134,7 +134,7 @@ class AcademiaParser:
 
     def parse_courses(self, page_html: str) -> CourseResponse:
         courses: list[Course] = []
-        seen: set[str] = set()
+        seen: set[tuple[str, str]] = set()
 
         reg_number = extract_reg_number(page_html)
 
@@ -161,8 +161,12 @@ class AcademiaParser:
             if len(cells) < 11:
                 continue
             course = self._parse_course_row(cells)
-            if course and course.code not in seen:
-                seen.add(course.code)
+            # Dedupe on (code, slot) — the same code legitimately appears once
+            # per part (theory "A" row + practical "P29-P30-" row), and the
+            # duplicate slot rows ("X" alternates) are harmless to keep since
+            # both timetable paths skip "X" tokens.
+            if course and (course.code, course.slot) not in seen:
+                seen.add((course.code, course.slot))
                 courses.append(course)
 
         return CourseResponse(regNumber=reg_number, courses=courses, status=200)
@@ -333,8 +337,19 @@ class AcademiaParser:
                         hour = hi + 1
                         if not cell_text:
                             continue
-                        # Split "A / X" → ["A", "X"]
-                        parts = [p.strip() for p in cell_text.replace("/", " / ").split(" / ") if p.strip()]
+                        # Split a cell into individual slot codes. Cells can
+                        # hold alternates ("A / X", "P12/X"), whitespace-joined
+                        # codes ("L51 L52"), or batch-suffixed codes ("L51-2").
+                        # Digit-only and "X" fragments never match a course slot
+                        # (course-side tokenising strips them too), so drop them.
+                        parts: list[str] = []
+                        for p in re.split(r"[\s/]+", cell_text):
+                            for q in re.split(r"-", p):
+                                q = q.strip()
+                                if q and not q.isdigit() and q != "X" and q not in parts:
+                                    parts.append(q)
+                        if not parts:
+                            continue
                         grid[(day_num, hour)] = parts
                         raw.append((day_num, hour, cell_text))
                     continue

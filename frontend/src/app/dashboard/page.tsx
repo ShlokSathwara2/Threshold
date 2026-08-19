@@ -22,8 +22,6 @@ import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
 import { lastSyncTime } from '@/lib/api';
 import { refreshNotifications } from '@/lib/notifications';
-import { checkForUpdate, type UpdateInfo } from '@/lib/update-check';
-import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
@@ -97,19 +95,6 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<ExamEntry[]>([]);
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-
-  // In-app update check: newer version on GitHub → show the update popup
-  // once (per version, unless dismissed).
-  useEffect(() => {
-    let mounted = true;
-    checkForUpdate().then((info) => {
-      if (mounted && info) setUpdateInfo(info);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     setLastSyncAt(lastSyncTime());
@@ -1535,8 +1520,6 @@ export default function DashboardPage() {
       <div style={{ position: 'relative', zIndex: 1 }}>
         <GradesSummary refreshKey={gradesKey} />
       </div>
-
-      <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />
     </div>
   );
 }

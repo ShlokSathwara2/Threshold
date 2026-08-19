@@ -80,9 +80,12 @@ export function SubjectRegistryProvider({ children }: { children: ReactNode }) {
       }
 
       if (list.length > 0) {
-        setCourses(list);
+        // Academia /courses can return the same code once per part (theory
+        // "A" row + practical "P29-P30-" row) — keep one entry per subject.
+        const unique = [...new Map(list.map((c) => [c.code, c] as const)).values()];
+        setCourses(unique);
         try {
-          localStorage.setItem(CACHE_KEY(), JSON.stringify(list));
+          localStorage.setItem(CACHE_KEY(), JSON.stringify(unique));
         } catch {
           /* ignore */
         }

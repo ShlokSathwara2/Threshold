@@ -12,6 +12,8 @@ import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
 import { SubjectRegistryProvider } from '@/lib/subject-registry';
 import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
+import { checkForUpdate, notifyUpdate, type UpdateInfo } from '@/lib/update-check';
+import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
 import Lenis from 'lenis';
 
 // "ra2411003010247@srmist.edu.in" → "Ra2411003010247"
@@ -124,8 +126,43 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [examOpen, setExamOpen] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const navScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // In-app update check: runs on every dashboard page, re-checks every few
+  // minutes, on app resume and when the app returns to the foreground, so
+  // users with an installed build get notified (popup + native notification)
+  // as soon as a new release is published — once per version.
+  useEffect(() => {
+    let disposed = false;
+    const check = () => {
+      if (disposed) return;
+      checkForUpdate().then((info) => {
+        if (disposed || !info) return;
+        setUpdateInfo((prev) => (prev?.version === info.version ? prev : info));
+        void notifyUpdate(info);
+      });
+    };
+    check();
+    const timer = window.setInterval(check, 5 * 60 * 1000);
+    const onVisible = () => {
+      if (!document.hidden) check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    App.addListener('resume', check)
+      .then((handle) => {
+        if (disposed) handle.remove();
+      })
+      .catch(() => {
+        /* not on native — no-op */
+      });
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Keep the sidebar's active/expanded section in view: when the sidebar
   // opens (or the Examination group expands), scroll the scroll container so
@@ -630,6 +667,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* App-level lock gate (biometric / PIN) */}
       <AppLockGate />
+
+      {/* New version available — global popup on every dashboard page */}
+      <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />
 
       {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
       {sessionExpired && (

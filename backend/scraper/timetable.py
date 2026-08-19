@@ -52,6 +52,18 @@ SLOT_MATRIX: dict[str, list[tuple[int, int]]] = {
 DAY_NAMES = {1: "DO-1", 2: "DO-2", 3: "DO-3", 4: "DO-4", 5: "DO-5"}
 
 
+def normalize_token(token: str) -> str:
+    """Canonicalise a slot token before matrix lookup.
+
+    Academia writes tutorials as "TA1".."TA10" while the matrix keys are
+    "T1".."T10" — collapse the extra "A" so tutorial classes still resolve.
+    """
+    token = token.strip().upper()
+    if token.startswith("TA") and len(token) > 2 and token[2:].isdigit():
+        return "T" + token[2:]
+    return token
+
+
 class TimetableBuilder:
     """Derive timetable from course slot assignments and batch number.
 
@@ -74,7 +86,7 @@ class TimetableBuilder:
                 continue
 
             for token in tokens:
-                time_slots = SLOT_MATRIX.get(token, [])
+                time_slots = SLOT_MATRIX.get(normalize_token(token), [])
                 for day, hour in time_slots:
                     schedule.append(
                         TimetableSlot(
