@@ -3,14 +3,39 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession } from '@/lib/api';
+import { App } from '@capacitor/app';
+import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser } from '@/lib/api';
 import { clearAllCaches } from '@/lib/cache';
 import PullRefresh from '@/components/ui/PullRefresh';
+import AppLockGate from '@/components/ui/AppLockGate';
 import BottomNav from '@/components/nav/BottomNav';
 import BrandWord from '@/components/brand/BrandWord';
 import { SubjectRegistryProvider } from '@/lib/subject-registry';
 import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
 import Lenis from 'lenis';
+
+// "ra2411003010247@srmist.edu.in" → "Ra2411003010247"
+// "SHLOK KUMAR" → "Shlok Kumar"
+function prettifyName(raw: string): string {
+  const base = (raw || '').split('@')[0].trim();
+  if (!base) return 'Student';
+  const cleaned = base.replace(/[._-]+/g, ' ').trim();
+  if (!cleaned) return 'Student';
+  return cleaned
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+const navContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.045, delayChildren: 0.08 } },
+};
+
+const navItemAnim = {
+  hidden: { opacity: 0, x: -14 },
+  show: { opacity: 1, x: 0, transition: { duration: 0.28, ease: 'easeOut' as const } },
+};
 
 type NavItem = { label: string; path: string; icon: string };
 type NavGroup = {
@@ -40,11 +65,17 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Insights',
-    items: [{ label: 'Analytics', path: '/dashboard/analytics', icon: '◉' }],
+    items: [
+      { label: 'Analytics', path: '/dashboard/analytics', icon: '◉' },
+      { label: 'Insights', path: '/dashboard/insights', icon: '🧭' },
+    ],
   },
   {
     label: 'App',
-    items: [{ label: 'Settings', path: '/dashboard/settings', icon: '⚙' }],
+    items: [
+      { label: 'Settings', path: '/dashboard/settings', icon: '⚙' },
+      { label: 'About Me', path: '/dashboard/about', icon: '✦' },
+    ],
   },
 ];
 
@@ -58,11 +89,13 @@ const pageTitles: Record<string, string> = {
   '/dashboard/calendar': 'Calendar',
   '/dashboard/profile': 'Profile',
   '/dashboard/settings': 'Settings',
+  '/dashboard/about': 'About Me',
   '/dashboard/course-status': 'Course Status',
   '/dashboard/exam/hall-ticket': 'Hall Ticket',
   '/dashboard/exam/timetable': 'Exam Timetable',
   '/dashboard/exam/provisional-results': 'Provisional Results',
   '/dashboard/analytics': 'Analytics',
+  '/dashboard/insights': 'Insights',
 };
 
 function NoiseOverlay() {
@@ -107,6 +140,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     fetchSpProfile()
       .then((res) => {
         if (res.profile?.name) setUser(res.profile.name as string);
+        // Offline logins may have been keyed to the shared placeholder —
+        // once the profile reveals the reg number, re-key the session so
+        // every local store is per-login.
+        if (res.profile?.reg_number) upgradeSessionUser(res.profile.reg_number);
       })
       .catch(() => {
         /* keep the username fallback */
@@ -144,8 +181,39 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const handleSessionExpiredTap = () => {
     clearSession();
-    router.push('/sp-login?expired=1');
+    router.push('/login?expired=1');
   };
+
+  // Deep links: threshold://attendance, threshold://subject/{code},
+  // threshold://timetable, threshold://marks, threshold://exams
+  useEffect(() => {
+    let disposed = false;
+    App.addListener('appUrlOpen', (e: { url: string }) => {
+      try {
+        const url = new URL(e.url);
+        const p = url.pathname;
+        if (p === '/attendance') router.push('/dashboard/attendance');
+        else if (p === '/timetable') router.push('/dashboard/timetable');
+        else if (p === '/marks') router.push('/dashboard/marks');
+        else if (p === '/exams') router.push('/dashboard/exams');
+        else if (p.startsWith('/subject/')) {
+          const code = decodeURIComponent(p.slice('/subject/'.length));
+          router.push(`/dashboard/attendance?code=${encodeURIComponent(code)}`);
+        }
+      } catch {
+        /* malformed url — ignore */
+      }
+    })
+      .then((handle) => {
+        if (disposed) handle.remove();
+      })
+      .catch(() => {
+        /* not on native — no-op */
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [router]);
 
   // Lenis smooth scroll on the scroll container
   useEffect(() => {
@@ -161,10 +229,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     clearSession();
     clearAllCaches();
-    router.push('/welcome');
-  };
-
-  const handleSwitchAccount = () => {
     router.push('/welcome');
   };
 
@@ -219,7 +283,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             textOverflow: 'ellipsis',
           }}>
             {pathname === '/dashboard' ? (
-              <BrandWord text="THRESHOLD" fontSize="1.2rem" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <img
+                  src="/logo.png"
+                  alt="Threshold"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    objectFit: 'cover',
+                  }}
+                />
+                <BrandWord text="THRESHOLD" fontSize="1.2rem" />
+              </div>
             ) : (
               pageTitles[pathname] || 'Threshold'
             )}
@@ -228,7 +304,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           <button
-            onClick={handleSwitchAccount}
+            onClick={() => router.push('/dashboard/internal-marks')}
             style={{
               background: theme.accentDim,
               border: `1px solid ${theme.accent}4d`,
@@ -240,7 +316,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               whiteSpace: 'nowrap',
             }}
           >
-            Switch
+            Internal Marks
           </button>
           <button
             onClick={handleLogout}
@@ -290,46 +366,91 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         display: 'flex',
         flexDirection: 'column',
         gap: '6px',
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
+        overflow: 'hidden',
         transition: 'left 0.3s cubic-bezier(0.23, 1, 0.32, 1)',
       }}>
         {/* Signed-in user chip */}
-        <div style={{
-          padding: '12px 14px',
-          marginBottom: '12px',
-          borderRadius: '12px',
-          background: theme.accentDim,
-          border: `1px solid ${theme.accent}33`,
-        }}>
-          <p style={{
-            color: theme.text,
-            fontWeight: 600,
+        <motion.div
+          variants={navItemAnim}
+          style={{
+            padding: '12px 14px',
+            marginBottom: '12px',
+            borderRadius: '12px',
+            background: theme.accentDim,
+            border: `1px solid ${theme.accent}33`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <span style={{
+            flexShrink: 0,
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: theme.accent,
+            color: '#fff',
             fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            fontWeight: 800,
+            border: `2px solid ${theme.accent}66`,
           }}>
-            {user || 'Student'}
-          </p>
-          <p style={{
-            color: theme.textFaint,
-            fontSize: '0.68rem',
-            marginTop: '2px',
-          }}>
-            Signed in • Student Portal
-          </p>
-        </div>
+            {(prettifyName(user) || 'S').charAt(0).toUpperCase()}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{
+              color: theme.text,
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              margin: 0,
+            }}>
+              {prettifyName(user)}
+            </p>
+            <p style={{
+              color: theme.textFaint,
+              fontSize: '0.66rem',
+              marginTop: '2px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {user.includes('@') ? user : 'Signed in • Student Portal'}
+            </p>
+          </div>
+        </motion.div>
 
+        <motion.div
+          key={sidebarOpen ? 'open' : 'closed'}
+          variants={navContainer}
+          initial="hidden"
+          animate={sidebarOpen ? 'show' : 'hidden'}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            paddingBottom: '8px',
+          }}
+        >
         {navGroups.map((group) => {
           const groupActive = group.items.some(
             (i) => pathname === i.path || pathname.startsWith(i.path + '/')
           );
           const isOpen = !group.expandable || examOpen;
           return (
-            <div key={group.label}>
+            <motion.div key={group.label} variants={navItemAnim}>
               {group.expandable ? (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => setExamOpen(!examOpen)}
                   style={{
                     display: 'flex',
@@ -350,8 +471,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 >
                   <span style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}>⚑</span>
                   {group.label}
-                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: W(0.4), transition: 'transform 0.25s', transform: examOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                </button>
+                  <motion.span
+                    animate={{ rotate: examOpen ? 90 : 0 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    style={{ marginLeft: 'auto', fontSize: '0.7rem', color: W(0.4), display: 'inline-block' }}
+                  >▶</motion.span>
+                </motion.button>
               ) : (
                 <p style={{
                   fontSize: '0.62rem',
@@ -375,8 +500,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                   {group.items.map((item) => {
                     const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
                     return (
-                      <button
+                      <motion.button
                         key={item.path}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           router.push(item.path);
                           setSidebarOpen(false);
@@ -398,9 +524,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                           width: '100%',
                         }}
                       >
-                        <span style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                        <motion.span
+                          animate={isActive ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+                          transition={{ duration: 0.35 }}
+                          style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center', flexShrink: 0 }}
+                        >{item.icon}</motion.span>
                         {item.label}
-                      </button>
+                      </motion.button>
                     );
                   })}
                 </motion.div>
@@ -408,8 +538,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 group.items.map((item) => {
                   const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
                   return (
-                    <button
+                    <motion.button
                       key={item.path}
+                      whileTap={{ scale: 0.97 }}
                       onClick={() => {
                         router.push(item.path);
                         setSidebarOpen(false);
@@ -428,17 +559,23 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                         cursor: 'pointer',
                         textAlign: 'left',
                         transition: 'all 0.2s',
+                        width: '100%',
                       }}
                     >
-                      <span style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                      <motion.span
+                        animate={isActive ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+                        transition={{ duration: 0.35 }}
+                        style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}
+                      >{item.icon}</motion.span>
                       {item.label}
-                    </button>
+                    </motion.button>
                   );
                 })
               )}
-            </div>
+            </motion.div>
           );
         })}
+        </motion.div>
 
       </nav>
 
@@ -463,6 +600,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Bottom navigation */}
       <BottomNav />
+
+      {/* App-level lock gate (biometric / PIN) */}
+      <AppLockGate />
 
       {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
       {sessionExpired && (

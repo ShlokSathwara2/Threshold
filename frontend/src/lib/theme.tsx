@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { scopedKey, isSingleUserDevice } from './user-scope';
 
 export interface ThemePalette {
   id: string;
@@ -147,7 +148,29 @@ export const DEFAULT_NOTIF: NotifPrefs = {
 };
 
 const THEME_KEY = 'threshold_theme';
-const NOTIF_KEY = 'threshold_notif_prefs';
+// Notification preferences are per-login: one student's alert toggles never
+// bleed into another login on the same phone.
+const LEGACY_NOTIF_KEY = 'threshold_notif_prefs';
+const NOTIF_KEY = () => scopedKey('threshold_notif_prefs');
+
+function loadNotifPrefs(): NotifPrefs {
+  try {
+    let raw = localStorage.getItem(NOTIF_KEY());
+    if (!raw) {
+      // Adopt legacy device-wide prefs only on a single-user device.
+      if (!isSingleUserDevice()) return DEFAULT_NOTIF;
+      raw = localStorage.getItem(LEGACY_NOTIF_KEY);
+      if (raw) {
+        localStorage.setItem(NOTIF_KEY(), raw);
+        localStorage.removeItem(LEGACY_NOTIF_KEY);
+      }
+    }
+    if (!raw) return DEFAULT_NOTIF;
+    return { ...DEFAULT_NOTIF, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_NOTIF;
+  }
+}
 
 export function hexToRgba(hex: string, alpha: number): string {
   const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -195,10 +218,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem(THEME_KEY);
       if (saved && THEMES.some((t) => t.id === saved)) setThemeId(saved);
     } catch { /* ignore */ }
-    try {
-      const saved = localStorage.getItem(NOTIF_KEY);
-      if (saved) setNotifState({ ...DEFAULT_NOTIF, ...JSON.parse(saved) });
-    } catch { /* ignore */ }
+    setNotifState(loadNotifPrefs());
   }, []);
 
   const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
@@ -229,7 +249,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setNotif = useCallback((p: Partial<NotifPrefs>) => {
     setNotifState((prev) => {
       const next = { ...prev, ...p };
-      try { localStorage.setItem(NOTIF_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      try { localStorage.setItem(NOTIF_KEY(), JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   }, []);

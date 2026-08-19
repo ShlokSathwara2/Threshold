@@ -83,9 +83,11 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="Academia username (reg number)"
+          placeholder="NetID — ....@srmist.edu.in"
           autoCapitalize="none"
           autoCorrect="off"
+          autoComplete="username"
+          inputMode="email"
           style={{
             padding: '12px 14px',
             borderRadius: '12px',
@@ -100,7 +102,8 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
+          placeholder="Password (academia portal)"
+          autoComplete="current-password"
           style={{
             padding: '12px 14px',
             borderRadius: '12px',

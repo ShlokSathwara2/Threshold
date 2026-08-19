@@ -35,6 +35,62 @@ export function buildDayOrderLookup(months: CalendarMonth[]): Map<string, string
   return lookup;
 }
 
+// Resolve TODAY's day order from the academic calendar. Looks the date up
+// directly; when today falls outside the planner's range, extrapolates the
+// DO-1..DO-5 rotation forward from the last known working day (holidays in
+// the known range don't advance the rotation). Returns null when the planner
+// is too stale to trust (>45 days behind) or today is a holiday.
+export function resolveTodayDayOrder(months: CalendarMonth[]): string | null {
+  const todayStr = toDateStr(new Date());
+  const all = months
+    .flatMap((m) => m.days)
+    .filter((d) => !!d.date && DATE_RE.test(d.date))
+    .sort((a, b) => (toDate(a.date)?.getTime() ?? 0) - (toDate(b.date)?.getTime() ?? 0));
+
+  const today = all.find((d) => d.date === todayStr);
+  if (today) {
+    if (today.isHoliday) return null;
+    const m = today.dayOrder?.match(/Day\s*(\d)/i);
+    return m && +m[1] >= 1 && +m[1] <= 5 ? `DO-${m[1]}` : null;
+  }
+  if (all.length === 0) return null;
+
+  let lastDo: number | null = null;
+  let lastDate: Date | null = null;
+  const nonWorking = new Set<string>();
+  for (const d of all) {
+    const dt = toDate(d.date!);
+    if (!dt) continue;
+    if (d.isHoliday) {
+      nonWorking.add(d.date!);
+      continue;
+    }
+    const m = d.dayOrder?.match(/Day\s*(\d)/i);
+    if (!m) {
+      nonWorking.add(d.date!);
+      continue;
+    }
+    if (!lastDate || dt.getTime() > lastDate.getTime()) {
+      lastDate = dt;
+      lastDo = +m[1];
+    }
+  }
+  if (lastDo === null || !lastDate) return null;
+
+  const todayDt = new Date();
+  todayDt.setHours(0, 0, 0, 0);
+  const gap = Math.round((todayDt.getTime() - lastDate.getTime()) / 86400000);
+  if (gap < 0 || gap > 45) return null;
+
+  let steps = 0;
+  for (let i = 1; i <= gap; i++) {
+    const ds = toDateStr(new Date(lastDate.getTime() + i * 86400000));
+    if (nonWorking.has(ds)) continue;
+    steps++;
+  }
+  return `DO-${((lastDo - 1 + steps) % 5) + 1}`;
+}
+
 const DATE_RE = /^(\d{2})-(\d{2})-(\d{4})$/;
 
 export function toDate(dateStr: string): Date | null {
@@ -73,20 +129,44 @@ export function classesOnDayOrder(
 
 export interface LeaveProjection {
   missed: number;
+  attendedBefore: number;
   projectedTotal: number;
   projectedPresent: number;
+  projectedAbsent: number;
   projectedPercentage: number;
+  projectedMargin: number;
+  projectedCanBunk: number;
+  projectedMustAttend: number;
   dropsBelow75: boolean;
 }
 
-export function projectSubject(subject: SubjectAttendance, missed: number): LeaveProjection {
-  const projectedTotal = subject.total + missed;
-  const projectedPercentage = projectedTotal > 0 ? (subject.present / projectedTotal) * 100 : 0;
+// Projection assumes the student attends EVERY scheduled class between today
+// and the leave start (attendedBefore) and misses every class during the
+// leave window (missed) — present/absent/total all shift accordingly.
+export function projectSubject(subject: SubjectAttendance, missed: number, attendedBefore = 0): LeaveProjection {
+  const projectedTotal = subject.total + missed + attendedBefore;
+  const projectedPresent = subject.present + attendedBefore;
+  const projectedAbsent = subject.absent + missed;
+  const projectedPercentage = projectedTotal > 0 ? (projectedPresent / projectedTotal) * 100 : 0;
+
+  let projectedCanBunk = 0;
+  let projectedMustAttend = 0;
+  if (projectedPercentage >= 75) {
+    projectedCanBunk = Math.floor((projectedPresent - 0.75 * projectedTotal) / 0.75);
+  } else {
+    projectedMustAttend = Math.ceil((0.75 * projectedTotal - projectedPresent) / 0.25);
+  }
+
   return {
     missed,
+    attendedBefore,
     projectedTotal,
-    projectedPresent: subject.present,
+    projectedPresent,
+    projectedAbsent,
     projectedPercentage,
+    projectedMargin: projectedPercentage - 75,
+    projectedCanBunk,
+    projectedMustAttend,
     dropsBelow75: projectedPercentage < 75,
   };
 }
@@ -132,26 +212,62 @@ export function computeReachPlan(
   return { hasSchedule: true, reachable: false, reachDate: null, futureClasses, needed: subject.mustAttend };
 }
 
-// Sum classes missed per subject over a list of leave dates (dd-mm-yyyy).
-export function computeMissedClasses(
-  subjects: SubjectAttendance[],
+export interface LeaveImpact {
+  missed: number;
+  attendedBefore: number;
+}
+
+// Leave-window impact per subject. The user picks leave dates (typically a
+// range like 25 Oct – 1 Nov). The projection assumes EVERY scheduled class
+// between today and the first leave day is attended (added to present AND
+// total), every scheduled class inside the leave window is missed (added to
+// absent AND total) — so totals reflect the real end-of-leave picture instead
+// of today's stale numbers.
+export function computeLeaveImpact(
   scheduleByCourse: DayOrderSchedule,
   lookup: Map<string, string | null>,
   leaveDates: string[],
   todayStr: string
-): Map<string, number> {
-  const missedMap = new Map<string, number>();
+): { from: string | null; to: string | null; perSubject: Map<string, LeaveImpact> } {
   const today = toDate(todayStr);
-  const futureDates = leaveDates.filter((d) => {
-    const date = toDate(d);
-    return date && today && date.getTime() >= today.getTime();
-  });
-  for (const subject of subjects) {
-    let missed = 0;
-    for (const d of futureDates) {
-      missed += classesOnDayOrder(scheduleByCourse, subject.courseCode, lookup.get(d) ?? null);
+  const future = leaveDates
+    .map(toDate)
+    .filter((d): d is Date => !!d && !!today && d.getTime() >= today.getTime())
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const perSubject = new Map<string, LeaveImpact>();
+  let from: string | null = null;
+  let to: string | null = null;
+
+  if (future.length > 0) {
+    const leaveStart = future[0];
+    const leaveEnd = future[future.length - 1];
+    from = toDateStr(leaveStart);
+    to = toDateStr(leaveEnd);
+
+    const dates = [...lookup.keys()]
+      .map((ds) => ({ ds, date: toDate(ds) }))
+      .filter((x): x is { ds: string; date: Date } => !!x.date && !!today && x.date.getTime() >= today.getTime())
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    for (const [code, per] of scheduleByCourse) {
+      const count = (ds: string) => {
+        const doName = lookup.get(ds);
+        return doName ? (per.get(doName) ?? 0) : 0;
+      };
+      let missed = 0;
+      let attendedBefore = 0;
+      for (const { ds, date } of dates) {
+        const cls = count(ds);
+        if (cls === 0) continue;
+        if (date.getTime() < leaveStart.getTime()) attendedBefore += cls;
+        else if (date.getTime() <= leaveEnd.getTime()) missed += cls;
+        // After the leave ends the semester continues but stays out of the
+        // projection — only up to the leave's end is forecast.
+      }
+      perSubject.set(code, { missed, attendedBefore });
     }
-    missedMap.set(subject.courseCode, missed);
   }
-  return missedMap;
+
+  return { from, to, perSubject };
 }

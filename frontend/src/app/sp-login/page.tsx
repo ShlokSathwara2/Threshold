@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { spLoginInit, spLoginVerify } from '@/lib/api';
+import { spLoginInit, spLoginVerify, saveSession } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -99,11 +99,7 @@ export default function SpLoginPage() {
     try {
       const data = await spLoginVerify(sessionId, username.trim(), password, captcha.trim());
       if (data.success && data.cookies) {
-        localStorage.setItem('threshold_session', JSON.stringify({
-          cookies: data.cookies,
-          user: 'student',
-          timestamp: Date.now(),
-        }));
+        await saveSession(data.cookies, username.trim());
         router.push('/dashboard');
       } else {
         setError(data.message || 'Login failed — check your credentials and CAPTCHA');

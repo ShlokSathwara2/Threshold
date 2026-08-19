@@ -1,4 +1,8 @@
+import hashlib
+import json
 import re
+import time
+from pathlib import Path
 
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
@@ -31,6 +35,59 @@ from scraper.student_portal.data import (
 router = APIRouter()
 auth_service = AuthService()
 sp_auth_service = StudentPortalAuth()
+
+# ── Per-user storage + delta-sync support ────────────────────────────
+
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_DATA_DIR.mkdir(exist_ok=True)
+_EXAMS_FILE = _DATA_DIR / "user_exams.json"
+
+
+def _load_exams_store() -> dict:
+    try:
+        if _EXAMS_FILE.exists():
+            return json.loads(_EXAMS_FILE.read_text("utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_exams_store(store: dict) -> None:
+    try:
+        _EXAMS_FILE.write_text(json.dumps(store), "utf-8")
+    except Exception:
+        pass
+
+
+# Content-hash cache per (namespace, session-cookie). Lets the app skip a
+# re-scrape when nothing changed — gentle on the portal and on the phone.
+_delta_cache: dict[str, dict] = {}
+
+
+def _delta_key(namespace: str, cookie: str) -> str:
+    h = hashlib.sha256(cookie.encode("utf-8", "ignore")).hexdigest()[:16]
+    return f"{namespace}:{h}"
+
+
+def _payload_hash(payload) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _delta(namespace: str, cookie: str, client_hash: str, fetch_fn, **kwargs):
+    """Return cached content when the client hash matches; otherwise fetch,
+    record the hash, and tag the payload with delta='fresh'."""
+    key = _delta_key(namespace, cookie)
+    cached = _delta_cache.get(key)
+    if client_hash and cached and cached["hash"] == client_hash:
+        return {"delta": "unchanged", "hash": cached["hash"]}
+    payload = fetch_fn(**kwargs)
+    h = _payload_hash(payload)
+    _delta_cache[key] = {"hash": h, "at": time.time()}
+    if isinstance(payload, dict):
+        payload = {**payload, "delta": "fresh", "hash": h}
+    return payload
 
 
 def _academia_cookie(x_academia: str, x_csrf: str) -> str:
@@ -220,13 +277,15 @@ def _get_sp_cookie(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
 
 
 @router.get("/sp/attendance")
-def sp_attendance(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+def sp_attendance(
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+    x_delta_hash: str = Header(default="", alias="X-Delta-Hash"),
+):
     cookie = _get_sp_cookie(x_csrf_token)
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=cookie)
-        return scraper.attendance().model_dump()
+        return _delta("attendance", cookie, x_delta_hash, lambda: StudentPortalScraper(cookie=cookie).attendance().model_dump())
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -234,13 +293,15 @@ def sp_attendance(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
 
 
 @router.get("/sp/marks")
-def sp_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+def sp_marks(
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+    x_delta_hash: str = Header(default="", alias="X-Delta-Hash"),
+):
     cookie = _get_sp_cookie(x_csrf_token)
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=cookie)
-        return scraper.marks().model_dump()
+        return _delta("marks", cookie, x_delta_hash, lambda: StudentPortalScraper(cookie=cookie).marks().model_dump())
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -262,13 +323,15 @@ def sp_grades(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
 
 
 @router.get("/sp/internal-marks")
-def sp_internal_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+def sp_internal_marks(
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+    x_delta_hash: str = Header(default="", alias="X-Delta-Hash"),
+):
     cookie = _get_sp_cookie(x_csrf_token)
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        scraper = StudentPortalScraper(cookie=cookie)
-        return {"internal_marks": scraper.internal_marks()}
+        return _delta("internal-marks", cookie, x_delta_hash, lambda: {"internal_marks": StudentPortalScraper(cookie=cookie).internal_marks()})
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -276,12 +339,15 @@ def sp_internal_marks(x_csrf_token: str = Header(default="", alias="X-CSRF-Token
 
 
 @router.get("/sp/profile")
-def sp_profile(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+def sp_profile(
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+    x_delta_hash: str = Header(default="", alias="X-Delta-Hash"),
+):
     cookie = _get_sp_cookie(x_csrf_token)
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     try:
-        return fetch_profile(cookie)
+        return _delta("profile", cookie, x_delta_hash, lambda: fetch_profile(cookie))
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -344,12 +410,15 @@ def sp_probe_pages(x_csrf_token: str = Header(default="", alias="X-CSRF-Token"))
 
 
 @router.get("/sp/calendar")
-def sp_calendar(x_csrf_token: str = Header(default="", alias="X-CSRF-Token")):
+def sp_calendar(
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+    x_delta_hash: str = Header(default="", alias="X-Delta-Hash"),
+):
     """Academic Calender/Planner from the Student Portal (has day orders)."""
     cookie = _get_sp_cookie(x_csrf_token)
     if not cookie:
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
-    return fetch_academic_calendar(cookie).model_dump()
+    return _delta("calendar", cookie, x_delta_hash, lambda: fetch_academic_calendar(cookie).model_dump())
 
 
 @router.get("/sp/personal-details")
@@ -516,3 +585,32 @@ def root():
 @router.get("/hello")
 def hello():
     return {"message": "Threshold backend is running"}
+
+
+# ── Per-user app data (exams) ────────────────────────────────────────
+
+@router.get("/sp/exams")
+def sp_exams_get(
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    store = _load_exams_store()
+    return {"exams": store.get(x_user, [])}
+
+
+@router.put("/sp/exams")
+def sp_exams_put(
+    body: dict,
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    if not x_user:
+        return {"error": "X-User header required", "status": 400}
+    store = _load_exams_store()
+    store[x_user] = body.get("exams", [])
+    _save_exams_store(store)
+    return {"success": True, "count": len(store[x_user])}

@@ -1,5 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+import { userHash, isPlaceholderUser, migrateLegacyIdentity } from './user-scope';
+
 export interface Session {
   cookies: string;
   user: string;
@@ -49,6 +51,50 @@ export function clearSession() {
   localStorage.removeItem('threshold_session');
 }
 
+// Resolve the student's stable identity (SP registration number) from the
+// portal, using the just-captured cookie. Every per-login storage key hashes
+// this — so a friend signing in on the same phone gets their own exams,
+// optional-hour marks, habits, etc.
+export async function resolveSessionUser(cookies: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_BASE}/sp/profile`, {
+      headers: { 'X-CSRF-Token': cookies },
+    });
+    if (!res.ok) return '';
+    const body = await res.json() as { profile?: { reg_number?: unknown } };
+    const reg = body?.profile?.reg_number;
+    if (typeof reg !== 'string') return '';
+    const id = reg.trim().toUpperCase();
+    // SRM registration numbers look like RA2411003010247 — anything else is a
+    // parse artifact and must not become a per-login identity.
+    return /^RA\d{4,}$/i.test(id) ? id : '';
+  } catch {
+    return '';
+  }
+}
+
+// Persist the session keyed by the REAL identity when it can be resolved;
+// falls back to the caller-provided username, then the legacy shared
+// placeholder (upgraded automatically once the profile loads).
+export async function saveSession(cookies: string, fallbackUser = ''): Promise<string> {
+  const identity = await resolveSessionUser(cookies);
+  const user = identity || fallbackUser || 'student';
+  localStorage.setItem('threshold_session', JSON.stringify({ cookies, user, timestamp: Date.now() }));
+  migrateLegacyIdentity();
+  return user;
+}
+
+// Upgrade a placeholder-keyed session once the profile reveals the reg number
+// (covers offline logins where identity resolution failed at login time).
+export function upgradeSessionUser(regNumber: string): boolean {
+  const session = getSession();
+  if (!session || !isPlaceholderUser(session.user)) return false;
+  session.user = regNumber;
+  localStorage.setItem('threshold_session', JSON.stringify(session));
+  migrateLegacyIdentity();
+  return true;
+}
+
 export function isLoggedIn(): boolean {
   return getSession() !== null;
 }
@@ -80,6 +126,15 @@ async function apiFetch<T>(
     }
   }
 
+  // Delta sync: when the backend hash matches, the response is
+  // {"delta":"unchanged"} and we short-circuit to the cached copy —
+  // no re-scrape, no wasted battery. Only for the heavy SP GETs.
+  const ns = (!options.method || options.method === 'GET') ? DELTA_NS[path] : undefined;
+  if (ns && typeof window !== 'undefined') {
+    const hash = getLs(deltaKeys(ns).hash);
+    if (hash) headers['X-Delta-Hash'] = hash;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
@@ -90,7 +145,76 @@ async function apiFetch<T>(
     throw new Error(body.error || body.message || `Request failed (${res.status})`);
   }
 
-  return res.json();
+  const body = await res.json();
+  if (ns && body && typeof body === 'object' && 'delta' in body) {
+    if (body.delta === 'unchanged') {
+      const raw = getLs(deltaKeys(ns).raw);
+      if (raw) return JSON.parse(raw) as T;
+    } else {
+      setLs(deltaKeys(ns).hash, String(body.hash ?? ''));
+      setLs(deltaKeys(ns).raw, JSON.stringify(body));
+      recordSync(path);
+    }
+  }
+  return body as T;
+}
+
+// ── Delta sync helpers ─────────────────────────────────────────────
+
+const DELTA_NS: Record<string, string> = {
+  '/sp/attendance': 'attendance',
+  '/sp/marks': 'marks',
+  '/sp/internal-marks': 'internal-marks',
+  '/sp/calendar': 'calendar',
+  '/sp/profile': 'profile',
+};
+
+function deltaKeys(ns: string) {
+  // Scoped per login: one student's cached payloads can never be served to
+  // another login on the same device.
+  const h = userHash();
+  return { hash: `threshold_delta_hash__${h}__${ns}`, raw: `threshold_delta_raw__${h}__${ns}` };
+}
+
+function getLs(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setLs(key: string, val: string) {
+  try {
+    localStorage.setItem(key, val);
+  } catch {
+    /* storage full/unavailable — ignore */
+  }
+}
+
+const SYNC_LOG_KEY = () => `threshold_sync_log__${userHash()}`;
+
+export function recordSync(path: string) {
+  try {
+    const raw = localStorage.getItem(SYNC_LOG_KEY());
+    const log = raw ? JSON.parse(raw) : {};
+    log[path] = Date.now();
+    localStorage.setItem(SYNC_LOG_KEY(), JSON.stringify(log));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function lastSyncTime(): number | null {
+  try {
+    const raw = localStorage.getItem(SYNC_LOG_KEY());
+    if (!raw) return null;
+    const log = JSON.parse(raw) as Record<string, number>;
+    const ts = Object.values(log);
+    return ts.length ? Math.max(...ts) : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Auth ───────────────────────────────────────────────────────────
@@ -533,4 +657,29 @@ export interface SmartResponse {
 
 export async function fetchSmartAttendance(): Promise<SmartResponse> {
   return apiFetch('/get-smart');
+}
+
+// ── Exam store (login-specific, synced to backend) ─────────────────
+
+export interface CloudExam {
+  id: string;
+  subjectCode: string;
+  subjectTitle: string;
+  dates: string[];
+  description?: string;
+}
+
+export async function fetchSpExams(user: string): Promise<CloudExam[]> {
+  const res = await apiFetch<{ exams: CloudExam[] }>('/sp/exams', {
+    headers: { 'X-User': user },
+  });
+  return Array.isArray(res.exams) ? res.exams : [];
+}
+
+export async function saveSpExams(user: string, exams: CloudExam[]): Promise<void> {
+  await apiFetch('/sp/exams', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-User': user },
+    body: JSON.stringify({ exams }),
+  });
 }

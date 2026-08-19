@@ -14,12 +14,13 @@ import {
   buildDayOrderSchedule,
   buildDayOrderLookup,
   computeReachPlan,
-  computeMissedClasses,
+  computeLeaveImpact,
   projectSubject,
   toDateStr,
   displayDate,
   type DayOrderSchedule,
   type ReachPlan,
+  type LeaveProjection,
 } from '@/lib/day-order';
 
 export default function AttendancePage() {
@@ -59,6 +60,24 @@ export default function AttendancePage() {
 
   const todayStr = useMemo(() => toDateStr(new Date()), []);
 
+  // Deep-link highlight: ?code=CSE-101 scrolls to and rings the subject card
+  const [target, setTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    const q = new URLSearchParams(window.location.search).get('code');
+    if (!q) return;
+    const code = subjects.find((s) => s.courseCode.toLowerCase() === q.toLowerCase())?.courseCode;
+    if (!code) return;
+    setTarget(code);
+    const el = document.getElementById(`subject-${code}`);
+    if (el) {
+      window.setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      window.setTimeout(() => setTarget(null), 4000);
+    }
+  }, [subjects]);
+
   const reachPlans = useMemo(() => {
     const plans = new Map<string, ReachPlan | null>();
     for (const s of subjects) {
@@ -74,32 +93,70 @@ export default function AttendancePage() {
 
   const projection = useMemo(() => {
     if (!leaveDates) return null;
-    const missedMap = computeMissedClasses(
-      subjects,
+    const { from, to, perSubject } = computeLeaveImpact(
       scheduleByCourse,
       dayOrderLookup,
       leaveDates,
       todayStr
     );
-    const perSubject = new Map<string, ReturnType<typeof projectSubject> | null>();
+    const projected = new Map<string, LeaveProjection>();
     let missedTotal = 0;
     let subjectsDropping = 0;
     for (const s of subjects) {
-      const missed = missedMap.get(s.courseCode) ?? 0;
+      const { missed, attendedBefore } = perSubject.get(s.courseCode) ?? { missed: 0, attendedBefore: 0 };
       missedTotal += missed;
-      if (missed > 0) {
-        const p = projectSubject(s, missed);
-        perSubject.set(s.courseCode, p);
-        if (p.dropsBelow75) subjectsDropping += 1;
-      }
+      const p = projectSubject(s, missed, attendedBefore);
+      projected.set(s.courseCode, p);
+      if (missed > 0 && p.dropsBelow75) subjectsDropping += 1;
     }
     return {
       leaveDays: leaveDates.length,
+      leaveFrom: from,
+      leaveTo: to,
       missedTotal,
       subjectsDropping,
-      perSubject,
+      perSubject: projected,
     };
   }, [leaveDates, subjects, scheduleByCourse, dayOrderLookup, todayStr]);
+
+  // Overall projected present/absent/total + margin across all subjects,
+  // so the leave planner summary shows the whole-picture effect.
+  const overallProjection = useMemo(() => {
+    if (!projection) return null;
+    let present = 0;
+    let absent = 0;
+    let total = 0;
+    for (const s of subjects) {
+      const p = projection.perSubject.get(s.courseCode);
+      if (p) {
+        present += p.projectedPresent;
+        absent += p.projectedAbsent;
+        total += p.projectedTotal;
+      } else {
+        present += s.present;
+        absent += s.absent;
+        total += s.total;
+      }
+    }
+    const percentage = total > 0 ? (present / total) * 100 : 0;
+    let canBunk = 0;
+    let mustAttend = 0;
+    if (percentage >= 75) {
+      canBunk = Math.floor((present - 0.75 * total) / 0.75);
+    } else {
+      mustAttend = Math.ceil((0.75 * total - present) / 0.25);
+    }
+    return {
+      present,
+      absent,
+      total,
+      percentage,
+      margin: percentage - 75,
+      canBunk,
+      mustAttend,
+      below75: percentage < 75,
+    };
+  }, [projection, subjects]);
 
   const belowThreshold = subjects.filter((s) => s.isBelowThreshold);
   const hasMeta = metaReady && scheduleByCourse.size > 0 && dayOrderLookup.size > 0;
@@ -204,8 +261,11 @@ export default function AttendancePage() {
         onReset={() => setLeaveDates(null)}
         active={leaveDates !== null}
         leaveDays={projection?.leaveDays ?? 0}
+        leaveFrom={projection?.leaveFrom ?? null}
+        leaveTo={projection?.leaveTo ?? null}
         missedTotal={projection?.missedTotal ?? 0}
         subjectsDropping={projection?.subjectsDropping ?? 0}
+        overall={overallProjection}
       />
 
       {/* 75% Recovery Plan */}
@@ -309,14 +369,23 @@ export default function AttendancePage() {
       {/* Subject Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {subjects.map((subject, i) => (
-          <SubjectAttendanceCard
+          <div
             key={subject.courseCode}
-            subject={subject}
-            index={i}
-            dayOrders={scheduleByCourse.get(subject.courseCode)}
-            reachPlan={reachPlans.get(subject.courseCode) ?? null}
-            projection={projection?.perSubject.get(subject.courseCode) ?? null}
-          />
+            id={`subject-${subject.courseCode}`}
+            style={target === subject.courseCode ? {
+              borderRadius: '18px',
+              boxShadow: '0 0 0 3px rgba(139,92,246,0.8), 0 0 24px rgba(139,92,246,0.4)',
+              transition: 'box-shadow 0.4s',
+            } : undefined}
+          >
+            <SubjectAttendanceCard
+              subject={subject}
+              index={i}
+              dayOrders={scheduleByCourse.get(subject.courseCode)}
+              reachPlan={reachPlans.get(subject.courseCode) ?? null}
+              projection={projection?.perSubject.get(subject.courseCode) ?? null}
+            />
+          </div>
         ))}
       </div>
 

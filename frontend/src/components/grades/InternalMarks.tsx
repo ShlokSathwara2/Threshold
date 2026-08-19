@@ -3,9 +3,16 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpInternalMarks, type InternalMark } from '@/lib/api';
+import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
-export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function InternalMarks({
+  refreshKey = 0,
+  subjects = [],
+}: {
+  refreshKey?: number;
+  subjects?: SubjectAttendance[];
+}) {
   const [marks, setMarks] = useState<InternalMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +159,7 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
           const max = parseFloat(m.maxMark);
           const pct = max > 0 ? (scored / max) * 100 : 0;
           const barColor = pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#ef4444';
+          const att = subjects.find((s) => s.courseCode === m.code);
 
           return (
             <motion.div
@@ -186,6 +194,44 @@ export default function InternalMarks({ refreshKey = 0 }: { refreshKey?: number 
                   {m.scored}<span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.75rem' }}>/{m.maxMark}</span>
                 </span>
               </div>
+
+              {att && (
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    background: WB(0.04),
+                    border: `1px solid ${WB(0.07)}`,
+                    color: W(0.55),
+                  }}>
+                    Present {att.present}/{att.total}
+                  </span>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    background: att.canBunk > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                    border: `1px solid ${att.canBunk > 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    color: att.canBunk > 0 ? '#4ade80' : '#f87171',
+                  }}>
+                    {att.canBunk > 0 ? `${att.canBunk} class${att.canBunk > 1 ? 'es' : ''} left` : '0 left — don\u2019t skip'}
+                  </span>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    background: att.isBelowThreshold ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                    border: `1px solid ${att.isBelowThreshold ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                    color: att.isBelowThreshold ? '#f87171' : '#4ade80',
+                  }}>
+                    {att.percentage.toFixed(1)}%
+                  </span>
+                </div>
+              )}
 
               {/* Progress bar */}
               <div style={{

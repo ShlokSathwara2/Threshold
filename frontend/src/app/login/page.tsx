@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+import { saveSession } from '@/lib/api';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -37,16 +38,14 @@ export default function LoginPage() {
     setIsNative(isNativePlatform());
   }, []);
 
-  const storeSession = useCallback((cookieStr: string) => {
-    localStorage.setItem('threshold_session', JSON.stringify({
-      cookies: cookieStr,
-      user: 'student',
-      timestamp: Date.now(),
-    }));
+  const storeSession = useCallback(async (cookieStr: string) => {
+    // Keyed by the REAL identity (SP reg number, resolved from the profile),
+    // so a friend logging in on this phone never sees your exams/OPT marks.
+    await saveSession(cookieStr);
   }, []);
 
-  const storeAndNavigate = useCallback((cookieStr: string) => {
-    storeSession(cookieStr);
+  const storeAndNavigate = useCallback(async (cookieStr: string) => {
+    await storeSession(cookieStr);
     router.push('/dashboard');
   }, [storeSession, router]);
 
@@ -88,7 +87,7 @@ export default function LoginPage() {
               .join('; ');
 
             if (cookieStr) {
-              storeAndNavigate(cookieStr);
+              await storeAndNavigate(cookieStr);
             } else {
               setNativeLoginError('No cookies received after login. Please try again.');
               setNativeLoginLoading(false);
@@ -149,7 +148,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (data.success) {
-        storeAndNavigate(cookie.trim());
+        await storeAndNavigate(cookie.trim());
       } else {
         setError(data.message || 'Failed to set cookies');
       }

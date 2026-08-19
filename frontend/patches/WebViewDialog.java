@@ -1,0 +1,7588 @@
+package ee.forgr.capacitor_inappbrowser;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.ActivityNotFoundException;
+import android.content.ComponentCallbacks2;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.res.AssetManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.net.http.SslError;
+import android.os.Build;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
+import android.provider.MediaStore;
+import android.security.KeyChain;
+import android.security.KeyChainAliasCallback;
+import android.text.TextUtils;
+import android.util.Base64;
+import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.CookieManager;
+import android.webkit.HttpAuthHandler;
+import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
+import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.Toolbar;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.core.content.FileProvider;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+import com.caverock.androidsvg.SVG;
+import com.caverock.androidsvg.SVGParseException;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.PluginCall;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import okhttp3.Headers;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.Principal;
+import java.security.PrivateKey;
+import java.security.SecureRandom;
+import java.security.cert.CertPathValidatorException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509KeyManager;
+import javax.net.ssl.X509TrustManager;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+public class WebViewDialog extends Dialog implements ProxyResponseRouting.ProxyRequestLocator {
+
+    private static final long HOST_WEBVIEW_INSET_RETRY_DELAY_MS = 160L;
+
+    private static class ProxiedRequest {
+
+        private WebResourceResponse response;
+        private final Semaphore semaphore;
+        private NativeRequestContext requestContext;
+        private NativeResponseData nativeResponse;
+        private boolean canceled;
+        private boolean timedOut;
+
+        public WebResourceResponse getResponse() {
+            return response;
+        }
+
+        public ProxiedRequest() {
+            this.semaphore = new Semaphore(0);
+            this.response = null;
+        }
+    }
+
+    private static class NativeRequestContext {
+
+        private String url;
+        private String method;
+        private Map<String, String> headers;
+        private String base64Body;
+        private boolean mainFrame;
+        private String credentialsMode;
+
+        NativeRequestContext(
+            String url,
+            String method,
+            Map<String, String> headers,
+            String base64Body,
+            boolean mainFrame,
+            String credentialsMode
+        ) {
+            this.url = url;
+            this.method = method;
+            this.headers = headers != null ? new HashMap<>(headers) : new HashMap<>();
+            this.base64Body = base64Body != null ? base64Body : "";
+            this.mainFrame = mainFrame;
+            this.credentialsMode = credentialsMode != null ? credentialsMode : "same-origin";
+        }
+    }
+
+    private static class NativeResponseData {
+
+        private int statusCode;
+        private String contentType;
+        private Map<String, String> headers;
+        private byte[] bodyBytes;
+
+        NativeResponseData(int statusCode, String contentType, Map<String, String> headers, byte[] bodyBytes) {
+            this.statusCode = statusCode;
+            this.contentType = contentType != null ? contentType : "application/octet-stream";
+            this.headers = headers != null ? new HashMap<>(headers) : new HashMap<>();
+            this.bodyBytes = bodyBytes != null ? bodyBytes : new byte[0];
+        }
+    }
+
+    private static class RedirectReplayResult {
+
+        private final NativeRequestContext requestContext;
+        private final NativeResponseData responseData;
+
+        RedirectReplayResult(NativeRequestContext requestContext, NativeResponseData responseData) {
+            this.requestContext = requestContext;
+            this.responseData = responseData;
+        }
+    }
+
+    private static class LegacyInitialProxyResult {
+
+        private final boolean canceled;
+        private final NativeResponseData responseData;
+        private final String requestUrl;
+
+        LegacyInitialProxyResult(boolean canceled, NativeResponseData responseData, String requestUrl) {
+            this.canceled = canceled;
+            this.responseData = responseData;
+            this.requestUrl = requestUrl;
+        }
+    }
+
+    private static final int REQUEST_CONNECT_TIMEOUT_MS = 15_000;
+    private static final int REQUEST_READ_TIMEOUT_MS = 30_000;
+    private static final int MAX_WEBVIEW_PROXY_REDIRECTS = 10;
+    private static final int MAX_MANAGED_DOWNLOAD_REDIRECTS = 10;
+    private static final int BLOB_DOWNLOAD_CHUNK_BYTES = 64 * 1024;
+    private static final long MAX_LEGACY_BLOB_DOWNLOAD_BYTES = 512L * 1024L;
+    private static final long MAX_INLINE_TEXT_PREVIEW_BYTES = 512L * 1024L;
+
+    private static class BlobDownloadSession {
+
+        private final File outputFile;
+        private final String sourceUrl;
+        private final String mimeType;
+        private final FileOutputStream outputStream;
+        private final long expectedSize;
+        private long bytesWritten;
+
+        private BlobDownloadSession(File outputFile, String sourceUrl, String mimeType, FileOutputStream outputStream, long expectedSize) {
+            this.outputFile = outputFile;
+            this.sourceUrl = sourceUrl;
+            this.mimeType = mimeType;
+            this.outputStream = outputStream;
+            this.expectedSize = expectedSize;
+            this.bytesWritten = 0L;
+        }
+    }
+
+    private static class ClientCertificateIdentity {
+
+        private final PrivateKey privateKey;
+        private final X509Certificate[] certificateChain;
+
+        private ClientCertificateIdentity(PrivateKey privateKey, X509Certificate[] certificateChain) {
+            this.privateKey = privateKey;
+            this.certificateChain = certificateChain;
+        }
+    }
+
+    private static class FixedClientCertificateKeyManager implements X509KeyManager {
+
+        private static final String ALIAS = "inappbrowser-client-cert";
+        private final ClientCertificateIdentity identity;
+
+        private FixedClientCertificateKeyManager(ClientCertificateIdentity identity) {
+            this.identity = identity;
+        }
+
+        @Override
+        public String[] getClientAliases(String keyType, Principal[] issuers) {
+            return shouldUseIdentity(keyType) ? new String[] { ALIAS } : null;
+        }
+
+        @Override
+        public String chooseClientAlias(String[] keyTypes, Principal[] issuers, java.net.Socket socket) {
+            if (keyTypes == null) {
+                return ALIAS;
+            }
+
+            for (String keyType : keyTypes) {
+                if (shouldUseIdentity(keyType)) {
+                    return ALIAS;
+                }
+            }
+
+            return null;
+        }
+
+        @Override
+        public String[] getServerAliases(String keyType, Principal[] issuers) {
+            return null;
+        }
+
+        @Override
+        public String chooseServerAlias(String keyType, Principal[] issuers, java.net.Socket socket) {
+            return null;
+        }
+
+        @Override
+        public X509Certificate[] getCertificateChain(String alias) {
+            return ALIAS.equals(alias) ? identity.certificateChain : null;
+        }
+
+        @Override
+        public PrivateKey getPrivateKey(String alias) {
+            return ALIAS.equals(alias) ? identity.privateKey : null;
+        }
+
+        private boolean shouldUseIdentity(String keyType) {
+            if (
+                identity == null ||
+                identity.privateKey == null ||
+                identity.certificateChain == null ||
+                identity.certificateChain.length == 0
+            ) {
+                return false;
+            }
+
+            if (TextUtils.isEmpty(keyType)) {
+                return true;
+            }
+
+            String privateKeyAlgorithm = identity.privateKey.getAlgorithm();
+            return !TextUtils.isEmpty(privateKeyAlgorithm) && privateKeyAlgorithm.equalsIgnoreCase(keyType);
+        }
+    }
+
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private boolean reloadFromGestureInProgress = false;
+    private WebView _webView;
+    private Toolbar _toolbar;
+    private Options _options = null;
+    private final Context _context;
+    public Activity activity;
+    private boolean isInitialized = false;
+    private boolean datePickerInjected = false; // Track if we've injected date picker fixes
+    private final WebView capacitorWebView;
+    private String instanceId = "";
+    private final Map<String, ProxiedRequest> proxiedRequestsHashmap = new ConcurrentHashMap<>();
+    private ProxyBridge proxyBridge;
+    private volatile WebViewAssetLoader bundledAssetLoader;
+    private final Object bundledAssetLoaderLock = new Object();
+    private String proxyBridgeScript;
+    private String proxyAccessToken;
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean cookieFlushScheduled = new AtomicBoolean(false);
+    private final Map<String, BlobDownloadSession> blobDownloadSessions = new ConcurrentHashMap<>();
+    private final Map<String, ClientCertificateIdentity> clientCertificateIdentities = new ConcurrentHashMap<>();
+    private int iconColor = Color.BLACK; // Default icon color
+    private Typeface cachedTitleTypeface;
+    private String cachedTitleFontFamily;
+    private Drawable cachedTitleIconDrawable;
+    private boolean cachedTitleIconResolved;
+    private boolean isHiddenModeActive = false;
+    private boolean toolbarHideInProgress = false;
+    private int injectedSafeAreaTop = Integer.MIN_VALUE;
+    private int injectedSafeAreaBottom = Integer.MIN_VALUE;
+    private int injectedSafeAreaLeft = Integer.MIN_VALUE;
+    private int injectedSafeAreaRight = Integer.MIN_VALUE;
+    private boolean configurationCallbacksRegistered = false;
+    private Configuration lastConfiguration;
+    private final ComponentCallbacks2 configurationCallbacks = new ComponentCallbacks2() {
+        @Override
+        public void onConfigurationChanged(Configuration newConfig) {
+            handleConfigurationChanged(newConfig);
+        }
+
+        @Override
+        public void onLowMemory() {}
+
+        @Override
+        public void onTrimMemory(int level) {}
+    };
+    private WindowManager.LayoutParams previousWindowAttributes;
+    private Drawable previousWindowBackground;
+    private ViewGroup.LayoutParams previousWebViewLayoutParams;
+    private float previousDecorAlpha = 1f;
+    private int previousDecorVisibility = View.VISIBLE;
+    private View browserContentView;
+    private ViewGroup backLayerParent;
+    private boolean backLayerActive = false;
+    private boolean usingHostTransparency = false;
+    private Runnable hostTransparencyApplyRunnable;
+    private long forwardedInputDownTime = 0L;
+    private static int hostTransparencyUseCount = 0;
+    private static Drawable originalCapacitorWebViewBackground;
+    private static boolean originalCapacitorWebViewBackgroundCaptured = false;
+    private static Drawable originalCapacitorParentBackground;
+    private static boolean originalCapacitorParentBackgroundCaptured = false;
+    private static Drawable originalCapacitorWindowBackground;
+    private static boolean originalCapacitorWindowBackgroundCaptured = false;
+    private static float originalCapacitorWebViewAlpha = 1f;
+    private static float originalCapacitorParentAlpha = 1f;
+    private float previousWebViewAlpha = 1f;
+    private int previousWebViewVisibility = View.VISIBLE;
+
+    Semaphore preShowSemaphore = null;
+    String preShowError = null;
+    // True when preShowScript was registered via WebViewCompat.addDocumentStartJavaScript;
+    // the blocking evaluateJavascript injection in onPageFinished is skipped in that case.
+    private boolean preShowInjectedAtDocumentStart = false;
+
+    public PermissionRequest currentPermissionRequest;
+    public static final int FILE_CHOOSER_REQUEST_CODE = 1000;
+    public ValueCallback<Uri> mUploadMessage;
+    public ValueCallback<Uri[]> mFilePathCallback;
+    FileChooserRequestSupport.FileChooserRequest activeFileChooserRequest;
+    private boolean openWebViewResolved;
+    private boolean isDismissing = false;
+    private PermissionRequest pendingCameraLaunchPermissionRequest;
+
+    // Temporary URI for storing camera capture
+    public Uri tempCameraUri;
+
+    public interface PermissionHandler {
+        void handleCameraPermissionRequest(PermissionRequest request);
+
+        void handleMicrophonePermissionRequest(PermissionRequest request);
+
+        void clearPendingPermissionRequest(PermissionRequest request);
+
+        boolean createManagedPopupWindow(WebViewDialog parentDialog, android.os.Message resultMsg, boolean isUserGesture, String popupUrl);
+    }
+
+    private final PermissionHandler permissionHandler;
+
+    public WebViewDialog(Context context, int theme, Options options, PermissionHandler permissionHandler, WebView capacitorWebView) {
+        // Use Material theme only if materialPicker is enabled
+        super(context, options.getMaterialPicker() ? R.style.InAppBrowserMaterialTheme : theme);
+        this._options = options;
+        this._context = context;
+        this.permissionHandler = permissionHandler;
+        this.isInitialized = false;
+        this.openWebViewResolved = false;
+        this.capacitorWebView = capacitorWebView;
+    }
+
+    public void setInstanceId(String id) {
+        this.instanceId = id != null ? id : "";
+    }
+
+    public String getInstanceId() {
+        return instanceId;
+    }
+
+    public Options getOptions() {
+        return _options;
+    }
+
+    public WebView getManagedWebView() {
+        return _webView;
+    }
+
+    private View getBrowserContentView() {
+        if (browserContentView == null) {
+            browserContentView = findViewById(R.id.coordinator_layout);
+        }
+        return browserContentView;
+    }
+
+    private ViewGroup getBackLayerParent() {
+        if (capacitorWebView != null && capacitorWebView.getParent() instanceof ViewGroup viewGroup) {
+            return viewGroup;
+        }
+        if (activity != null && activity.getWindow() != null) {
+            View content = activity.getWindow().getDecorView().findViewById(android.R.id.content);
+            if (content instanceof ViewGroup viewGroup) {
+                return viewGroup;
+            }
+        }
+        return null;
+    }
+
+    private ViewGroup.LayoutParams createBackLayerLayoutParams(ViewGroup parent) {
+        int width =
+            _options != null && _options.getWidth() != null ? (int) getPixels(_options.getWidth()) : ViewGroup.LayoutParams.MATCH_PARENT;
+        int height =
+            _options != null && _options.getHeight() != null ? (int) getPixels(_options.getHeight()) : ViewGroup.LayoutParams.MATCH_PARENT;
+        int leftMargin = _options != null && _options.getX() != null ? (int) getPixels(_options.getX()) : 0;
+        int topMargin = _options != null && _options.getY() != null ? (int) getPixels(_options.getY()) : 0;
+
+        if (parent instanceof FrameLayout) {
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, height, Gravity.TOP | Gravity.START);
+            params.leftMargin = leftMargin;
+            params.topMargin = topMargin;
+            return params;
+        }
+        if (parent instanceof RelativeLayout) {
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(width, height);
+            params.leftMargin = leftMargin;
+            params.topMargin = topMargin;
+            return params;
+        }
+        if (parent instanceof CoordinatorLayout) {
+            CoordinatorLayout.LayoutParams params = new CoordinatorLayout.LayoutParams(width, height);
+            params.leftMargin = leftMargin;
+            params.topMargin = topMargin;
+            return params;
+        }
+
+        ViewGroup.MarginLayoutParams params = new ViewGroup.MarginLayoutParams(width, height);
+        params.leftMargin = leftMargin;
+        params.topMargin = topMargin;
+        return params;
+    }
+
+    private void applyBackLayerDimensions() {
+        View contentView = getBrowserContentView();
+        if (!backLayerActive || contentView == null || backLayerParent == null) {
+            return;
+        }
+        contentView.setLayoutParams(createBackLayerLayoutParams(backLayerParent));
+        contentView.requestLayout();
+    }
+
+    private boolean isMiuiDevice() {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER.toLowerCase(Locale.US) : "";
+        String brand = Build.BRAND != null ? Build.BRAND.toLowerCase(Locale.US) : "";
+        return manufacturer.contains("xiaomi") || brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco");
+    }
+
+    private boolean usesFullStackTransparentBackgroundWorkaround() {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER.toLowerCase(Locale.US) : "";
+        String brand = Build.BRAND != null ? Build.BRAND.toLowerCase(Locale.US) : "";
+        return (
+            isMiuiDevice() ||
+            manufacturer.contains("huawei") ||
+            manufacturer.contains("honor") ||
+            brand.contains("huawei") ||
+            brand.contains("honor")
+        );
+    }
+
+    private void applyHostTransparency(boolean enabled) {
+        if (!enabled || capacitorWebView == null || usingHostTransparency) {
+            return;
+        }
+        ViewGroup capacitorParent = capacitorWebView.getParent() instanceof ViewGroup ? (ViewGroup) capacitorWebView.getParent() : null;
+        Window window = activity != null ? activity.getWindow() : null;
+        synchronized (WebViewDialog.class) {
+            if (hostTransparencyUseCount == 0) {
+                originalCapacitorWebViewBackground = capacitorWebView.getBackground();
+                originalCapacitorWebViewBackgroundCaptured = true;
+                originalCapacitorWebViewAlpha = capacitorWebView.getAlpha();
+                if (capacitorParent != null) {
+                    originalCapacitorParentBackground = capacitorParent.getBackground();
+                    originalCapacitorParentBackgroundCaptured = true;
+                    originalCapacitorParentAlpha = capacitorParent.getAlpha();
+                }
+                if (window != null) {
+                    originalCapacitorWindowBackground = window.getDecorView().getBackground();
+                    originalCapacitorWindowBackgroundCaptured = true;
+                }
+            }
+            hostTransparencyUseCount++;
+            usingHostTransparency = true;
+        }
+
+        final Runnable[] applyRef = new Runnable[1];
+        Runnable apply = () -> {
+            synchronized (WebViewDialog.class) {
+                if (!usingHostTransparency || hostTransparencyApplyRunnable != applyRef[0]) {
+                    return;
+                }
+            }
+            boolean fullStackWorkaround = usesFullStackTransparentBackgroundWorkaround();
+            if (window != null && fullStackWorkaround) {
+                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            }
+            if (capacitorParent != null && fullStackWorkaround) {
+                capacitorParent.setBackgroundColor(Color.TRANSPARENT);
+            }
+            capacitorWebView.setBackgroundColor(isMiuiDevice() ? Color.argb(1, 255, 255, 255) : Color.TRANSPARENT);
+            capacitorWebView.setAlpha(isMiuiDevice() ? 0.99f : originalCapacitorWebViewAlpha);
+            if (capacitorParent != null) {
+                capacitorParent.requestTransparentRegion(capacitorWebView);
+            }
+        };
+
+        applyRef[0] = apply;
+        hostTransparencyApplyRunnable = apply;
+        apply.run();
+        if (isMiuiDevice()) {
+            mainHandler.postDelayed(apply, 50);
+            mainHandler.postDelayed(apply, 250);
+        }
+    }
+
+    private void restoreHostTransparency() {
+        if (!usingHostTransparency || capacitorWebView == null) {
+            return;
+        }
+        ViewGroup capacitorParent = capacitorWebView.getParent() instanceof ViewGroup ? (ViewGroup) capacitorWebView.getParent() : null;
+        Window window = activity != null ? activity.getWindow() : null;
+        if (hostTransparencyApplyRunnable != null) {
+            mainHandler.removeCallbacks(hostTransparencyApplyRunnable);
+            hostTransparencyApplyRunnable = null;
+        }
+        synchronized (WebViewDialog.class) {
+            hostTransparencyUseCount = Math.max(0, hostTransparencyUseCount - 1);
+            usingHostTransparency = false;
+            if (hostTransparencyUseCount > 0) {
+                return;
+            }
+            if (originalCapacitorWebViewBackgroundCaptured) {
+                capacitorWebView.setBackground(originalCapacitorWebViewBackground);
+            }
+            capacitorWebView.setAlpha(originalCapacitorWebViewAlpha);
+            if (capacitorParent != null && originalCapacitorParentBackgroundCaptured) {
+                capacitorParent.setBackground(originalCapacitorParentBackground);
+                capacitorParent.setAlpha(originalCapacitorParentAlpha);
+            }
+            if (window != null && originalCapacitorWindowBackgroundCaptured) {
+                window.setBackgroundDrawable(originalCapacitorWindowBackground);
+            }
+            originalCapacitorWebViewBackground = null;
+            originalCapacitorWebViewBackgroundCaptured = false;
+            originalCapacitorParentBackground = null;
+            originalCapacitorParentBackgroundCaptured = false;
+            originalCapacitorWindowBackground = null;
+            originalCapacitorWindowBackgroundCaptured = false;
+            originalCapacitorWebViewAlpha = 1f;
+            originalCapacitorParentAlpha = 1f;
+        }
+    }
+
+    private void detachBackLayer() {
+        View contentView = getBrowserContentView();
+        if (contentView != null && contentView.getParent() instanceof ViewGroup parent) {
+            if (parent == backLayerParent || backLayerActive) {
+                parent.removeView(contentView);
+            }
+        }
+        backLayerActive = false;
+        backLayerParent = null;
+        restoreHostTransparency();
+    }
+
+    private void attachContentToDialogWindow() {
+        View contentView = getBrowserContentView();
+        if (contentView == null) {
+            return;
+        }
+        if (contentView.getParent() instanceof ViewGroup parent) {
+            parent.removeView(contentView);
+        }
+        setContentView(contentView);
+    }
+
+    public boolean sendToBack(boolean transparentBackground) {
+        if (_options != null) {
+            _options.setToBack(true);
+            _options.setTransparentBackground(transparentBackground);
+        }
+        View contentView = getBrowserContentView();
+        ViewGroup parent = getBackLayerParent();
+        if (contentView == null || parent == null) {
+            Log.w("InAppBrowser", "Unable to send webview to back: missing content or parent view");
+            return false;
+        }
+        if (contentView.getParent() instanceof ViewGroup currentParent) {
+            currentParent.removeView(contentView);
+        }
+        if (transparentBackground) {
+            applyHostTransparency(true);
+        } else {
+            restoreHostTransparency();
+        }
+        int targetIndex = capacitorWebView != null ? parent.indexOfChild(capacitorWebView) : 0;
+        parent.addView(contentView, Math.max(0, targetIndex), createBackLayerLayoutParams(parent));
+        contentView.setVisibility(View.VISIBLE);
+        contentView.setAlpha(1f);
+        backLayerParent = parent;
+        backLayerActive = true;
+        if (isShowing()) {
+            super.hide();
+        }
+        refreshInsetsForHostingLayer();
+        return true;
+    }
+
+    public void bringToFrontLayer() {
+        if (_options != null) {
+            _options.setToBack(false);
+        }
+        detachBackLayer();
+        attachContentToDialogWindow();
+        if (!isShowing()) {
+            show();
+        }
+        applyDimensions();
+        refreshInsetsForHostingLayer();
+    }
+
+    /**
+     * The container padding is computed for the window hosting the content, and the two windows inset
+     * differently: the dialog is edge-to-edge on Android 15+, while the host activity fits its own
+     * system windows. Recompute after a layer change so padding from the previous host is not left
+     * behind (which would stack on top of the host offset).
+     */
+    private void refreshInsetsForHostingLayer() {
+        reapplyInsetsFromWindowRoot();
+        mainHandler.post(this::reapplyInsetsFromWindowRoot);
+    }
+
+    private boolean showAccordingToLayerMode() {
+        if (_options != null && _options.isToBack()) {
+            return sendToBack(_options.getTransparentBackground());
+        }
+        bringToFrontLayer();
+        return true;
+    }
+
+    private void showAccordingToLayerModeOrFallback() {
+        if (!showAccordingToLayerMode()) {
+            Log.w("InAppBrowser", "Unable to send webview to back; showing it in front");
+            bringToFrontLayer();
+        }
+    }
+
+    private boolean dispatchMotionEvent(int action, double x, double y) {
+        if (_webView == null) {
+            return false;
+        }
+        long now = SystemClock.uptimeMillis();
+        if (action == MotionEvent.ACTION_DOWN || forwardedInputDownTime == 0L) {
+            forwardedInputDownTime = now;
+        }
+        MotionEvent event = MotionEvent.obtain(forwardedInputDownTime, now, action, getPixels(x), getPixels(y), 0);
+        boolean handled = _webView.dispatchTouchEvent(event);
+        event.recycle();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            forwardedInputDownTime = 0L;
+        }
+        return handled;
+    }
+
+    public boolean dispatchInputEvent(String type, double x, double y, double deltaX, double deltaY) {
+        if (_webView == null || type == null) {
+            return false;
+        }
+        switch (type) {
+            case "click":
+                forwardedInputDownTime = SystemClock.uptimeMillis();
+                dispatchMotionEvent(MotionEvent.ACTION_DOWN, x, y);
+                return dispatchMotionEvent(MotionEvent.ACTION_UP, x, y);
+            case "touchstart":
+                return dispatchMotionEvent(MotionEvent.ACTION_DOWN, x, y);
+            case "touchmove":
+                return dispatchMotionEvent(MotionEvent.ACTION_MOVE, x, y);
+            case "touchend":
+                return dispatchMotionEvent(MotionEvent.ACTION_UP, x, y);
+            case "touchcancel":
+                return dispatchMotionEvent(MotionEvent.ACTION_CANCEL, x, y);
+            case "scroll":
+                return dispatchScrollEvent(x, y, deltaX, deltaY);
+            default:
+                return false;
+        }
+    }
+
+    private boolean dispatchScrollEvent(double x, double y, double deltaX, double deltaY) {
+        if (_webView == null) {
+            return false;
+        }
+        String script =
+            "(function() {" +
+            "  const x = " +
+            Double.toString(x) +
+            ";" +
+            "  const y = " +
+            Double.toString(y) +
+            ";" +
+            "  const dx = " +
+            Double.toString(deltaX) +
+            ";" +
+            "  const dy = " +
+            Double.toString(deltaY) +
+            ";" +
+            "  let target = Number.isFinite(x) && Number.isFinite(y) ? document.elementFromPoint(x, y) : null;" +
+            "  while (target && target !== document.body && target !== document.documentElement) {" +
+            "    const style = window.getComputedStyle(target);" +
+            "    const canScroll = /(auto|scroll)/.test(style.overflow + style.overflowX + style.overflowY) &&" +
+            "      (target.scrollHeight > target.clientHeight || target.scrollWidth > target.clientWidth);" +
+            "    if (canScroll && typeof target.scrollBy === 'function') {" +
+            "      target.scrollBy(dx, dy);" +
+            "      return true;" +
+            "    }" +
+            "    target = target.parentElement;" +
+            "  }" +
+            "  window.scrollBy(dx, dy);" +
+            "  return true;" +
+            "})();";
+        _webView.evaluateJavascript(script, null);
+        return true;
+    }
+
+    private void resolveOpenWebViewIfNeeded() {
+        if (openWebViewResolved || _options == null) {
+            return;
+        }
+        PluginCall call = _options.getPluginCall();
+        if (call == null) {
+            Log.e("InAppBrowser", "Cannot resolve openWebView: plugin call is null");
+            openWebViewResolved = true;
+            return;
+        }
+        if (instanceId == null || instanceId.isEmpty()) {
+            call.reject("Cannot resolve openWebView: missing webview id");
+            openWebViewResolved = true;
+            return;
+        }
+        JSObject result = new JSObject();
+        result.put("id", instanceId);
+        call.resolve(result);
+        openWebViewResolved = true;
+    }
+
+    private void rejectOpenWebViewIfNeeded(String message) {
+        if (openWebViewResolved || _options == null) {
+            return;
+        }
+        PluginCall call = _options.getPluginCall();
+        if (call == null) {
+            Log.e("InAppBrowser", "Cannot reject openWebView: plugin call is null");
+            openWebViewResolved = true;
+            return;
+        }
+        call.reject(message);
+        openWebViewResolved = true;
+    }
+
+    // Add this class to provide safer JavaScript interface
+    private class JavaScriptInterface {
+
+        @JavascriptInterface
+        public void postMessage(String message) {
+            handleJavaScriptPostMessage(message);
+        }
+
+        @JavascriptInterface
+        public void close() {
+            try {
+                // close webview safely
+                if (activity == null) {
+                    Log.e("InAppBrowser", "Cannot close - activity is null");
+                    return;
+                }
+
+                activity.runOnUiThread(() -> {
+                    try {
+                        String currentUrl = getUrl();
+                        dismiss();
+
+                        if (_options != null && _options.getCallbacks() != null) {
+                            _options.getCallbacks().closeEvent(currentUrl);
+                        }
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Error closing WebView: " + e.getMessage());
+                    }
+                });
+            } catch (Exception e) {
+                Log.e("InAppBrowser", "Error in close: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public void hide() {
+            if (!isJavaScriptControlAllowed()) {
+                Log.w("InAppBrowser", "hide() blocked: allowWebViewJsVisibilityControl is false");
+                return;
+            }
+            if (activity == null) {
+                Log.e("InAppBrowser", "Cannot hide - activity is null");
+                return;
+            }
+            activity.runOnUiThread(() -> setHidden(true));
+        }
+
+        @JavascriptInterface
+        public void show() {
+            if (!isJavaScriptControlAllowed()) {
+                Log.w("InAppBrowser", "show() blocked: allowWebViewJsVisibilityControl is false");
+                return;
+            }
+            if (activity == null) {
+                Log.e("InAppBrowser", "Cannot show - activity is null");
+                return;
+            }
+            activity.runOnUiThread(() -> {
+                setHidden(false);
+                showAccordingToLayerModeOrFallback();
+            });
+        }
+
+        @JavascriptInterface
+        public void takeScreenshot(String requestId) {
+            if (requestId == null || requestId.isEmpty()) {
+                Log.e("InAppBrowser", "Cannot take screenshot - requestId is empty");
+                return;
+            }
+
+            if (_options == null || !_options.getAllowScreenshotsFromWebPage()) {
+                rejectJavaScriptScreenshot(requestId, "Screenshot bridge is not enabled for this page");
+                return;
+            }
+
+            WebViewDialog.this.takeScreenshot(
+                new ScreenshotResultCallback() {
+                    @Override
+                    public void onSuccess(JSObject screenshot) {
+                        resolveJavaScriptScreenshot(requestId, screenshot);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        rejectJavaScriptScreenshot(requestId, message);
+                    }
+                }
+            );
+        }
+
+        @JavascriptInterface
+        public void handleBlobDownload(String payload) {
+            if (_options == null || !_options.getHandleDownloads()) {
+                return;
+            }
+
+            executorService.execute(() -> {
+                try {
+                    JSONObject jsonPayload = parseBridgePayload(payload, "Blob download payload is missing");
+                    String base64 = jsonPayload.optString("base64", "");
+                    if (TextUtils.isEmpty(base64)) {
+                        throw new IOException("Blob download payload is empty");
+                    }
+
+                    long declaredSize = jsonPayload.optLong("size", -1L);
+                    long estimatedSize = estimateDecodedByteCount(base64);
+                    long decodedSize = declaredSize >= 0 ? Math.max(declaredSize, estimatedSize) : estimatedSize;
+                    if (decodedSize > MAX_LEGACY_BLOB_DOWNLOAD_BYTES) {
+                        throw new IOException("Blob download is too large for the legacy bridge");
+                    }
+
+                    String fileName = sanitizeFileName(jsonPayload.optString("fileName", "download"));
+                    String sourceUrl = jsonPayload.optString("sourceUrl", null);
+                    String mimeType = normalizeMimeType(jsonPayload.optString("mimeType", null), fileName);
+                    File outputFile = null;
+
+                    try {
+                        outputFile = createDownloadFile(fileName);
+                        try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
+                            outputStream.write(Base64.decode(base64, Base64.DEFAULT));
+                        }
+
+                        finalizeDownload(outputFile, mimeType, sourceUrl);
+                    } catch (Exception innerException) {
+                        if (outputFile != null && outputFile.exists() && !outputFile.delete()) {
+                            outputFile.deleteOnExit();
+                        }
+                        throw innerException;
+                    }
+                } catch (Exception exception) {
+                    showDownloadError("Failed to save blob download", exception);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void startBlobDownload(String payload) {
+            if (_options == null || !_options.getHandleDownloads()) {
+                return;
+            }
+
+            try {
+                JSONObject jsonPayload = parseBridgePayload(payload, "Blob download start payload is missing");
+                String sessionId = jsonPayload.optString("sessionId", "");
+                if (TextUtils.isEmpty(sessionId)) {
+                    throw new IOException("Blob download session id is missing");
+                }
+
+                String fileName = sanitizeFileName(jsonPayload.optString("fileName", "download"));
+                String sourceUrl = jsonPayload.optString("sourceUrl", null);
+                String mimeType = normalizeMimeType(jsonPayload.optString("mimeType", null), fileName);
+                long expectedSize = jsonPayload.optLong("size", -1L);
+                File outputFile = createDownloadFile(fileName);
+                BlobDownloadSession session = new BlobDownloadSession(
+                    outputFile,
+                    sourceUrl,
+                    mimeType,
+                    new FileOutputStream(outputFile),
+                    expectedSize
+                );
+
+                BlobDownloadSession existingSession = blobDownloadSessions.putIfAbsent(sessionId, session);
+                if (existingSession != null) {
+                    cleanupBlobDownloadSession(session, true);
+                    throw new IOException("Blob download session already exists");
+                }
+            } catch (Exception exception) {
+                showDownloadError("Failed to start blob download", exception);
+            }
+        }
+
+        @JavascriptInterface
+        public void appendBlobDownloadChunk(String payload) {
+            if (_options == null || !_options.getHandleDownloads()) {
+                return;
+            }
+
+            String sessionId = null;
+            try {
+                JSONObject jsonPayload = parseBridgePayload(payload, "Blob download chunk payload is missing");
+                sessionId = jsonPayload.optString("sessionId", "");
+                if (TextUtils.isEmpty(sessionId)) {
+                    throw new IOException("Blob download session id is missing");
+                }
+
+                String base64 = jsonPayload.optString("base64", "");
+                if (TextUtils.isEmpty(base64)) {
+                    return;
+                }
+
+                BlobDownloadSession session = blobDownloadSessions.get(sessionId);
+                if (session == null) {
+                    Log.w("InAppBrowser", "Ignoring chunk for missing or aborted blob session: " + sessionId);
+                    return;
+                }
+
+                byte[] chunkBytes = Base64.decode(base64, Base64.DEFAULT);
+                synchronized (session) {
+                    session.outputStream.write(chunkBytes);
+                    session.bytesWritten += chunkBytes.length;
+                    if (session.expectedSize >= 0 && session.bytesWritten > session.expectedSize) {
+                        throw new IOException("Blob download exceeded expected size");
+                    }
+                }
+            } catch (Exception exception) {
+                abortBlobDownloadSession(sessionId, true);
+                showDownloadError("Failed to save blob download", exception);
+            }
+        }
+
+        @JavascriptInterface
+        public void finishBlobDownload(String payload) {
+            if (_options == null || !_options.getHandleDownloads()) {
+                return;
+            }
+
+            String sessionId = null;
+            try {
+                JSONObject jsonPayload = parseBridgePayload(payload, "Blob download completion payload is missing");
+                sessionId = jsonPayload.optString("sessionId", "");
+                if (TextUtils.isEmpty(sessionId)) {
+                    throw new IOException("Blob download session id is missing");
+                }
+
+                BlobDownloadSession session = blobDownloadSessions.get(sessionId);
+                if (session == null) {
+                    throw new IOException("Blob download session was not initialized");
+                }
+
+                synchronized (session) {
+                    session.outputStream.flush();
+                    session.outputStream.close();
+                }
+
+                if (session.expectedSize >= 0 && session.bytesWritten != session.expectedSize) {
+                    throw new IOException(
+                        "Blob download size mismatch for " +
+                            session.outputFile.getName() +
+                            ": expected " +
+                            session.expectedSize +
+                            ", wrote " +
+                            session.bytesWritten
+                    );
+                }
+
+                finalizeDownload(session.outputFile, session.mimeType, session.sourceUrl);
+                blobDownloadSessions.remove(sessionId);
+            } catch (Exception exception) {
+                abortBlobDownloadSession(sessionId, true);
+                showDownloadError("Failed to finalize blob download", exception);
+            }
+        }
+
+        @JavascriptInterface
+        public void abortBlobDownload(String payload) {
+            if (_options == null || !_options.getHandleDownloads()) {
+                return;
+            }
+
+            String sessionId = null;
+            String reason = "Blob download aborted";
+            String sourceUrl = null;
+            String fileName = null;
+            String mimeType = null;
+            try {
+                JSONObject jsonPayload = parseBridgePayload(payload, "Blob download abort payload is missing");
+                sessionId = jsonPayload.optString("sessionId", "");
+                if (!TextUtils.isEmpty(jsonPayload.optString("reason", ""))) {
+                    reason = jsonPayload.optString("reason", reason);
+                }
+                sourceUrl = jsonPayload.optString("sourceUrl", null);
+                fileName = jsonPayload.optString("fileName", null);
+                mimeType = jsonPayload.optString("mimeType", null);
+            } catch (Exception ignored) {}
+
+            BlobDownloadSession session = abortBlobDownloadSession(sessionId, true);
+            notifyDownloadFailed(
+                session != null ? session.sourceUrl : sourceUrl,
+                session != null ? session.outputFile.getName() : fileName,
+                session != null ? session.mimeType : mimeType,
+                reason
+            );
+            Log.w("InAppBrowser", reason);
+        }
+    }
+
+    public interface ScreenshotResultCallback {
+        void onSuccess(JSObject screenshot);
+
+        void onError(String message);
+    }
+
+    private boolean isJavaScriptControlAllowed() {
+        return _options != null && _options.getAllowWebViewJsVisibilityControl();
+    }
+
+    /**
+     * Checks if the given HTTP method supports a request body.
+     * @param method The HTTP method to check
+     * @return true if the method supports a body (POST, PUT, PATCH), false otherwise
+     */
+    private boolean supportsRequestBody(String method) {
+        if (method == null) {
+            return false;
+        }
+        String upperMethod = method.toUpperCase();
+        return upperMethod.equals("POST") || upperMethod.equals("PUT") || upperMethod.equals("PATCH");
+    }
+
+    private String sanitizeFileName(String fileName) {
+        if (TextUtils.isEmpty(fileName)) {
+            return "download";
+        }
+
+        String sanitized = fileName.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return sanitized.isEmpty() ? "download" : sanitized;
+    }
+
+    private String fileExtension(String fileName) {
+        int lastDotIndex = fileName.lastIndexOf('.');
+        if (lastDotIndex < 0 || lastDotIndex == fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(lastDotIndex + 1).toLowerCase();
+    }
+
+    private String normalizeMimeType(String mimeType, String fileName) {
+        if (!TextUtils.isEmpty(mimeType)) {
+            String normalized = mimeType.split(";")[0].trim().toLowerCase();
+            if (!TextUtils.isEmpty(normalized)) {
+                return normalized;
+            }
+        }
+
+        String guessedType = URLConnection.guessContentTypeFromName(fileName);
+        if (!TextUtils.isEmpty(guessedType)) {
+            return guessedType.toLowerCase();
+        }
+
+        String extension = fileExtension(fileName);
+        if ("pdf".equals(extension)) {
+            return "application/pdf";
+        }
+        if ("json".equals(extension)) {
+            return "application/json";
+        }
+
+        return "application/octet-stream";
+    }
+
+    private boolean isTextPreviewMimeType(String mimeType) {
+        if (TextUtils.isEmpty(mimeType)) {
+            return false;
+        }
+
+        return (
+            mimeType.startsWith("text/") ||
+            "application/json".equals(mimeType) ||
+            "application/javascript".equals(mimeType) ||
+            "application/xhtml+xml".equals(mimeType) ||
+            "image/svg+xml".equals(mimeType)
+        );
+    }
+
+    private File downloadDirectory() throws IOException {
+        File directory = new File(_context.getCacheDir(), "inappbrowser-downloads");
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IOException("Could not create download directory");
+        }
+        return directory;
+    }
+
+    private File createDownloadFile(String fileName) throws IOException {
+        String sanitizedFileName = sanitizeFileName(fileName);
+        String extension = fileExtension(sanitizedFileName);
+        String baseName = extension.isEmpty()
+            ? sanitizedFileName
+            : sanitizedFileName.substring(0, sanitizedFileName.length() - extension.length() - 1);
+        File directory = downloadDirectory();
+
+        int duplicateIndex = 0;
+        while (true) {
+            String candidateName =
+                duplicateIndex == 0
+                    ? sanitizedFileName
+                    : extension.isEmpty()
+                        ? baseName + "-" + duplicateIndex
+                        : baseName + "-" + duplicateIndex + "." + extension;
+            File candidate = new File(directory, candidateName);
+            if (candidate.createNewFile()) {
+                return candidate;
+            }
+            duplicateIndex++;
+        }
+    }
+
+    private String readUtf8File(File file) throws IOException {
+        try (FileInputStream inputStream = new FileInputStream(file); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return new String(outputStream.toByteArray(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private long estimateDecodedByteCount(String base64) {
+        if (TextUtils.isEmpty(base64)) {
+            return 0L;
+        }
+
+        int padding = 0;
+        int length = base64.length();
+        if (length > 0 && base64.charAt(length - 1) == '=') {
+            padding++;
+        }
+        if (length > 1 && base64.charAt(length - 2) == '=') {
+            padding++;
+        }
+        return ((long) length * 3L) / 4L - padding;
+    }
+
+    private JSONObject parseBridgePayload(String payload, String errorMessage) throws JSONException {
+        if (TextUtils.isEmpty(payload)) {
+            throw new JSONException(errorMessage);
+        }
+        return new JSONObject(payload);
+    }
+
+    private void cleanupBlobDownloadSession(BlobDownloadSession session, boolean deleteFile) {
+        if (session == null) {
+            return;
+        }
+
+        synchronized (session) {
+            try {
+                session.outputStream.close();
+            } catch (IOException ignored) {}
+        }
+
+        if (deleteFile && session.outputFile.exists() && !session.outputFile.delete()) {
+            session.outputFile.deleteOnExit();
+        }
+    }
+
+    private BlobDownloadSession abortBlobDownloadSession(String sessionId, boolean deleteFile) {
+        if (TextUtils.isEmpty(sessionId)) {
+            return null;
+        }
+
+        BlobDownloadSession session = blobDownloadSessions.remove(sessionId);
+        cleanupBlobDownloadSession(session, deleteFile);
+        return session;
+    }
+
+    private String textPreviewHtml(File file, String bodyText) {
+        String fileName = TextUtils.htmlEncode(file.getName());
+        String escapedBody = TextUtils.htmlEncode(bodyText);
+
+        return String.format(
+            """
+            <!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>%s</title>
+                <style>
+                  body {
+                    margin: 0;
+                    min-height: 100vh;
+                    padding: 24px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                    background: linear-gradient(180deg, #f8fafc 0%%, #e2e8f0 100%%);
+                    color: #0f172a;
+                  }
+                  main {
+                    max-width: 720px;
+                    margin: 0 auto;
+                    background: rgba(255, 255, 255, 0.94);
+                    border-radius: 20px;
+                    padding: 24px;
+                    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.12);
+                  }
+                  h1 {
+                    margin: 0 0 16px;
+                    font-size: 1.2rem;
+                  }
+                  pre {
+                    margin: 0;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                  }
+                </style>
+              </head>
+              <body>
+                <main>
+                  <h1>%s</h1>
+                  <pre>%s</pre>
+                </main>
+              </body>
+            </html>
+            """,
+            fileName,
+            fileName,
+            escapedBody
+        );
+    }
+
+    private void notifyDownloadCompleted(File file, String mimeType, String sourceUrl, String handledBy) {
+        if (_options == null || _options.getCallbacks() == null) {
+            return;
+        }
+
+        _options
+            .getCallbacks()
+            .downloadCompleted(sourceUrl, file.getName(), mimeType, file.getAbsolutePath(), Uri.fromFile(file).toString(), handledBy);
+    }
+
+    private void notifyDownloadFailed(String sourceUrl, String fileName, String mimeType, String error) {
+        if (_options == null || _options.getCallbacks() == null) {
+            return;
+        }
+
+        _options.getCallbacks().downloadFailed(sourceUrl, fileName, mimeType, error);
+    }
+
+    private String downloadErrorMessage(String message, Exception exception) {
+        if (exception == null || TextUtils.isEmpty(exception.getMessage())) {
+            return message;
+        }
+        return message + ": " + exception.getMessage();
+    }
+
+    private int normalizedPort(String scheme, int port) {
+        if (port >= 0) {
+            return port;
+        }
+        if ("https".equalsIgnoreCase(scheme)) {
+            return 443;
+        }
+        if ("http".equalsIgnoreCase(scheme)) {
+            return 80;
+        }
+        return -1;
+    }
+
+    private String clientCertificateIdentityKey(String host, int port, String scheme) {
+        if (TextUtils.isEmpty(host)) {
+            return null;
+        }
+        return host.toLowerCase(Locale.ROOT) + ":" + normalizedPort(scheme, port);
+    }
+
+    private String clientCertificateIdentityKey(URL url) {
+        if (url == null) {
+            return null;
+        }
+        return clientCertificateIdentityKey(url.getHost(), url.getPort(), url.getProtocol());
+    }
+
+    private boolean isSameOrigin(String firstUrl, String secondUrl) {
+        if (TextUtils.isEmpty(firstUrl) || TextUtils.isEmpty(secondUrl)) {
+            return false;
+        }
+
+        try {
+            URI firstUri = new URI(firstUrl);
+            URI secondUri = new URI(secondUrl);
+            String firstHost = firstUri.getHost();
+            String secondHost = secondUri.getHost();
+            if (firstHost == null || secondHost == null) {
+                return false;
+            }
+
+            return (
+                Objects.equals(firstUri.getScheme(), secondUri.getScheme()) &&
+                firstHost.equalsIgnoreCase(secondHost) &&
+                normalizedPort(firstUri.getScheme(), firstUri.getPort()) == normalizedPort(secondUri.getScheme(), secondUri.getPort())
+            );
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean shouldBlockManagedDownload(String url) {
+        if (_options == null) {
+            return false;
+        }
+
+        return shouldBlockHost(url, _options.getBlockedHosts());
+    }
+
+    private boolean shouldBlockHost(String url, List<String> blockedHosts) {
+        Uri uri = Uri.parse(url);
+        String host = uri.getHost();
+
+        if (host == null || host.isEmpty()) {
+            return false;
+        }
+
+        if (blockedHosts == null || blockedHosts.isEmpty()) {
+            return false;
+        }
+
+        String normalizedHost = host.toLowerCase(Locale.US);
+        for (String blockPattern : blockedHosts) {
+            if (blockPattern != null && matchesBlockPattern(normalizedHost, blockPattern.toLowerCase(Locale.US))) {
+                Log.d("InAppBrowser", "Blocked managed download host detected: " + host);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean matchesBlockPattern(String host, String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return false;
+        }
+
+        if (host.equals(pattern)) {
+            return true;
+        }
+
+        if (!pattern.contains("*")) {
+            return false;
+        }
+
+        if (pattern.startsWith("*.")) {
+            return matchesWildcardDomain(host, pattern);
+        } else if (pattern.contains("*")) {
+            return matchesRegexPattern(host, pattern);
+        }
+
+        return false;
+    }
+
+    private boolean matchesWildcardDomain(String host, String pattern) {
+        String domain = pattern.substring(2);
+        if (domain.isEmpty()) {
+            return false;
+        }
+
+        return host.equals(domain) || host.endsWith("." + domain);
+    }
+
+    private boolean matchesRegexPattern(String host, String pattern) {
+        try {
+            String escapedPattern = pattern
+                .replace("\\", "\\\\")
+                .replace(".", "\\.")
+                .replace("+", "\\+")
+                .replace("?", "\\?")
+                .replace("^", "\\^")
+                .replace("$", "\\$")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace("|", "\\|");
+            String regexPattern = "^" + escapedPattern.replace("*", ".*") + "$";
+            return Pattern.matches(regexPattern, host);
+        } catch (Exception exception) {
+            Log.e("InAppBrowser", "Invalid blocked host pattern '" + pattern + "': " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private boolean shouldForwardCustomDownloadHeader(String headerKey) {
+        if (TextUtils.isEmpty(headerKey)) {
+            return false;
+        }
+
+        return !("cookie".equalsIgnoreCase(headerKey) || "proxy-authorization".equalsIgnoreCase(headerKey));
+    }
+
+    private String redactUrlForLogging(String rawUrl) {
+        if (TextUtils.isEmpty(rawUrl)) {
+            return rawUrl;
+        }
+
+        try {
+            Uri parsedUrl = Uri.parse(rawUrl);
+            return parsedUrl.buildUpon().encodedQuery(null).encodedFragment(null).build().toString();
+        } catch (Exception exception) {
+            return rawUrl;
+        }
+    }
+
+    private void configureDownloadTlsIfNeeded(HttpURLConnection connection, URL downloadUrl) throws Exception {
+        if (!(connection instanceof HttpsURLConnection)) {
+            return;
+        }
+
+        ClientCertificateIdentity clientCertificateIdentity = clientCertificateIdentities.get(clientCertificateIdentityKey(downloadUrl));
+        boolean ignoreUntrustedSslError = _options != null && _options.ignoreUntrustedSSLError();
+        if (clientCertificateIdentity == null && !ignoreUntrustedSslError) {
+            return;
+        }
+
+        KeyManager[] keyManagers =
+            clientCertificateIdentity != null ? new KeyManager[] { new FixedClientCertificateKeyManager(clientCertificateIdentity) } : null;
+
+        X509TrustManager defaultTrustManager = ignoreUntrustedSslError ? createDefaultTrustManager() : null;
+        TrustManager[] trustManagers = ignoreUntrustedSslError
+            ? new TrustManager[] {
+                  new X509TrustManager() {
+                      @Override
+                      public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                          defaultTrustManager.checkClientTrusted(chain, authType);
+                      }
+
+                      @Override
+                      public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                          try {
+                              defaultTrustManager.checkServerTrusted(chain, authType);
+                          } catch (CertificateException certificateException) {
+                              if (!shouldBypassDownloadTrustFailure(certificateException, chain)) {
+                                  throw certificateException;
+                              }
+                              Log.w(
+                                  "InAppBrowser",
+                                  "Ignoring untrusted download certificate for " + redactUrlForLogging(downloadUrl.toString())
+                              );
+                          }
+                      }
+
+                      @Override
+                      public X509Certificate[] getAcceptedIssuers() {
+                          return defaultTrustManager.getAcceptedIssuers();
+                      }
+                  }
+              }
+            : null;
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(keyManagers, trustManagers, new SecureRandom());
+
+        HttpsURLConnection secureConnection = (HttpsURLConnection) connection;
+        secureConnection.setSSLSocketFactory(sslContext.getSocketFactory());
+    }
+
+    private X509TrustManager createDefaultTrustManager() throws GeneralSecurityException {
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init((java.security.KeyStore) null);
+        for (TrustManager trustManager : trustManagerFactory.getTrustManagers()) {
+            if (trustManager instanceof X509TrustManager) {
+                return (X509TrustManager) trustManager;
+            }
+        }
+        throw new GeneralSecurityException("No default X509TrustManager available");
+    }
+
+    private boolean shouldBypassDownloadTrustFailure(CertificateException certificateException, X509Certificate[] chain) {
+        return areCertificatesCurrentlyValid(chain) && isUntrustedIssuerFailure(certificateException);
+    }
+
+    private boolean areCertificatesCurrentlyValid(X509Certificate[] chain) {
+        if (chain == null || chain.length == 0) {
+            return false;
+        }
+
+        for (X509Certificate certificate : chain) {
+            if (certificate == null) {
+                return false;
+            }
+
+            try {
+                certificate.checkValidity();
+            } catch (CertificateExpiredException | CertificateNotYetValidException certificateValidityException) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isUntrustedIssuerFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof CertificateExpiredException || current instanceof CertificateNotYetValidException) {
+                return false;
+            }
+            if (current instanceof CertPathValidatorException) {
+                CertPathValidatorException validatorException = (CertPathValidatorException) current;
+                CertPathValidatorException.Reason reason = validatorException.getReason();
+                if (
+                    reason == CertPathValidatorException.BasicReason.EXPIRED ||
+                    reason == CertPathValidatorException.BasicReason.NOT_YET_VALID ||
+                    reason == CertPathValidatorException.BasicReason.REVOKED ||
+                    reason == CertPathValidatorException.BasicReason.INVALID_SIGNATURE ||
+                    reason == CertPathValidatorException.BasicReason.ALGORITHM_CONSTRAINED
+                ) {
+                    return false;
+                }
+            }
+
+            String message = current.getMessage();
+            if (!TextUtils.isEmpty(message)) {
+                String normalizedMessage = message.toLowerCase(Locale.US);
+                if (
+                    normalizedMessage.contains("trust anchor for certification path not found") ||
+                    normalizedMessage.contains("unable to find valid certification path") ||
+                    normalizedMessage.contains("trust anchor")
+                ) {
+                    return true;
+                }
+                if (
+                    normalizedMessage.contains("certificate expired") ||
+                    normalizedMessage.contains("not yet valid") ||
+                    normalizedMessage.contains("certificate revoked") ||
+                    normalizedMessage.contains("revoked")
+                ) {
+                    return false;
+                }
+            }
+
+            current = current.getCause();
+        }
+
+        return false;
+    }
+
+    private void previewDownloadedFileInWebView(File file, String mimeType, String sourceUrl) {
+        WebView webView = _webView;
+        if (webView == null || isDismissing) {
+            openDownloadedFile(file, mimeType, sourceUrl);
+            return;
+        }
+
+        if (!isTextPreviewMimeType(mimeType)) {
+            openDownloadedFile(file, mimeType, sourceUrl);
+            return;
+        }
+
+        if (file.length() > MAX_INLINE_TEXT_PREVIEW_BYTES) {
+            Log.i("InAppBrowser", "Opening large text download externally: " + file.getName());
+            openDownloadedFile(file, mimeType, sourceUrl);
+            return;
+        }
+
+        executorService.execute(() -> {
+            try {
+                String previewHtml = textPreviewHtml(file, readUtf8File(file));
+                mainHandler.post(() -> {
+                    if (isDismissing || _webView == null || _webView != webView) {
+                        openDownloadedFile(file, mimeType, sourceUrl);
+                        return;
+                    }
+
+                    webView.loadDataWithBaseURL("https://download-preview.local/", previewHtml, "text/html", "utf-8", null);
+                    notifyDownloadCompleted(file, mimeType, sourceUrl, "inAppBrowser");
+                });
+            } catch (IOException ioException) {
+                showDownloadError("Failed to preview downloaded text file", ioException, sourceUrl, file.getName(), mimeType);
+            }
+        });
+    }
+
+    private void openDownloadedFile(File file, String mimeType, String sourceUrl) {
+        try {
+            Uri fileUri = FileProvider.getUriForFile(_context, _context.getPackageName() + ".fileprovider", file);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(fileUri, mimeType);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            _context.startActivity(intent);
+            notifyDownloadCompleted(file, mimeType, sourceUrl, "external");
+        } catch (ActivityNotFoundException activityNotFoundException) {
+            showDownloadError("No app can open " + file.getName(), activityNotFoundException, sourceUrl, file.getName(), mimeType);
+        } catch (Exception exception) {
+            showDownloadError("Failed to open " + file.getName(), exception, sourceUrl, file.getName(), mimeType);
+        }
+    }
+
+    private void finalizeDownload(File outputFile, String mimeType, String sourceUrl) {
+        mainHandler.post(() -> {
+            if (isTextPreviewMimeType(mimeType) && _webView != null) {
+                previewDownloadedFileInWebView(outputFile, mimeType, sourceUrl);
+                return;
+            }
+
+            openDownloadedFile(outputFile, mimeType, sourceUrl);
+        });
+    }
+
+    private void showDownloadError(String message, Exception exception) {
+        showDownloadError(message, exception, null, null, null);
+    }
+
+    private void showDownloadError(String message, Exception exception, String sourceUrl, String fileName, String mimeType) {
+        Log.e("InAppBrowser", message, exception);
+        notifyDownloadFailed(sourceUrl, fileName, mimeType, downloadErrorMessage(message, exception));
+        mainHandler.post(() -> Toast.makeText(_context, message, Toast.LENGTH_SHORT).show());
+    }
+
+    private String currentManagedDownloadPageUrl() {
+        if (_webView != null && !TextUtils.isEmpty(_webView.getUrl())) {
+            return _webView.getUrl();
+        }
+
+        return _options != null ? _options.getUrl() : null;
+    }
+
+    private HttpURLConnection openManagedDownloadConnection(String url, String userAgent, String pageUrl) throws Exception {
+        URL downloadUrl = new URL(url);
+        HttpURLConnection connection = (HttpURLConnection) downloadUrl.openConnection();
+        configureDownloadTlsIfNeeded(connection, downloadUrl);
+        connection.setConnectTimeout(REQUEST_CONNECT_TIMEOUT_MS);
+        connection.setReadTimeout(REQUEST_READ_TIMEOUT_MS);
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("Accept", "*/*");
+
+        if (!TextUtils.isEmpty(userAgent)) {
+            connection.setRequestProperty("User-Agent", userAgent);
+        }
+
+        String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
+        if (!TextUtils.isEmpty(cookie)) {
+            connection.setRequestProperty("Cookie", cookie);
+        }
+
+        if (!TextUtils.isEmpty(pageUrl)) {
+            connection.setRequestProperty("Referer", pageUrl);
+        }
+
+        if (_options != null && _options.getHeaders() != null) {
+            if (isSameOrigin(pageUrl, url)) {
+                Iterator<String> headerKeys = _options.getHeaders().keys();
+                while (headerKeys.hasNext()) {
+                    String headerKey = headerKeys.next();
+                    if (!shouldForwardCustomDownloadHeader(headerKey)) {
+                        continue;
+                    }
+
+                    String headerValue = _options.getHeaders().getString(headerKey);
+                    if (!TextUtils.isEmpty(headerValue)) {
+                        connection.setRequestProperty(headerKey, headerValue);
+                    }
+                }
+            } else {
+                Log.w("InAppBrowser", "Skipping custom headers for cross-origin download: " + redactUrlForLogging(url));
+            }
+        }
+
+        return connection;
+    }
+
+    private boolean isManagedDownloadRedirect(int responseCode) {
+        return (
+            responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+            responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+            responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
+            responseCode == 307 ||
+            responseCode == 308
+        );
+    }
+
+    private String resolveManagedDownloadRedirectUrl(HttpURLConnection connection) throws IOException {
+        String location = connection.getHeaderField("Location");
+        if (TextUtils.isEmpty(location)) {
+            throw new IOException("Managed download redirect missing Location header");
+        }
+
+        return new URL(connection.getURL(), location).toString();
+    }
+
+    private void persistManagedDownloadResponseCookies(HttpURLConnection connection, String requestUrl) {
+        if (connection == null || TextUtils.isEmpty(requestUrl)) {
+            return;
+        }
+
+        ProxyRequestSupport.ParsedResponseHeaders parsedHeaders = ProxyRequestSupport.splitResponseHeaders(connection.getHeaderFields());
+        applyResponseCookies(requestUrl, parsedHeaders.cookieHeaders());
+    }
+
+    private void downloadUrlToFile(String url, String userAgent, String contentDisposition, String mimeType) {
+        // WebView methods must run on the main thread; capture the page URL before the background download starts.
+        final String pageUrl = currentManagedDownloadPageUrl();
+        executorService.execute(() -> {
+            HttpURLConnection connection = null;
+            InputStream inputStream = null;
+            File outputFile = null;
+            boolean downloadSucceeded = false;
+
+            try {
+                String currentUrl = url;
+                int redirectsFollowed = 0;
+                while (true) {
+                    if (shouldBlockManagedDownload(currentUrl)) {
+                        throw new SecurityException("Download blocked for URL: " + redactUrlForLogging(currentUrl));
+                    }
+
+                    connection = openManagedDownloadConnection(currentUrl, userAgent, pageUrl);
+                    connection.connect();
+
+                    int responseCode = connection.getResponseCode();
+                    persistManagedDownloadResponseCookies(connection, currentUrl);
+                    if (!isManagedDownloadRedirect(responseCode)) {
+                        break;
+                    }
+
+                    if (redirectsFollowed >= MAX_MANAGED_DOWNLOAD_REDIRECTS) {
+                        throw new IOException("Too many managed download redirects for: " + redactUrlForLogging(url));
+                    }
+
+                    String redirectUrl = resolveManagedDownloadRedirectUrl(connection);
+                    if (shouldBlockManagedDownload(redirectUrl)) {
+                        throw new SecurityException("Download blocked for URL: " + redactUrlForLogging(redirectUrl));
+                    }
+
+                    connection.disconnect();
+                    connection = null;
+                    currentUrl = redirectUrl;
+                    redirectsFollowed++;
+                }
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode < 200 || responseCode >= 300) {
+                    String responseMessage = connection.getResponseMessage();
+                    throw new IOException(
+                        "Download request failed with HTTP " +
+                            responseCode +
+                            (TextUtils.isEmpty(responseMessage) ? "" : " " + responseMessage)
+                    );
+                }
+
+                String resolvedDisposition = connection.getHeaderField("Content-Disposition");
+                if (TextUtils.isEmpty(resolvedDisposition)) {
+                    resolvedDisposition = contentDisposition;
+                }
+
+                String provisionalMimeType = connection.getContentType();
+                if (TextUtils.isEmpty(provisionalMimeType)) {
+                    provisionalMimeType = mimeType;
+                }
+
+                String fileName = URLUtil.guessFileName(connection.getURL().toString(), resolvedDisposition, provisionalMimeType);
+                String resolvedMimeType = normalizeMimeType(provisionalMimeType, fileName);
+                outputFile = createDownloadFile(fileName);
+
+                inputStream = connection.getInputStream();
+                try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+
+                finalizeDownload(outputFile, resolvedMimeType, url);
+                downloadSucceeded = true;
+            } catch (Exception exception) {
+                showDownloadError("Failed to download file", exception, url, null, mimeType);
+            } finally {
+                if (inputStream != null) {
+                    try {
+                        inputStream.close();
+                    } catch (IOException ignored) {}
+                }
+                if (connection != null) {
+                    connection.disconnect();
+                }
+                if (!downloadSucceeded && outputFile != null && outputFile.exists() && !outputFile.delete()) {
+                    outputFile.deleteOnExit();
+                }
+            }
+        });
+    }
+
+    private void handleBlobDownloadFromPage(String blobUrl, String mimeType, String contentDisposition) {
+        if (_webView == null) {
+            showDownloadError(
+                "Blob download requires an active WebView",
+                new IllegalStateException("WebView not initialized"),
+                blobUrl,
+                null,
+                mimeType
+            );
+            return;
+        }
+
+        String fallbackMimeType = normalizeMimeType(mimeType, "download");
+        String fallbackFileName = URLUtil.guessFileName("download", contentDisposition, fallbackMimeType);
+        String script = String.format(
+            """
+            (() => {
+              const blobUrl = %s;
+              const fallbackMimeType = %s;
+              const fallbackFileName = %s;
+              const legacyMaxBytes = %d;
+              const chunkSize = %d;
+              const matchingLink = Array.from(document.querySelectorAll('a[download]')).find(link => link.href === blobUrl);
+              const bridge = (window.mobileApp && window.mobileApp.startBlobDownload && window.mobileApp.appendBlobDownloadChunk && window.mobileApp.finishBlobDownload)
+                ? window.mobileApp
+                : (window.AndroidInterface && window.AndroidInterface.startBlobDownload && window.AndroidInterface.appendBlobDownloadChunk && window.AndroidInterface.finishBlobDownload)
+                  ? window.AndroidInterface
+                  : (window.mobileApp && window.mobileApp.handleBlobDownload)
+                    ? window.mobileApp
+                    : (window.AndroidInterface && window.AndroidInterface.handleBlobDownload)
+                      ? window.AndroidInterface
+                      : null;
+              const sessionId = `blob-download-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+              let fileName = fallbackFileName;
+              const readChunkAsBase64 = chunk => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                  const dataUrl = reader.result || '';
+                  resolve(String(dataUrl).split(',').pop() || '');
+                };
+                reader.onerror = function() {
+                  reject(reader.error || new Error('Failed to read blob chunk'));
+                };
+                reader.readAsDataURL(chunk);
+              });
+
+              return (async function() {
+                if (!bridge) {
+                  throw new Error('Blob download bridge is not available');
+                }
+
+                const response = await fetch(blobUrl);
+                const blob = await response.blob();
+                fileName = (matchingLink && matchingLink.getAttribute('download')) || fallbackFileName;
+
+                if (bridge.startBlobDownload && bridge.appendBlobDownloadChunk && bridge.finishBlobDownload) {
+                  bridge.startBlobDownload(JSON.stringify({
+                    sessionId,
+                    fileName,
+                    sourceUrl: blobUrl,
+                    mimeType: blob.type || fallbackMimeType,
+                    size: blob.size
+                  }));
+                  for (let offset = 0; offset < blob.size; offset += chunkSize) {
+                    const base64 = await readChunkAsBase64(blob.slice(offset, offset + chunkSize));
+                    bridge.appendBlobDownloadChunk(JSON.stringify({ sessionId, base64 }));
+                  }
+                  bridge.finishBlobDownload(JSON.stringify({ sessionId }));
+                  return;
+                }
+
+                if (blob.size > legacyMaxBytes) {
+                  throw new Error('Blob download is too large for the legacy bridge');
+                }
+
+                const base64 = await readChunkAsBase64(blob);
+                bridge.handleBlobDownload(JSON.stringify({
+                  fileName,
+                  sourceUrl: blobUrl,
+                  mimeType: blob.type || fallbackMimeType,
+                  size: blob.size,
+                  base64
+                }));
+              })().catch(error => {
+              if (bridge && bridge.abortBlobDownload) {
+                bridge.abortBlobDownload(JSON.stringify({
+                  sessionId,
+                  fileName,
+                  sourceUrl: blobUrl,
+                  mimeType: fallbackMimeType,
+                  reason: String((error && error.message) || error || 'Blob download failed')
+                }));
+              }
+              console.error('Failed to capture blob download', error);
+            });
+            })();
+            """,
+            JSONObject.quote(blobUrl),
+            JSONObject.quote(fallbackMimeType),
+            JSONObject.quote(fallbackFileName),
+            MAX_LEGACY_BLOB_DOWNLOAD_BYTES,
+            BLOB_DOWNLOAD_CHUNK_BYTES
+        );
+
+        final WebView webView = _webView;
+        webView.post(() -> {
+            if (isDismissing || _webView == null || _webView != webView) {
+                Log.w("InAppBrowser", "Skipping blob download bridge dispatch because the WebView is no longer available");
+                return;
+            }
+
+            webView.evaluateJavascript(script, null);
+        });
+    }
+
+    private void handleDownloadRequest(String url, String userAgent, String contentDisposition, String mimeType) {
+        if (_options == null || !_options.getHandleDownloads() || TextUtils.isEmpty(url)) {
+            return;
+        }
+
+        if (shouldBlockManagedDownload(url)) {
+            showDownloadError(
+                "Blocked download URL",
+                new SecurityException("Download blocked for URL: " + redactUrlForLogging(url)),
+                url,
+                null,
+                mimeType
+            );
+            return;
+        }
+
+        if (url.startsWith("blob:")) {
+            handleBlobDownloadFromPage(url, mimeType, contentDisposition);
+            return;
+        }
+
+        downloadUrlToFile(url, userAgent, contentDisposition, mimeType);
+    }
+
+    public class PreShowScriptInterface {
+
+        @JavascriptInterface
+        public void error(String error) {
+            try {
+                // Handle message from JavaScript
+                if (preShowSemaphore != null) {
+                    preShowError = error;
+                    preShowSemaphore.release();
+                }
+            } catch (Exception e) {
+                Log.e("InAppBrowser", "Error in error callback: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public void success() {
+            try {
+                // Handle message from JavaScript
+                if (preShowSemaphore != null) {
+                    preShowSemaphore.release();
+                }
+            } catch (Exception e) {
+                Log.e("InAppBrowser", "Error in success callback: " + e.getMessage());
+            }
+        }
+    }
+
+    public class PrintInterface {
+
+        private Context context;
+        private WebView webView;
+
+        public PrintInterface(Context context, WebView webView) {
+            this.context = context;
+            this.webView = webView;
+        }
+
+        @JavascriptInterface
+        public void print() {
+            // Run on UI thread since printing requires UI operations
+            ((Activity) context).runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        // Create a print job from the WebView content
+                        PrintManager printManager = (PrintManager) context.getSystemService(Context.PRINT_SERVICE);
+                        String jobName = "Document_" + System.currentTimeMillis();
+
+                        PrintDocumentAdapter printAdapter;
+
+                        // For API 21+ (Lollipop and above)
+                        printAdapter = webView.createPrintDocumentAdapter(jobName);
+
+                        printManager.print(jobName, printAdapter, new PrintAttributes.Builder().build());
+                    }
+                }
+            );
+        }
+    }
+
+    @SuppressLint({ "SetJavaScriptEnabled", "AddJavascriptInterface" })
+    public void presentWebView() {
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        setCancelable(true);
+        Objects.requireNonNull(getWindow()).setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        );
+        setContentView(R.layout.activity_browser);
+
+        // If custom dimensions are set, configure for touch passthrough
+        if (_options != null && (_options.getWidth() != null || _options.getHeight() != null)) {
+            Window window = getWindow();
+            if (window != null) {
+                // Make the dialog background transparent
+                window.setBackgroundDrawableResource(android.R.color.transparent);
+                // Don't dim the background
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                // Allow touches outside to pass through
+                window.setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            }
+        }
+
+        // Set fitsSystemWindows only for Android 10 (API 29)
+        if (android.os.Build.VERSION.SDK_INT == android.os.Build.VERSION_CODES.Q) {
+            View coordinator = findViewById(R.id.coordinator_layout);
+            if (coordinator != null) coordinator.setFitsSystemWindows(true);
+            View appBar = findViewById(R.id.app_bar_layout);
+            if (appBar != null) appBar.setFitsSystemWindows(true);
+        }
+
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        // Make status bar transparent
+        if (getWindow() != null) {
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+
+            // Add FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS flag to the window
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+
+            // On Android 30+ clear FLAG_TRANSLUCENT_STATUS flag
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        }
+
+        WindowInsetsControllerCompat insetsController = new WindowInsetsControllerCompat(
+            getWindow(),
+            getWindow() != null ? getWindow().getDecorView() : null
+        );
+
+        if (getWindow() != null) {
+            getWindow()
+                .getDecorView()
+                .post(() -> {
+                    // Get status bar height
+                    int statusBarHeight = 0;
+                    int resourceId = getContext().getResources().getIdentifier("status_bar_height", "dimen", "android");
+                    if (resourceId > 0) {
+                        statusBarHeight = getContext().getResources().getDimensionPixelSize(resourceId);
+                    }
+
+                    // Find the status bar color view
+                    View statusBarColorView = findViewById(R.id.status_bar_color_view);
+
+                    // Set the height of the status bar color view
+                    if (statusBarColorView != null) {
+                        statusBarColorView.getLayoutParams().height = statusBarHeight;
+                        statusBarColorView.requestLayout();
+
+                        // Set color based on toolbar color or dark mode
+                        if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+                            try {
+                                // Use explicitly provided toolbar color for status bar
+                                int toolbarColor = Color.parseColor(_options.getToolbarColor());
+                                statusBarColorView.setBackgroundColor(toolbarColor);
+
+                                // Set status bar text to white or black based on background
+                                boolean isDarkBackground = isDarkColor(toolbarColor);
+                                insetsController.setAppearanceLightStatusBars(!isDarkBackground);
+                            } catch (IllegalArgumentException e) {
+                                // Fallback to default black if color parsing fails
+                                statusBarColorView.setBackgroundColor(Color.BLACK);
+                                insetsController.setAppearanceLightStatusBars(false);
+                            }
+                        } else {
+                            // Follow system dark mode if no toolbar color provided
+                            boolean isDarkTheme = isDarkThemeEnabled();
+                            int statusBarColor = isDarkTheme ? Color.BLACK : Color.WHITE;
+                            statusBarColorView.setBackgroundColor(statusBarColor);
+                            insetsController.setAppearanceLightStatusBars(!isDarkTheme);
+                        }
+                    }
+                });
+        }
+
+        // Set dimensions if specified, otherwise fullscreen
+        applyDimensions();
+
+        this._webView = findViewById(R.id.browser_view);
+
+        this.swipeRefreshLayout = findViewById(R.id.content_browser_layout);
+        if (this.swipeRefreshLayout != null) {
+            boolean enableReloadGesture = _options != null && _options.getEnableReloadGesture();
+            this.swipeRefreshLayout.setEnabled(enableReloadGesture);
+            this.swipeRefreshLayout.setOnRefreshListener(() -> {
+                reloadFromGestureInProgress = true;
+                reload();
+            });
+            this.swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) -> _webView != null && _webView.canScrollVertically(-1));
+        }
+
+        // Apply insets to fix edge-to-edge issues on Android 15+
+        applyInsets();
+
+        _webView.addJavascriptInterface(new JavaScriptInterface(), "AndroidInterface");
+        // Provide window.mobileApp at document start via native interface
+        _webView.addJavascriptInterface(new JavaScriptInterface(), "mobileApp");
+        _webView.addJavascriptInterface(new PreShowScriptInterface(), "PreShowScriptInterface");
+        _webView.addJavascriptInterface(new PrintInterface(this._context, _webView), "PrintInterface");
+        if (_options.shouldEnableNativeProxy()) {
+            proxyAccessToken = UUID.randomUUID().toString();
+            proxyBridge = new ProxyBridge(proxyAccessToken);
+            _webView.addJavascriptInterface(proxyBridge, "__capgoProxy");
+            proxyBridgeScript = loadProxyBridgeScript();
+        }
+        ensureBundledAssetLoader();
+        _webView.getSettings().setJavaScriptEnabled(true);
+        _webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
+        _webView.getSettings().setDatabaseEnabled(true);
+        _webView.getSettings().setDomStorageEnabled(true);
+        _webView.getSettings().setAllowContentAccess(true);
+        _webView.getSettings().setAllowFileAccess(true);
+        _webView.getSettings().setLoadWithOverviewMode(true);
+        _webView.getSettings().setUseWideViewPort(true);
+        _webView.getSettings().setAllowFileAccessFromFileURLs(true);
+        _webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+        if (!_options.getPersistWebViewData()) {
+            _webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+            _webView.getSettings().setDatabaseEnabled(false);
+            _webView.getSettings().setDomStorageEnabled(false);
+            _webView.clearCache(true);
+            _webView.clearHistory();
+            _webView.clearFormData();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(_webView, false);
+            }
+        }
+        _webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        injectDocumentStartJavaScriptInterface();
+
+        _webView.getSettings().setSupportMultipleWindows(true);
+        if (_options.getEnableZoom()) {
+            _webView.getSettings().setSupportZoom(true);
+            _webView.getSettings().setBuiltInZoomControls(true);
+            _webView.getSettings().setDisplayZoomControls(false);
+        }
+
+        // Enhanced settings for Google Pay and Payment Request API support (only when enabled)
+        if (_options.getEnableGooglePaySupport()) {
+            Log.d("InAppBrowser", "Enabling Google Pay support features");
+            _webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            _webView.getSettings().setSupportMultipleWindows(true);
+            _webView.getSettings().setGeolocationEnabled(true);
+
+            // Ensure secure context for Payment Request API
+            _webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+
+            // Enable Payment Request API only if feature is supported
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST)) {
+                WebSettingsCompat.setPaymentRequestEnabled(_webView.getSettings(), true);
+                Log.d("InAppBrowser", "Payment Request API enabled");
+            } else {
+                Log.d("InAppBrowser", "Payment Request API not supported on this device");
+            }
+        }
+
+        // Set web view background color
+        int backgroundColor = _options.getBackgroundColor().equals("white") ? Color.WHITE : Color.BLACK;
+        _webView.setBackgroundColor(backgroundColor);
+
+        // Set text zoom if specified in options
+        if (_options.getTextZoom() > 0) {
+            _webView.getSettings().setTextZoom(_options.getTextZoom());
+        }
+
+        _webView.setWebViewClient(new WebViewClient());
+
+        _webView.setWebChromeClient(
+            new WebChromeClient() {
+                @Override
+                public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                    if (consoleMessage != null && _options != null && _options.getCaptureConsoleLogs() && _options.getCallbacks() != null) {
+                        _options
+                            .getCallbacks()
+                            .consoleMessage(
+                                consoleMessage.messageLevel().name(),
+                                consoleMessage.message(),
+                                consoleMessage.sourceId(),
+                                consoleMessage.lineNumber(),
+                                null
+                            );
+                    }
+                    return super.onConsoleMessage(consoleMessage);
+                }
+
+                // Enable file open dialog
+                @Override
+                public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams
+                ) {
+                    String[] acceptTypes = fileChooserParams.getAcceptTypes();
+                    if (acceptTypes == null || acceptTypes.length == 0) {
+                        acceptTypes = new String[] { "*/*" };
+                    }
+
+                    // DEBUG: Log details about the file chooser request
+                    Log.d("InAppBrowser", "onShowFileChooser called");
+                    Log.d("InAppBrowser", "Accept types: " + Arrays.toString(acceptTypes));
+                    Log.d("InAppBrowser", "Current URL: " + getUrl());
+                    Log.d("InAppBrowser", "Original URL: " + (webView.getOriginalUrl() != null ? webView.getOriginalUrl() : "null"));
+                    Log.d(
+                        "InAppBrowser",
+                        "Has camera permission: " +
+                            (activity != null &&
+                                activity.checkSelfPermission(android.Manifest.permission.CAMERA) ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    );
+
+                    // Check if the file chooser is already open
+                    final boolean isMultiple = fileChooserParams.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                    beginFileChooserRequest(filePathCallback, acceptTypes, isMultiple);
+                    final FileChooserRequestSupport.FileChooserRequest request = activeFileChooserRequest;
+
+                    // Direct check for capture attribute in URL (fallback method)
+                    boolean isCaptureInUrl;
+                    String captureMode;
+                    String currentUrl = getUrl();
+
+                    // Look for capture in URL parameters - sometimes the attribute shows up in URL
+                    if (currentUrl != null && currentUrl.contains("capture=")) {
+                        isCaptureInUrl = true;
+                        captureMode = currentUrl.contains("capture=user") ? "user" : "environment";
+                        Log.d("InAppBrowser", "Found capture in URL: " + captureMode);
+                    } else {
+                        captureMode = null;
+                        isCaptureInUrl = false;
+                    }
+
+                    // For image-only inputs, try to detect capture attribute using JavaScript.
+                    // Mixed accept lists (e.g. "image/*,application/pdf") must skip the camera
+                    // path entirely — the camera can only produce images.
+                    if (FileChooserAcceptSupport.isImageOnlyAcceptTypes(acceptTypes)) {
+                        // Check if HTML content contains capture attribute on file inputs (synchronous check)
+                        webView.evaluateJavascript(
+                            "document.querySelector('input[type=\"file\"][capture]') !== null",
+                            (hasCaptureValue) -> {
+                                Log.d("InAppBrowser", "Quick capture check: " + hasCaptureValue);
+                                if (Boolean.parseBoolean(hasCaptureValue.replace("\"", ""))) {
+                                    Log.d("InAppBrowser", "Found capture attribute in quick check");
+                                }
+                            }
+                        );
+
+                        // Fixed JavaScript with proper error handling
+                        String js = """
+                            (function() {
+                              try {
+                                var captureAttr = null;
+                                // Check active element first
+                                if (document.activeElement &&
+                                    document.activeElement.tagName === 'INPUT' &&
+                                    document.activeElement.type === 'file') {
+                                  if (document.activeElement.hasAttribute('capture')) {
+                                    captureAttr = document.activeElement.getAttribute('capture') || 'environment';
+                                    return captureAttr;
+                                  }
+                                }
+                                // Try to find any input with capture attribute
+                                var inputs = document.querySelectorAll('input[type="file"][capture]');
+                                if (inputs && inputs.length > 0) {
+                                  captureAttr = inputs[0].getAttribute('capture') || 'environment';
+                                  return captureAttr;
+                                }
+                                // Try to extract from HTML attributes
+                                var allInputs = document.getElementsByTagName('input');
+                                for (var i = 0; i < allInputs.length; i++) {
+                                  var input = allInputs[i];
+                                  if (input.type === 'file') {
+                                    if (input.hasAttribute('capture')) {
+                                      captureAttr = input.getAttribute('capture') || 'environment';
+                                      return captureAttr;
+                                    }
+                                    // Look for the accept attribute containing image/* as this might be a camera input
+                                    var acceptAttr = input.getAttribute('accept');
+                                    if (acceptAttr && acceptAttr.indexOf('image/*') >= 0) {
+                                      console.log('Found input with image/* accept');
+                                    }
+                                  }
+                                }
+                                return '';
+                              } catch(e) {
+                                console.error('Capture detection error:', e);
+                                return '';
+                              }
+                            })();
+                            """;
+
+                        webView.evaluateJavascript(js, (value) -> {
+                            if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                return;
+                            }
+
+                            Log.d("InAppBrowser", "Capture attribute JS result: " + value);
+
+                            // If we already found capture in URL, use that directly
+                            if (isCaptureInUrl) {
+                                Log.d("InAppBrowser", "Using capture from URL: " + captureMode);
+                                launchCamera(captureMode.equals("user"), request);
+                                return;
+                            }
+
+                            // Process JavaScript result
+                            if (value != null && value.length() > 2) {
+                                // Clean up the value (remove quotes)
+                                String captureValue = value.replace("\"", "");
+                                Log.d("InAppBrowser", "Found capture attribute: " + captureValue);
+
+                                if (!captureValue.isEmpty()) {
+                                    activity.runOnUiThread(() -> launchCamera(captureValue.equals("user"), request));
+                                    return;
+                                }
+                            }
+
+                            // Look for hints in the web page source
+                            Log.d("InAppBrowser", "Looking for camera hints in page content");
+                            webView.evaluateJavascript("(function() { return document.documentElement.innerHTML; })()", (htmlSource) -> {
+                                if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                    return;
+                                }
+
+                                if (htmlSource != null && htmlSource.length() > 10) {
+                                    boolean hasCameraOrSelfieKeyword =
+                                        htmlSource.contains("capture=") || htmlSource.contains("camera") || htmlSource.contains("selfie");
+
+                                    Log.d("InAppBrowser", "Page contains camera keywords: " + hasCameraOrSelfieKeyword);
+
+                                    if (
+                                        hasCameraOrSelfieKeyword &&
+                                        currentUrl != null &&
+                                        (currentUrl.contains("selfie") || currentUrl.contains("camera") || currentUrl.contains("photo"))
+                                    ) {
+                                        Log.d("InAppBrowser", "URL suggests camera usage, launching camera");
+                                        activity.runOnUiThread(() -> launchCamera(currentUrl.contains("selfie"), request));
+                                        return;
+                                    }
+                                }
+
+                                // If all detection methods fail, fall back to regular file picker
+                                Log.d("InAppBrowser", "No capture attribute detected, using file picker");
+                                openFileChooser(request);
+                            });
+                        });
+                        return true;
+                    }
+
+                    // For non-image types, use regular file picker
+                    openFileChooser(request);
+                    return true;
+                }
+
+                /**
+                 * Launch the camera app for capturing images
+                 * @param useFrontCamera true to use front camera, false for back camera
+                 */
+                private void launchCamera(boolean useFrontCamera, FileChooserRequestSupport.FileChooserRequest request) {
+                    if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                        return;
+                    }
+
+                    Log.d("InAppBrowser", "Launching camera, front camera: " + useFrontCamera);
+
+                    // First check if we have camera permission
+                    if (activity != null && permissionHandler != null) {
+                        // Create a temporary permission request to check camera permission
+                        android.webkit.PermissionRequest tempRequest = new android.webkit.PermissionRequest() {
+                            @Override
+                            public Uri getOrigin() {
+                                return Uri.parse("file:///android_asset/");
+                            }
+
+                            @Override
+                            public String[] getResources() {
+                                return new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE };
+                            }
+
+                            @Override
+                            public void grant(String[] resources) {
+                                pendingCameraLaunchPermissionRequest = null;
+                                if (isDismissing) {
+                                    Log.d("InAppBrowser", "Ignoring delayed camera permission grant during dismiss");
+                                    return;
+                                }
+                                if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                    return;
+                                }
+                                // Permission granted, now launch the camera
+                                launchCameraWithPermission(useFrontCamera, request);
+                            }
+
+                            @Override
+                            public void deny() {
+                                pendingCameraLaunchPermissionRequest = null;
+                                if (isDismissing) {
+                                    Log.d("InAppBrowser", "Ignoring delayed camera permission denial during dismiss");
+                                    return;
+                                }
+                                if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                    return;
+                                }
+                                // Permission denied, fall back to file picker
+                                Log.e("InAppBrowser", "Camera permission denied, falling back to file picker");
+                                fallbackToFilePicker(request);
+                            }
+                        };
+
+                        pendingCameraLaunchPermissionRequest = tempRequest;
+
+                        // Request camera permission through the plugin
+                        permissionHandler.handleCameraPermissionRequest(tempRequest);
+                        return;
+                    }
+
+                    // If we can't request permission, try launching directly
+                    launchCameraWithPermission(useFrontCamera, request);
+                }
+
+                /**
+                 * Launch camera after permission is granted
+                 */
+                private void launchCameraWithPermission(boolean useFrontCamera, FileChooserRequestSupport.FileChooserRequest request) {
+                    if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                        return;
+                    }
+
+                    try {
+                        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                        if (takePictureIntent.resolveActivity(activity.getPackageManager()) != null) {
+                            File photoFile = null;
+                            try {
+                                photoFile = createImageFile();
+                            } catch (IOException ex) {
+                                Log.e("InAppBrowser", "Error creating image file", ex);
+                                fallbackToFilePicker(request);
+                                return;
+                            }
+
+                            if (photoFile != null) {
+                                request.tempCameraUri = FileProvider.getUriForFile(
+                                    activity,
+                                    activity.getPackageName() + ".fileprovider",
+                                    photoFile
+                                );
+                                syncFileChooserPublicFields();
+                                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, request.tempCameraUri);
+
+                                if (useFrontCamera) {
+                                    takePictureIntent.putExtra("android.intent.extras.CAMERA_FACING", 1);
+                                }
+
+                                try {
+                                    if (activity instanceof androidx.activity.ComponentActivity) {
+                                        androidx.activity.ComponentActivity componentActivity =
+                                            (androidx.activity.ComponentActivity) activity;
+                                        componentActivity
+                                            .getActivityResultRegistry()
+                                            .register(
+                                                "camera_capture",
+                                                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                                                (result) -> {
+                                                    if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                                        return;
+                                                    }
+                                                    Uri[] results = null;
+                                                    if (result.getResultCode() == Activity.RESULT_OK && request.tempCameraUri != null) {
+                                                        results = new Uri[] { request.tempCameraUri };
+                                                    }
+                                                    if (
+                                                        FileChooserRequestSupport.completeIfActive(
+                                                            request,
+                                                            activeFileChooserRequest,
+                                                            results
+                                                        )
+                                                    ) {
+                                                        request.tempCameraUri = null;
+                                                        clearActiveFileChooserRequest(request);
+                                                    }
+                                                }
+                                            )
+                                            .launch(takePictureIntent);
+                                    } else {
+                                        // Fallback for non-ComponentActivity
+                                        activity.startActivityForResult(takePictureIntent, FILE_CHOOSER_REQUEST_CODE);
+                                    }
+                                } catch (SecurityException e) {
+                                    Log.e("InAppBrowser", "Security exception launching camera: " + e.getMessage(), e);
+                                    fallbackToFilePicker(request);
+                                }
+                            } else {
+                                Log.e("InAppBrowser", "Failed to create photo URI, falling back to file picker");
+                                fallbackToFilePicker(request);
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Camera launch failed: " + e.getMessage(), e);
+                        fallbackToFilePicker(request);
+                    }
+                }
+
+                /**
+                 * Fall back to file picker when camera launch fails
+                 */
+                private void fallbackToFilePicker(FileChooserRequestSupport.FileChooserRequest request) {
+                    if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                        return;
+                    }
+                    openFileChooser(request);
+                }
+
+                // Grant permissions for cam
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    Log.i("INAPPBROWSER", "onPermissionRequest " + Arrays.toString(request.getResources()));
+                    final String[] requestedResources = request.getResources();
+                    for (String r : requestedResources) {
+                        Log.i("INAPPBROWSER", "requestedResources " + r);
+                        if (r.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                            Log.i("INAPPBROWSER", "RESOURCE_VIDEO_CAPTURE req");
+                            // Store the permission request
+                            currentPermissionRequest = request;
+                            // Initiate the permission request through the plugin
+                            if (permissionHandler != null) {
+                                permissionHandler.handleCameraPermissionRequest(request);
+                            }
+                            return; // Return here to avoid denying the request
+                        } else if (r.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                            Log.i("INAPPBROWSER", "RESOURCE_AUDIO_CAPTURE req");
+                            // Store the permission request
+                            currentPermissionRequest = request;
+                            // Initiate the permission request through the plugin
+                            if (permissionHandler != null) {
+                                permissionHandler.handleMicrophonePermissionRequest(request);
+                            }
+                            return; // Return here to avoid denying the request
+                        }
+                    }
+                    // If no matching permission is found, deny the request
+                    request.deny();
+                }
+
+                @Override
+                public void onPermissionRequestCanceled(PermissionRequest request) {
+                    super.onPermissionRequestCanceled(request);
+                    Toast.makeText(WebViewDialog.this.activity, "Permission Denied", Toast.LENGTH_SHORT).show();
+                    // Handle the denied permission
+                    if (currentPermissionRequest != null) {
+                        currentPermissionRequest.deny();
+                        currentPermissionRequest = null;
+                    }
+                }
+
+                // Handle geolocation permission requests
+                @Override
+                public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
+                    Log.i("INAPPBROWSER", "onGeolocationPermissionsShowPrompt for origin: " + origin);
+                    // Grant geolocation permission automatically for openWebView
+                    // This allows websites to access location when opened with openWebView
+                    callback.invoke(origin, true, false);
+                }
+
+                // This method will be called at page load, a good place to inject customizations
+                @Override
+                public void onProgressChanged(WebView view, int newProgress) {
+                    super.onProgressChanged(view, newProgress);
+
+                    if (_options.getCallbacks() != null) {
+                        _options.getCallbacks().pageLoadProgress(newProgress / 100.0);
+                    }
+
+                    // When the page is almost loaded, inject our date picker customization
+                    // Only if materialPicker option is enabled
+                    if (newProgress > 75 && !datePickerInjected && _options.getMaterialPicker()) {
+                        injectDatePickerFixes();
+                    }
+                }
+
+                @Override
+                public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                    Log.d(
+                        "InAppBrowser",
+                        "onCreateWindow called - isUserGesture: " +
+                            isUserGesture +
+                            ", GooglePaySupport: " +
+                            _options.getEnableGooglePaySupport() +
+                            ", preventDeeplink: " +
+                            _options.getPreventDeeplink() +
+                            ", openBlankTargetInWebView: " +
+                            _options.getOpenBlankTargetInWebView()
+                    );
+
+                    WebView.HitTestResult result = view.getHitTestResult();
+                    String data = result != null ? result.getExtra() : null;
+
+                    // Authorized App Links with target=_blank should open the native app,
+                    // not spawn a managed popup (which previously left the UI in a broken state).
+                    if (
+                        data != null &&
+                        !_options.getPreventDeeplink() &&
+                        isHttpOrHttpsUrl(data) &&
+                        isAuthorizedAppLink(data, _options.getAuthorizedAppLinks())
+                    ) {
+                        try {
+                            Log.d("InAppBrowser", "Opening authorized blank-target link externally: " + data);
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(data));
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            view.getContext().startActivity(intent);
+                            return false;
+                        } catch (ActivityNotFoundException | SecurityException e) {
+                            Log.w("InAppBrowser", "No app for authorized blank-target link, loading in current WebView", e);
+                            final String fallbackUrl = data;
+                            view.post(() -> {
+                                if (isDismissing || _webView == null || _webView != view) {
+                                    return;
+                                }
+                                _webView.loadUrl(fallbackUrl);
+                            });
+                            return false;
+                        }
+                    }
+
+                    if (shouldLoadBlankTargetInCurrentWebView(data)) {
+                        Log.d("InAppBrowser", "Loading target=_blank link in current WebView: " + data);
+                        view.post(() -> _webView.loadUrl(data));
+                        return false;
+                    }
+
+                    String popupUrl = null;
+                    try {
+                        WebView.HitTestResult hitTestResult = view.getHitTestResult();
+                        popupUrl = hitTestResult != null ? hitTestResult.getExtra() : null;
+                    } catch (Exception ignored) {}
+
+                    if (
+                        permissionHandler != null &&
+                        permissionHandler.createManagedPopupWindow(WebViewDialog.this, resultMsg, isUserGesture, popupUrl)
+                    ) {
+                        Log.d("InAppBrowser", "Created managed popup window");
+                        return true;
+                    }
+                    if (!_options.getPreventDeeplink() && isUserGesture) {
+                        try {
+                            if (data != null && !data.isEmpty()) {
+                                Log.d("InAppBrowser", "Falling back to external browser for popup URL: " + data);
+                                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(data));
+                                browserIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                _webView.getContext().startActivity(browserIntent);
+                                return false;
+                            }
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error opening external popup fallback: " + e.getMessage());
+                        }
+                    }
+
+                    return false;
+                }
+
+                @Override
+                public void onCloseWindow(WebView window) {
+                    Log.d("InAppBrowser", "onCloseWindow called");
+                    if (window == _webView) {
+                        String currentUrl = getUrl();
+                        dismiss();
+                        if (_options != null && _options.getCallbacks() != null) {
+                            _options.getCallbacks().closeEvent(currentUrl);
+                        }
+                    } else {
+                        super.onCloseWindow(window);
+                    }
+                }
+            }
+        );
+
+        if (_options.getHandleDownloads()) {
+            _webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+                Log.d(
+                    "InAppBrowser",
+                    "Handling WebView download: " + redactUrlForLogging(url) + ", mimeType=" + mimeType + ", bytes=" + contentLength
+                );
+                handleDownloadRequest(url, userAgent, contentDisposition, mimeType);
+            });
+        }
+
+        Map<String, String> requestHeaders = buildRequestHeadersExcludingUserAgent();
+        applyWebViewUserAgent();
+
+        // Load URL with optional HTTP method and body
+        String httpMethod = _options.getHttpMethod();
+        String httpBody = _options.getHttpBody();
+
+        if (!_options.isPopupWindowMode()) {
+            if (loadHtmlDataUrlIfNeeded(this._options.getUrl())) {
+                // Inline HTML loaded from data:text/html;base64 URL.
+            } else if (shouldBootstrapInitialLegacyProxyLoad()) {
+                loadInitialLegacyProxyContent(requestHeaders, buildRequestHeadersForNativeProxy(requestHeaders), httpMethod, httpBody);
+            } else if (supportsRequestBody(httpMethod) && httpBody != null) {
+                // For POST/PUT/PATCH requests with body
+                // Note: Android WebView has limitations with custom headers on POST
+                // Headers may not be sent with the initial request when using postUrl
+                byte[] postData = httpBody.getBytes(StandardCharsets.UTF_8);
+                _webView.postUrl(this._options.getUrl(), postData);
+
+                // Log a warning if headers were provided, as they won't be sent with postUrl
+                if (!requestHeaders.isEmpty()) {
+                    Log.w(
+                        "InAppBrowser",
+                        "Custom headers were provided but may not be sent with POST request. " +
+                            "Android WebView's postUrl method has limited header support."
+                    );
+                }
+            } else {
+                // For GET and other methods, use loadUrl with headers
+                _webView.loadUrl(this._options.getUrl(), requestHeaders);
+            }
+
+            _webView.requestFocus();
+            _webView.requestFocusFromTouch();
+
+            // Inject JavaScript interface early to ensure it's available immediately
+            // This complements the injection in onPageFinished and doUpdateVisitedHistory
+            _webView.post(() -> {
+                if (_webView != null) {
+                    injectJavaScriptInterface();
+
+                    // Inject Google Pay support enhancements if enabled
+                    if (_options.getEnableGooglePaySupport()) {
+                        injectGooglePayPolyfills();
+                    }
+
+                    Log.d("InAppBrowser", "JavaScript interface injected early after URL load");
+                }
+            });
+        }
+
+        setupToolbar();
+        setWebViewClient();
+
+        if (this._options.isHidden()) {
+            if (_options.isPopupWindowMode() || _options.getInvisibilityMode() == Options.InvisibilityMode.FAKE_VISIBLE) {
+                show();
+                if (!isHiddenModeActive) {
+                    applyHiddenMode();
+                }
+            }
+            resolveOpenWebViewIfNeeded();
+        } else if (_options.isPopupWindowMode()) {
+            showAccordingToLayerModeOrFallback();
+        } else if (!this._options.isPresentAfterPageLoad()) {
+            showAccordingToLayerModeOrFallback();
+            resolveOpenWebViewIfNeeded();
+        }
+
+        // Capacitor activities handle orientation themselves; refresh dialog layout explicitly.
+        registerConfigurationCallbacks();
+    }
+
+    private void applyHiddenMode() {
+        Window window = getWindow();
+        if (window == null) {
+            return;
+        }
+
+        previousWindowAttributes = new WindowManager.LayoutParams();
+        previousWindowAttributes.copyFrom(window.getAttributes());
+        previousWindowBackground = window.getDecorView().getBackground();
+
+        View decorView = window.getDecorView();
+        if (decorView != null) {
+            previousDecorAlpha = decorView.getAlpha();
+            previousDecorVisibility = decorView.getVisibility();
+        }
+
+        if (_webView != null) {
+            previousWebViewAlpha = _webView.getAlpha();
+            previousWebViewVisibility = _webView.getVisibility();
+            previousWebViewLayoutParams = _webView.getLayoutParams();
+        }
+
+        window.setBackgroundDrawableResource(android.R.color.transparent);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+
+        if (decorView != null) {
+            decorView.setAlpha(0f);
+            if (_options.getInvisibilityMode() == Options.InvisibilityMode.AWARE) {
+                decorView.setVisibility(View.GONE);
+            } else {
+                decorView.setVisibility(View.INVISIBLE);
+            }
+        }
+
+        if (_webView != null) {
+            if (_options.getInvisibilityMode() == Options.InvisibilityMode.AWARE) {
+                window.setLayout(1, 1);
+                _webView.setAlpha(0f);
+                _webView.setVisibility(View.INVISIBLE);
+                _webView.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
+            } else {
+                _webView.setAlpha(0f);
+                _webView.setVisibility(View.INVISIBLE);
+            }
+        }
+
+        isHiddenModeActive = true;
+    }
+
+    private void restoreVisibleMode() {
+        Window window = getWindow();
+        if (window == null) {
+            return;
+        }
+
+        if (previousWindowAttributes != null) {
+            window.setAttributes(previousWindowAttributes);
+        }
+        if (previousWindowBackground != null) {
+            window.setBackgroundDrawable(previousWindowBackground);
+        }
+
+        View decorView = window.getDecorView();
+        if (decorView != null) {
+            decorView.setAlpha(previousDecorAlpha);
+            decorView.setVisibility(previousDecorVisibility);
+        }
+
+        if (_webView != null) {
+            if (previousWebViewLayoutParams != null) {
+                _webView.setLayoutParams(previousWebViewLayoutParams);
+            }
+            _webView.setAlpha(previousWebViewAlpha);
+            _webView.setVisibility(previousWebViewVisibility);
+        }
+
+        previousWindowAttributes = null;
+        previousWindowBackground = null;
+        previousWebViewLayoutParams = null;
+        previousDecorAlpha = 1f;
+        previousDecorVisibility = View.VISIBLE;
+        previousWebViewAlpha = 1f;
+        previousWebViewVisibility = View.VISIBLE;
+        isHiddenModeActive = false;
+    }
+
+    public void setHidden(boolean hidden) {
+        if (hidden) {
+            if (!isHiddenModeActive) {
+                if (getWindow() == null) {
+                    try {
+                        if (backLayerActive) {
+                            detachBackLayer();
+                            attachContentToDialogWindow();
+                        }
+                        show();
+                        Window window = getWindow();
+                        if (window == null) {
+                            Log.w("InAppBrowser", "Unable to apply hidden mode: window is null after show()");
+                            return;
+                        }
+                        View decorView = window.getDecorView();
+                        if (decorView == null) {
+                            Log.w("InAppBrowser", "Unable to apply hidden mode: decorView is null after show()");
+                            return;
+                        }
+                        // Set flag immediately to prevent race condition if setHidden(false)
+                        // is called before the posted runnable executes
+                        isHiddenModeActive = true;
+                        decorView.post(this::applyHiddenMode);
+                    } catch (Exception e) {
+                        Log.w("InAppBrowser", "Unable to show dialog before hiding", e);
+                    }
+                } else {
+                    applyHiddenMode();
+                }
+            }
+        } else {
+            toolbarHideInProgress = false;
+            if (isHiddenModeActive) {
+                restoreVisibleMode();
+            }
+        }
+        if (_options != null) {
+            _options.setHidden(hidden);
+        }
+    }
+
+    public boolean isHiddenModeActive() {
+        return isHiddenModeActive;
+    }
+
+    /**
+     * Apply window insets to the WebView to properly handle edge-to-edge display
+     * and fix status bar overlap issues on Android 15+
+     */
+    private void applyInsets() {
+        if (_webView == null) {
+            return;
+        }
+
+        // Check if we need Android 15+ specific fixes
+        boolean isAndroid15Plus = Build.VERSION.SDK_INT >= 35;
+
+        View toolbarView = findViewById(R.id.tool_bar);
+
+        // Fix content browser layout height for all Android versions to allow proper scrolling
+        // This fixes landscape scrolling issues where bottom content is unreachable
+        ensureContentBrowserMatchParentHeight();
+
+        boolean isBlankToolbar = _options != null && TextUtils.equals(_options.getToolbarType(), "blank");
+        if (isBlankToolbar) {
+            configureBlankToolbarLayout();
+        }
+
+        // Special handling for Android 15+
+        if (isAndroid15Plus && !isBlankToolbar) {
+            refreshEdgeToEdgeChrome();
+        }
+
+        // Resolve insets from the dialog window root; layout children can receive already-fitted zero insets.
+        final View insetsSourceView = resolveSafeAreaInsetsSourceView();
+
+        ViewCompat.setOnApplyWindowInsetsListener(insetsSourceView, (v, windowInsets) -> {
+            applyWindowInsetsToWebView(windowInsets, isAndroid15Plus, toolbarView);
+            return windowInsets;
+        });
+        requestSafeAreaInsets();
+
+        // Handle window decoration - version-specific handling
+        if (getWindow() != null) {
+            if (isAndroid15Plus) {
+                // Android 15+: Use edge-to-edge with proper insets handling
+                getWindow().setDecorFitsSystemWindows(false);
+                getWindow().setStatusBarColor(Color.TRANSPARENT);
+                getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+                WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+
+                // Set status bar text color
+                if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+                    try {
+                        int backgroundColor = Color.parseColor(_options.getToolbarColor());
+                        boolean isDarkBackground = isDarkColor(backgroundColor);
+                        controller.setAppearanceLightStatusBars(!isDarkBackground);
+                    } catch (IllegalArgumentException e) {
+                        // Ignore color parsing errors
+                    }
+                }
+            } else if (Build.VERSION.SDK_INT >= 30) {
+                // Android 11-14: Keep navigation bar transparent but respect status bar
+                getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+                WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+
+                // Set status bar color to match toolbar or use system default
+                if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+                    try {
+                        int toolbarColor = Color.parseColor(_options.getToolbarColor());
+                        getWindow().setStatusBarColor(toolbarColor);
+                        boolean isDarkBackground = isDarkColor(toolbarColor);
+                        controller.setAppearanceLightStatusBars(!isDarkBackground);
+                    } catch (IllegalArgumentException e) {
+                        // Follow system theme if color parsing fails
+                        boolean isDarkTheme = isDarkThemeEnabled();
+                        int statusBarColor = isDarkTheme ? Color.BLACK : Color.WHITE;
+                        getWindow().setStatusBarColor(statusBarColor);
+                        controller.setAppearanceLightStatusBars(!isDarkTheme);
+                    }
+                } else {
+                    // Follow system theme if no toolbar color provided
+                    boolean isDarkTheme = isDarkThemeEnabled();
+                    int statusBarColor = isDarkTheme ? Color.BLACK : Color.WHITE;
+                    getWindow().setStatusBarColor(statusBarColor);
+                    controller.setAppearanceLightStatusBars(!isDarkTheme);
+                }
+            } else {
+                // Pre-Android 11: Use deprecated flags for edge-to-edge navigation bar only
+                getWindow()
+                    .getDecorView()
+                    .setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+
+                getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+                // Set status bar color to match toolbar
+                if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+                    try {
+                        int toolbarColor = Color.parseColor(_options.getToolbarColor());
+                        getWindow().setStatusBarColor(toolbarColor);
+                    } catch (IllegalArgumentException e) {
+                        // Use system default
+                    }
+                }
+            }
+        }
+
+        requestSafeAreaInsets();
+
+        mainHandler.postDelayed(this::reapplyInsetsFromWindowRoot, 300);
+        mainHandler.postDelayed(this::reapplyInsetsFromWindowRoot, 1200);
+    }
+
+    private void registerConfigurationCallbacks() {
+        if (configurationCallbacksRegistered) {
+            return;
+        }
+
+        Context callbackContext = activity != null ? activity : _context;
+        if (callbackContext == null) {
+            return;
+        }
+
+        lastConfiguration = new Configuration(callbackContext.getResources().getConfiguration());
+        callbackContext.registerComponentCallbacks(configurationCallbacks);
+        configurationCallbacksRegistered = true;
+    }
+
+    private void unregisterConfigurationCallbacks() {
+        if (!configurationCallbacksRegistered) {
+            return;
+        }
+
+        Context callbackContext = activity != null ? activity : _context;
+        if (callbackContext != null) {
+            try {
+                callbackContext.unregisterComponentCallbacks(configurationCallbacks);
+            } catch (Exception e) {
+                Log.w("InAppBrowser", "Failed to unregister configuration callbacks: " + e.getMessage());
+            }
+        }
+
+        configurationCallbacksRegistered = false;
+        lastConfiguration = null;
+    }
+
+    private void handleConfigurationChanged(Configuration newConfig) {
+        if (isDismissing || _webView == null) {
+            return;
+        }
+
+        Integer previousOrientation = lastConfiguration != null ? lastConfiguration.orientation : null;
+        Integer previousScreenWidthDp = lastConfiguration != null ? lastConfiguration.screenWidthDp : null;
+        Integer previousScreenHeightDp = lastConfiguration != null ? lastConfiguration.screenHeightDp : null;
+        Integer previousSmallestScreenWidthDp = lastConfiguration != null ? lastConfiguration.smallestScreenWidthDp : null;
+        Integer previousDensityDpi = lastConfiguration != null ? lastConfiguration.densityDpi : null;
+
+        int currentOrientation = newConfig != null ? newConfig.orientation : (previousOrientation != null ? previousOrientation : 0);
+        int currentScreenWidthDp =
+            newConfig != null ? newConfig.screenWidthDp : (previousScreenWidthDp != null ? previousScreenWidthDp : 0);
+        int currentScreenHeightDp =
+            newConfig != null ? newConfig.screenHeightDp : (previousScreenHeightDp != null ? previousScreenHeightDp : 0);
+        int currentSmallestScreenWidthDp =
+            newConfig != null
+                ? newConfig.smallestScreenWidthDp
+                : (previousSmallestScreenWidthDp != null ? previousSmallestScreenWidthDp : 0);
+        int currentDensityDpi = newConfig != null ? newConfig.densityDpi : (previousDensityDpi != null ? previousDensityDpi : 0);
+
+        boolean shouldRefresh = OrientationLayoutSupport.shouldRefreshBrowserLayout(
+            previousOrientation,
+            previousScreenWidthDp,
+            previousScreenHeightDp,
+            previousSmallestScreenWidthDp,
+            previousDensityDpi,
+            currentOrientation,
+            currentScreenWidthDp,
+            currentScreenHeightDp,
+            currentSmallestScreenWidthDp,
+            currentDensityDpi
+        );
+
+        if (newConfig != null) {
+            lastConfiguration = new Configuration(newConfig);
+        }
+
+        if (!shouldRefresh) {
+            return;
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            refreshLayoutForConfigurationChange();
+        } else {
+            mainHandler.post(this::refreshLayoutForConfigurationChange);
+        }
+    }
+
+    /**
+     * Capacitor keeps the host activity alive across orientation changes. Re-apply fullscreen
+     * window dimensions, system chrome, and safe-area insets so the WebView stays scrollable
+     * after portrait↔landscape transitions.
+     */
+    private void refreshLayoutForConfigurationChange() {
+        if (isDismissing || _webView == null) {
+            return;
+        }
+
+        if (isHiddenModeActive) {
+            requestSafeAreaInsets();
+            reapplyInsetsFromWindowRoot();
+            return;
+        }
+
+        if (backLayerActive) {
+            applyBackLayerDimensions();
+        } else {
+            applyDimensions();
+        }
+
+        ensureContentBrowserMatchParentHeight();
+
+        boolean isBlankToolbar = _options != null && TextUtils.equals(_options.getToolbarType(), "blank");
+        if (isBlankToolbar) {
+            configureBlankToolbarLayout();
+        } else if (Build.VERSION.SDK_INT >= 35) {
+            refreshEdgeToEdgeChrome();
+        } else {
+            refreshStatusBarColorViewHeight();
+        }
+
+        View coordinator = findViewById(R.id.coordinator_layout);
+        if (coordinator != null) {
+            coordinator.requestLayout();
+        }
+
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+            swipeRefreshLayout.requestLayout();
+        }
+
+        _webView.requestLayout();
+        _webView.invalidate();
+        requestSafeAreaInsets();
+        reapplyInsetsFromWindowRoot();
+
+        mainHandler.post(this::reapplyInsetsFromWindowRoot);
+        mainHandler.postDelayed(this::reapplyInsetsFromWindowRoot, 100);
+        mainHandler.postDelayed(this::reapplyInsetsFromWindowRoot, 300);
+
+        _webView.post(() -> {
+            if (_webView == null) {
+                return;
+            }
+            requestWebViewContentRelayout();
+            _webView.evaluateJavascript("(function(){window.dispatchEvent(new Event('resize'));})();", null);
+        });
+    }
+
+    private void ensureContentBrowserMatchParentHeight() {
+        View contentBrowserLayout = findViewById(R.id.content_browser_layout);
+        if (contentBrowserLayout == null) {
+            return;
+        }
+
+        ViewGroup.LayoutParams layoutParams = contentBrowserLayout.getLayoutParams();
+        if (layoutParams == null) {
+            return;
+        }
+
+        layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        contentBrowserLayout.setLayoutParams(layoutParams);
+    }
+
+    private void refreshStatusBarColorViewHeight() {
+        View statusBarColorView = findViewById(R.id.status_bar_color_view);
+        if (statusBarColorView == null) {
+            return;
+        }
+
+        int statusBarHeight = getSystemStatusBarHeight();
+        ViewGroup.LayoutParams params = statusBarColorView.getLayoutParams();
+        if (params == null) {
+            return;
+        }
+
+        params.height = statusBarHeight;
+        statusBarColorView.setLayoutParams(params);
+        statusBarColorView.requestLayout();
+    }
+
+    private void refreshEdgeToEdgeChrome() {
+        if (_webView == null || _options == null) {
+            return;
+        }
+
+        View statusBarColorView = findViewById(R.id.status_bar_color_view);
+        View toolbarView = findViewById(R.id.tool_bar);
+        if (toolbarView == null || !(toolbarView.getParent() instanceof com.google.android.material.appbar.AppBarLayout appBarLayout)) {
+            refreshStatusBarColorViewHeight();
+            return;
+        }
+
+        appBarLayout.setElevation(0);
+        appBarLayout.setStateListAnimator(null);
+        appBarLayout.setOutlineProvider(null);
+
+        int backgroundColor = Color.BLACK;
+        if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+            try {
+                backgroundColor = Color.parseColor(_options.getToolbarColor());
+            } catch (IllegalArgumentException e) {
+                Log.e("InAppBrowser", "Invalid toolbar color, using black: " + e.getMessage());
+            }
+        } else {
+            backgroundColor = isDarkThemeEnabled() ? Color.BLACK : Color.WHITE;
+        }
+
+        final int finalBgColor = backgroundColor;
+        _webView.post(() -> {
+            if (_webView == null) {
+                return;
+            }
+
+            int statusBarHeight = getSystemStatusBarHeight();
+
+            if (statusBarColorView != null) {
+                ViewGroup.LayoutParams params = statusBarColorView.getLayoutParams();
+                if (params != null) {
+                    params.height = statusBarHeight;
+                    statusBarColorView.setLayoutParams(params);
+                }
+                statusBarColorView.setBackgroundColor(finalBgColor);
+                statusBarColorView.setVisibility(View.VISIBLE);
+            }
+
+            applyAppBarTopInset(appBarLayout, appBarHandlesTopInset(toolbarView) ? statusBarHeight : 0);
+            appBarLayout.setBackgroundColor(finalBgColor);
+        });
+    }
+
+    /**
+     * Whether a visible AppBarLayout consumes the top inset itself. It is the only alternative to
+     * padding the WebView container for the status bar, so both mechanisms share this condition and
+     * can never inset the top twice.
+     */
+    private boolean appBarHandlesTopInset(View toolbarView) {
+        return (
+            Build.VERSION.SDK_INT >= 35 &&
+            _options != null &&
+            !TextUtils.equals(_options.getToolbarType(), "blank") &&
+            toolbarView != null &&
+            toolbarView.getVisibility() == View.VISIBLE &&
+            toolbarView.getParent() instanceof com.google.android.material.appbar.AppBarLayout
+        );
+    }
+
+    /**
+     * The appbar must sit below the status bar on edge-to-edge windows. A top margin does that
+     * visually, but CoordinatorLayout's scrolling-view behavior sizes the content container from the
+     * appbar height only and positions it below the appbar margin, so a margin pushes the container
+     * bottom off-screen by the status-bar height (#641). Padding grows the appbar height instead,
+     * which the behavior does account for, keeping the container inside the window.
+     */
+    private void applyAppBarTopInset(com.google.android.material.appbar.AppBarLayout appBarLayout, int statusBarTop) {
+        ViewGroup.LayoutParams appBarParams = appBarLayout.getLayoutParams();
+        if (appBarParams instanceof ViewGroup.MarginLayoutParams marginParams && marginParams.topMargin != 0) {
+            marginParams.topMargin = 0;
+            appBarLayout.setLayoutParams(marginParams);
+        }
+
+        appBarLayout.setPadding(
+            appBarLayout.getPaddingLeft(),
+            Math.max(0, statusBarTop),
+            appBarLayout.getPaddingRight(),
+            appBarLayout.getPaddingBottom()
+        );
+    }
+
+    private void applyWindowInsetsToWebView(WindowInsetsCompat windowInsets, boolean isAndroid15Plus, View toolbarView) {
+        if (windowInsets == null || _options == null) {
+            return;
+        }
+
+        Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+        Insets navigationBars = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
+        Insets systemGestures = windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures());
+        Insets mandatoryGestures = windowInsets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures());
+        Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+        boolean keyboardVisible = windowInsets.isVisible(WindowInsetsCompat.Type.ime());
+
+        applySafeAreaInsets(
+            bars,
+            navigationBars,
+            systemGestures,
+            mandatoryGestures,
+            ime,
+            keyboardVisible,
+            appBarHandlesTopInset(toolbarView),
+            isAndroid15Plus
+        );
+    }
+
+    /**
+     * Re-read root window insets and apply the container padding.
+     * Dialog windows may not re-dispatch inset listeners after rotation, leaving stale
+     * portrait insets that break vertical scrolling in landscape.
+     */
+    private void reapplyInsetsFromWindowRoot() {
+        if (_webView == null || _options == null) {
+            return;
+        }
+
+        View insetsSourceView = resolveHostedInsetsSourceView();
+        if (insetsSourceView == null) {
+            return;
+        }
+
+        WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(insetsSourceView);
+        if (windowInsets == null) {
+            // Root insets not ready yet; do not mutate the container padding. Delayed retries and
+            // requestApplyInsets will retry.
+            return;
+        }
+
+        boolean isAndroid15Plus = Build.VERSION.SDK_INT >= 35;
+        View toolbarView = findBrowserContentDescendant(R.id.tool_bar);
+        applyWindowInsetsToWebView(windowInsets, isAndroid15Plus, toolbarView);
+    }
+
+    /**
+     * Insets must come from the window that currently hosts the content. In back-layer mode the
+     * content lives in the host activity's window and this dialog's window is hidden, so its decor
+     * would report stale insets.
+     */
+    private View resolveHostedInsetsSourceView() {
+        if (backLayerActive) {
+            View contentView = getBrowserContentView();
+            if (contentView != null && contentView.isAttachedToWindow()) {
+                return contentView;
+            }
+        }
+
+        Window window = getWindow();
+        return window != null ? window.getDecorView() : null;
+    }
+
+    /**
+     * Back-layer mode reparents the browser content out of the dialog window, so {@link
+     * #findViewById(int)} no longer reaches it. Resolve through the content view, which owns these
+     * views in both layers.
+     */
+    private View findBrowserContentDescendant(int id) {
+        View contentView = getBrowserContentView();
+        View view = contentView != null ? contentView.findViewById(id) : null;
+        return view != null ? view : findViewById(id);
+    }
+
+    private void requestWebViewContentRelayout() {
+        View container = findViewById(R.id.content_browser_layout);
+        if (container != null) {
+            container.requestLayout();
+            container.invalidate();
+        }
+
+        if (_webView == null) {
+            return;
+        }
+
+        _webView.requestLayout();
+        _webView.invalidate();
+    }
+
+    /**
+     * The WebView is the content child of a SwipeRefreshLayout, which lays that child out inside its
+     * own padding and ignores child margins entirely. Safe-area insets are therefore applied as
+     * padding on the container instead of margins on the WebView (#641).
+     */
+    private void applySafeAreaInsets(
+        Insets bars,
+        Insets navigationBars,
+        Insets systemGestures,
+        Insets mandatoryGestures,
+        Insets ime,
+        boolean keyboardVisible,
+        boolean appBarHandlesTopInset,
+        boolean isEdgeToEdge
+    ) {
+        if (_webView == null || _options == null) {
+            return;
+        }
+
+        View container = findBrowserContentDescendant(R.id.content_browser_layout);
+        if (container == null) {
+            return;
+        }
+
+        boolean applyBottomInset = SafeAreaInsetsSupport.shouldInsetBottomForContainer(_options.getEnabledSafeMargin(), isEdgeToEdge);
+        int statusBarTop = SafeAreaInsetsSupport.resolveStatusBarTop(
+            bars.top,
+            bars.bottom,
+            bars.left,
+            bars.right,
+            getSystemStatusBarHeight()
+        );
+        int fallbackBottomInset = applyBottomInset ? getSystemNavigationBarHeight() : 0;
+        int safeBottomInset = SafeAreaInsetsSupport.resolveSafeBottomInsetWithFallback(
+            bars.bottom,
+            navigationBars.bottom,
+            systemGestures.bottom,
+            mandatoryGestures.bottom,
+            bars.left,
+            bars.right,
+            navigationBars.left,
+            navigationBars.right,
+            fallbackBottomInset,
+            applyBottomInset
+        );
+        // Android 15+ uses edge-to-edge (decorFitsSystemWindows=false) and needs the IME inset applied.
+        // Older dialogs still resize for the keyboard; re-applying decor IME creates a black gap (#622).
+        int imeBottom = SafeAreaInsetsSupport.resolveImeBottomInset(keyboardVisible, ime.bottom, isEdgeToEdge);
+
+        // In back-layer mode the content is reparented into the host activity's window, which this
+        // plugin never puts in edge-to-edge, so the host owns the top inset and the useTopInset opt-in
+        // still decides there.
+        int padTop = SafeAreaInsetsSupport.resolveContainerTopPadding(
+            _options.getEnabledSafeTopMargin(),
+            _options.getUseTopInset(),
+            statusBarTop,
+            appBarHandlesTopInset,
+            isEdgeToEdge && !backLayerActive
+        );
+        int padBottom = SafeAreaInsetsSupport.resolveContainerBottomPadding(applyBottomInset, safeBottomInset, imeBottom);
+
+        if (appBarHandlesTopInset) {
+            // Keep the appbar inset in sync with the reported inset (cutouts, rotation, multi-window)
+            // instead of the status_bar_height resource used for the initial layout.
+            View toolbarView = findBrowserContentDescendant(R.id.tool_bar);
+            if (toolbarView != null && toolbarView.getParent() instanceof com.google.android.material.appbar.AppBarLayout appBarLayout) {
+                applyAppBarTopInset(appBarLayout, statusBarTop);
+            }
+        }
+
+        boolean paddingChanged =
+            container.getPaddingLeft() != bars.left ||
+            container.getPaddingTop() != padTop ||
+            container.getPaddingRight() != bars.right ||
+            container.getPaddingBottom() != padBottom;
+        if (paddingChanged) {
+            container.setPadding(bars.left, padTop, bars.right, padBottom);
+        }
+
+        injectSafeAreaCssVariables(padTop, padBottom, bars.left, bars.right);
+    }
+
+    private void configureBlankToolbarLayout() {
+        View appBarLayout = findViewById(R.id.app_bar_layout);
+        if (appBarLayout != null) {
+            appBarLayout.setVisibility(View.GONE);
+        }
+
+        View statusBarColorView = findViewById(R.id.status_bar_color_view);
+        if (statusBarColorView != null) {
+            statusBarColorView.setVisibility(View.GONE);
+        }
+
+        View contentBrowserLayout = findViewById(R.id.content_browser_layout);
+        if (contentBrowserLayout != null && contentBrowserLayout.getLayoutParams() instanceof CoordinatorLayout.LayoutParams) {
+            CoordinatorLayout.LayoutParams layoutParams = (CoordinatorLayout.LayoutParams) contentBrowserLayout.getLayoutParams();
+            layoutParams.setBehavior(null);
+            contentBrowserLayout.setLayoutParams(layoutParams);
+        }
+    }
+
+    private int getSystemStatusBarHeight() {
+        int resourceId = getContext().getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resourceId <= 0) {
+            return 0;
+        }
+
+        return getContext().getResources().getDimensionPixelSize(resourceId);
+    }
+
+    private void resetInjectedSafeAreaCssVariables() {
+        injectedSafeAreaTop = Integer.MIN_VALUE;
+        injectedSafeAreaBottom = Integer.MIN_VALUE;
+        injectedSafeAreaLeft = Integer.MIN_VALUE;
+        injectedSafeAreaRight = Integer.MIN_VALUE;
+    }
+
+    private void injectSafeAreaCssVariables(int top, int bottom, int left, int right) {
+        if (_webView == null) {
+            return;
+        }
+
+        // Insets are dispatched on every layout pass; only touch the document when they differ from
+        // what it already holds. Cleared on page load so a new document is served again.
+        if (
+            injectedSafeAreaTop == top && injectedSafeAreaBottom == bottom && injectedSafeAreaLeft == left && injectedSafeAreaRight == right
+        ) {
+            return;
+        }
+
+        // Recorded before posting so passes that repeat within the same frame are suppressed too.
+        injectedSafeAreaTop = top;
+        injectedSafeAreaBottom = bottom;
+        injectedSafeAreaLeft = left;
+        injectedSafeAreaRight = right;
+
+        String script = String.format(
+            Locale.US,
+            "(function(){var root=document.documentElement;" +
+                "root.style.setProperty('--safe-area-inset-top','%dpx');" +
+                "root.style.setProperty('--safe-area-inset-bottom','%dpx');" +
+                "root.style.setProperty('--safe-area-inset-left','%dpx');" +
+                "root.style.setProperty('--safe-area-inset-right','%dpx');" +
+                "return root.style.getPropertyValue('--safe-area-inset-top')?1:0;})();",
+            top,
+            bottom,
+            left,
+            right
+        );
+        _webView.post(() -> {
+            if (_webView == null) {
+                resetInjectedSafeAreaCssVariables();
+                return;
+            }
+            _webView.evaluateJavascript(script, (value) -> {
+                boolean cacheStillHoldsTheseValues =
+                    injectedSafeAreaTop == top &&
+                    injectedSafeAreaBottom == bottom &&
+                    injectedSafeAreaLeft == left &&
+                    injectedSafeAreaRight == right;
+                // The document did not take the variables, so let a later pass inject them again.
+                // A newer injection may already have replaced them, in which case it owns the cache.
+                if (!"1".equals(value) && cacheStillHoldsTheseValues) {
+                    resetInjectedSafeAreaCssVariables();
+                }
+            });
+        });
+    }
+
+    private View resolveSafeAreaInsetsSourceView() {
+        Window window = getWindow();
+        if (window != null) {
+            View decorView = window.getDecorView();
+            if (decorView != null) {
+                return decorView;
+            }
+        }
+
+        View coordinatorView = findViewById(R.id.coordinator_layout);
+        return coordinatorView != null ? coordinatorView : _webView;
+    }
+
+    private int getSystemNavigationBarHeight() {
+        int resourceId = getContext().getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        if (resourceId <= 0) {
+            return 0;
+        }
+
+        return getContext().getResources().getDimensionPixelSize(resourceId);
+    }
+
+    private void requestSafeAreaInsets() {
+        View insetsSourceView = resolveSafeAreaInsetsSourceView();
+        if (insetsSourceView == null) {
+            return;
+        }
+
+        ViewCompat.requestApplyInsets(insetsSourceView);
+        insetsSourceView.post(() -> {
+            ViewCompat.requestApplyInsets(insetsSourceView);
+            reapplyInsetsFromWindowRoot();
+        });
+    }
+
+    public void postMessageToJS(Object detail) {
+        if (_webView != null) {
+            try {
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("detail", detail);
+                String jsonDetail = jsonObject.toString();
+                String script = String.format("window.dispatchEvent(new CustomEvent('messageFromNative', %s));", jsonDetail);
+                _webView.post(() -> {
+                    if (_webView != null) {
+                        _webView.evaluateJavascript(script, null);
+                    }
+                });
+            } catch (Exception e) {
+                Log.e("postMessageToJS", "Error sending message to JS: " + e.getMessage());
+            }
+        }
+    }
+
+    private String toJsonString(JSObject object) {
+        return object == null ? null : object.toString();
+    }
+
+    private void resolveJavaScriptScreenshot(String requestId, JSObject screenshot) {
+        if (_webView == null) {
+            return;
+        }
+        JSObject payload = new JSObject();
+        payload.put("requestId", requestId);
+        payload.put("result", screenshot);
+        String jsonPayload = toJsonString(payload);
+        if (jsonPayload == null) {
+            return;
+        }
+        String script = "window.__capgoInAppBrowserResolveScreenshot(" + jsonPayload + ");";
+        _webView.post(() -> {
+            if (_webView != null) {
+                _webView.evaluateJavascript(script, null);
+            }
+        });
+    }
+
+    private void rejectJavaScriptScreenshot(String requestId, String message) {
+        if (_webView == null) {
+            return;
+        }
+        JSObject payload = new JSObject();
+        payload.put("requestId", requestId);
+        payload.put("message", message);
+        String jsonPayload = toJsonString(payload);
+        if (jsonPayload == null) {
+            return;
+        }
+        String script = "window.__capgoInAppBrowserRejectScreenshot(" + jsonPayload + ");";
+        _webView.post(() -> {
+            if (_webView != null) {
+                _webView.evaluateJavascript(script, null);
+            }
+        });
+    }
+
+    public void takeScreenshot(ScreenshotResultCallback callback) {
+        takeScreenshot(true, callback);
+    }
+
+    private void takeScreenshot(boolean emitEvent, ScreenshotResultCallback callback) {
+        if (_webView == null) {
+            callback.onError("WebView is not initialized");
+            return;
+        }
+
+        _webView.post(() -> {
+            if (_webView == null) {
+                callback.onError("WebView is not initialized");
+                return;
+            }
+
+            int width = _webView.getWidth() > 0 ? _webView.getWidth() : _webView.getMeasuredWidth();
+            int height = _webView.getHeight() > 0 ? _webView.getHeight() : _webView.getMeasuredHeight();
+            if (width <= 0 || height <= 0) {
+                callback.onError("WebView is not ready to capture a screenshot");
+                return;
+            }
+
+            final Bitmap bitmap;
+            try {
+                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            } catch (OutOfMemoryError error) {
+                callback.onError("Not enough memory to allocate screenshot buffer");
+                return;
+            }
+            Canvas canvas = new Canvas(bitmap);
+            _webView.draw(canvas);
+
+            executorService.execute(() -> {
+                try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)) {
+                        postScreenshotError(callback, "Failed to encode screenshot");
+                        return;
+                    }
+
+                    String base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP);
+                    JSObject result = new JSObject();
+                    result.put("format", "png");
+                    result.put("mimeType", "image/png");
+                    result.put("base64", base64);
+                    result.put("dataUrl", "data:image/png;base64," + base64);
+                    result.put("width", width);
+                    result.put("height", height);
+
+                    postScreenshotSuccess(callback, result, emitEvent);
+                } catch (IOException e) {
+                    postScreenshotError(callback, "Failed to encode screenshot: " + e.getMessage());
+                } finally {
+                    bitmap.recycle();
+                }
+            });
+        });
+    }
+
+    private void postScreenshotSuccess(ScreenshotResultCallback callback, JSObject result, boolean emitEvent) {
+        if (_webView == null) {
+            callback.onError("WebView is not initialized");
+            return;
+        }
+        _webView.post(() -> {
+            if (emitEvent && _options != null && _options.getCallbacks() != null) {
+                _options.getCallbacks().screenshotTaken(result);
+            }
+            callback.onSuccess(result);
+        });
+    }
+
+    private void postScreenshotError(ScreenshotResultCallback callback, String message) {
+        if (_webView == null) {
+            callback.onError(message);
+            return;
+        }
+        _webView.post(() -> callback.onError(message));
+    }
+
+    private void injectJavaScriptInterface() {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot inject JavaScript interface - WebView is null");
+            return;
+        }
+
+        try {
+            String script = createMobileAppBridgeScript();
+
+            _webView.post(() -> {
+                if (_webView != null) {
+                    try {
+                        _webView.evaluateJavascript(script, null);
+                        injectBlankTargetInCurrentWebViewScript();
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Error injecting JavaScript interface: " + e.getMessage());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error preparing JavaScript interface: " + e.getMessage());
+        }
+    }
+
+    private void injectDocumentStartJavaScriptInterface() {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot inject document-start JavaScript interface - WebView is null");
+            return;
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            Log.d("InAppBrowser", "Document-start JavaScript injection is not supported; using navigation fallback");
+            return;
+        }
+
+        try {
+            injectDocumentStartPostMessageBridge();
+            WebViewCompat.addDocumentStartJavaScript(_webView, createMobileAppBridgeScript(), Collections.singleton("*"));
+            // Honor preShowScriptInjectionTime: "documentStart" (matches iOS WKUserScript
+            // .atDocumentStart). Runs before page scripts and persists across navigations,
+            // so the blocking semaphore injection in onPageFinished is not needed.
+            String preShowScript = _options.getPreShowScript();
+            if (preShowScript != null && !preShowScript.isEmpty() && "documentStart".equals(_options.getPreShowScriptInjectionTime())) {
+                WebViewCompat.addDocumentStartJavaScript(_webView, preShowScript, Collections.singleton("*"));
+                preShowInjectedAtDocumentStart = true;
+            }
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error injecting document-start JavaScript interface: " + e.getMessage());
+        }
+    }
+
+    private void injectDocumentStartPostMessageBridge() {
+        if (_webView == null) {
+            return;
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            Log.d("InAppBrowser", "Document-start postMessage bridge is not supported; using JavaScript interface fallback");
+            return;
+        }
+
+        try {
+            WebViewCompat.addWebMessageListener(
+                _webView,
+                MobileAppBridgeScript.POST_MESSAGE_BRIDGE_NAME,
+                Collections.singleton("*"),
+                (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
+                    if (message == null || message.getType() != WebMessageCompat.TYPE_STRING) {
+                        Log.e("InAppBrowser", "Received unsupported postMessage payload from WebView");
+                        return;
+                    }
+                    handleJavaScriptPostMessage(message.getData());
+                }
+            );
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error injecting document-start postMessage bridge: " + e.getMessage());
+        }
+    }
+
+    private String createMobileAppBridgeScript() {
+        return MobileAppBridgeScript.create(isJavaScriptControlAllowed(), _options != null && _options.getAllowScreenshotsFromWebPage());
+    }
+
+    private void handleJavaScriptPostMessage(String message) {
+        try {
+            if (message == null || message.isEmpty()) {
+                Log.e("InAppBrowser", "Received empty message from WebView");
+                return;
+            }
+
+            if (_options == null || _options.getCallbacks() == null) {
+                Log.e("InAppBrowser", "Cannot handle postMessage - options or callbacks are null");
+                return;
+            }
+
+            _options.getCallbacks().javascriptCallback(message);
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error in postMessage: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Injects JavaScript polyfills and enhancements for Google Pay support
+     * Helps resolve OR_BIBED_15 errors by ensuring proper cross-origin handling
+     */
+    private void injectGooglePayPolyfills() {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot inject Google Pay polyfills - WebView is null");
+            return;
+        }
+
+        try {
+            String googlePayScript = """
+                (function() {
+                  console.log('[InAppBrowser] Injecting Google Pay support enhancements');
+
+                  // Enhance window.open to work better with Google Pay popups
+                  const originalWindowOpen = window.open;
+                  window.open = function(url, target, features) {
+                    console.log('[InAppBrowser] Enhanced window.open called:', url, target, features);
+
+                    // For Google Pay URLs, ensure they open in a new context
+                    if (url && (url.includes('google.com/pay') || url.includes('accounts.google.com'))) {
+                      console.log('[InAppBrowser] Google Pay popup detected, using enhanced handling');
+                      // Let the native WebView handle this via onCreateWindow
+                      return originalWindowOpen.call(window, url, '_blank', features);
+                    }
+
+                    return originalWindowOpen.call(window, url, target, features);
+                  };
+
+                  // Ensure proper Payment Request API context
+                  if (window.PaymentRequest) {
+                    console.log('[InAppBrowser] Payment Request API available');
+
+                    // Wrap PaymentRequest constructor to add better error handling
+                    const OriginalPaymentRequest = window.PaymentRequest;
+                    window.PaymentRequest = function(methodData, details, options) {
+                      console.log('[InAppBrowser] PaymentRequest created with enhanced error handling');
+                      const request = new OriginalPaymentRequest(methodData, details, options);
+
+                      // Override show method to handle popup blocking issues
+                      const originalShow = request.show;
+                      request.show = function() {
+                        console.log('[InAppBrowser] PaymentRequest.show() called');
+                        return originalShow.call(this).catch((error) => {
+                          console.error('[InAppBrowser] PaymentRequest error:', error);
+                          if (error.name === 'SecurityError' || error.message.includes('popup')) {
+                            console.log('[InAppBrowser] Attempting to handle popup blocking issue');
+                          }
+                          throw error;
+                        });
+                      };
+
+                      return request;
+                    };
+
+                    // Copy static methods
+                    Object.setPrototypeOf(window.PaymentRequest, OriginalPaymentRequest);
+                    Object.defineProperty(window.PaymentRequest, 'prototype', {
+                      value: OriginalPaymentRequest.prototype
+                    });
+                  }
+
+                  // Add meta tag to ensure proper cross-origin handling if not present
+                  if (!document.querySelector('meta[http-equiv="Cross-Origin-Opener-Policy"]')) {
+                    const meta = document.createElement('meta');
+                    meta.setAttribute('http-equiv', 'Cross-Origin-Opener-Policy');
+                    meta.setAttribute('content', 'same-origin-allow-popups');
+                    if (document.head) {
+                      document.head.appendChild(meta);
+                      console.log('[InAppBrowser] Added Cross-Origin-Opener-Policy meta tag');
+                    }
+                  }
+
+                  console.log('[InAppBrowser] Google Pay support enhancements complete');
+                })();
+                """;
+
+            _webView.post(() -> {
+                if (_webView != null) {
+                    try {
+                        _webView.evaluateJavascript(googlePayScript, (result) -> {
+                            Log.d("InAppBrowser", "Google Pay polyfills injected successfully");
+                        });
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Error injecting Google Pay polyfills: " + e.getMessage());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error preparing Google Pay polyfills: " + e.getMessage());
+        }
+    }
+
+    private void injectPreShowScript() {
+        //    String script =
+        //        "import('https://unpkg.com/darkreader@4.9.89/darkreader.js').then(() => {DarkReader.enable({ brightness: 100, contrast: 90, sepia: 10 });window.PreLoadScriptInterface.finished()})";
+
+        if (preShowSemaphore != null) {
+            return;
+        }
+
+        String script = String.format(
+            """
+            async function preShowFunction() {
+              %s
+            }
+            preShowFunction()
+              .then(() => window.PreShowScriptInterface.success())
+              .catch(err => {
+                console.error('Pre show error', err);
+                window.PreShowScriptInterface.error(JSON.stringify(err, Object.getOwnPropertyNames(err)));
+              });
+            """,
+            _options.getPreShowScript()
+        );
+
+        Log.i("InjectPreShowScript", String.format("PreShowScript script:\n%s", script));
+
+        preShowSemaphore = new Semaphore(0);
+        activity.runOnUiThread(
+            new Runnable() {
+                @Override
+                public void run() {
+                    if (_webView != null) {
+                        _webView.evaluateJavascript(script, null);
+                    } else {
+                        // If WebView is null, release semaphore to prevent deadlock
+                        if (preShowSemaphore != null) {
+                            preShowSemaphore.release();
+                        }
+                    }
+                }
+            }
+        );
+
+        try {
+            if (!preShowSemaphore.tryAcquire(10, TimeUnit.SECONDS)) {
+                Log.e("InjectPreShowScript", "PreShowScript running for over 10 seconds. The plugin will not wait any longer!");
+                return;
+            }
+            if (preShowError != null && !preShowError.isEmpty()) {
+                Log.e("InjectPreShowScript", "Error within the user-provided preShowFunction: " + preShowError);
+            }
+        } catch (InterruptedException e) {
+            Log.e("InjectPreShowScript", "Error when calling InjectPreShowScript: " + e.getMessage());
+        } finally {
+            preShowSemaphore = null;
+            preShowError = null;
+        }
+    }
+
+    private void beginFileChooserRequest(ValueCallback<Uri[]> filePathCallback, String[] acceptTypes, boolean isMultiple) {
+        if (activeFileChooserRequest != null) {
+            FileChooserRequestSupport.cancel(activeFileChooserRequest);
+        }
+        activeFileChooserRequest = new FileChooserRequestSupport.FileChooserRequest(filePathCallback, acceptTypes, isMultiple);
+        syncFileChooserPublicFields();
+    }
+
+    private void clearActiveFileChooserRequest(FileChooserRequestSupport.FileChooserRequest request) {
+        if (activeFileChooserRequest == request) {
+            activeFileChooserRequest = null;
+            syncFileChooserPublicFields();
+        }
+    }
+
+    private void syncFileChooserPublicFields() {
+        mFilePathCallback = activeFileChooserRequest != null ? activeFileChooserRequest.callback : null;
+        tempCameraUri = activeFileChooserRequest != null ? activeFileChooserRequest.tempCameraUri : null;
+    }
+
+    void completeLegacyFileChooserResult(Uri[] results) {
+        FileChooserRequestSupport.FileChooserRequest request = activeFileChooserRequest;
+        if (request == null) {
+            return;
+        }
+        if (FileChooserRequestSupport.completeIfActive(request, activeFileChooserRequest, results)) {
+            request.tempCameraUri = null;
+            clearActiveFileChooserRequest(request);
+        }
+    }
+
+    private void openFileChooser(FileChooserRequestSupport.FileChooserRequest request) {
+        if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+            return;
+        }
+        java.util.LinkedHashSet<String> mimeTypes = FileChooserAcceptSupport.normalizeAcceptTypes(request.acceptTypes);
+        Intent intent = FileChooserAcceptSupport.createFileChooserIntent(request.acceptTypes, request.multiple);
+
+        Log.d("InAppBrowser", "File picker using action: " + intent.getAction() + ", MIME types: " + mimeTypes);
+
+        try {
+            if (activity instanceof androidx.activity.ComponentActivity) {
+                androidx.activity.ComponentActivity componentActivity = (androidx.activity.ComponentActivity) activity;
+                componentActivity
+                    .getActivityResultRegistry()
+                    .register(
+                        "file_chooser",
+                        new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                        (result) -> {
+                            if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                return;
+                            }
+                            Uri[] results = null;
+                            if (result.getResultCode() == Activity.RESULT_OK) {
+                                Intent data = result.getData();
+                                if (data != null) {
+                                    if (data.getClipData() != null) {
+                                        // Handle multiple files
+                                        int count = data.getClipData().getItemCount();
+                                        results = new Uri[count];
+                                        for (int i = 0; i < count; i++) {
+                                            results[i] = data.getClipData().getItemAt(i).getUri();
+                                        }
+                                    } else if (data.getData() != null) {
+                                        // Handle single file
+                                        results = new Uri[] { data.getData() };
+                                    }
+                                }
+                            }
+                            if (FileChooserRequestSupport.completeIfActive(request, activeFileChooserRequest, results)) {
+                                clearActiveFileChooserRequest(request);
+                            }
+                        }
+                    )
+                    .launch(Intent.createChooser(intent, "Select File"));
+            } else {
+                // Fallback for non-ComponentActivity
+                activity.startActivityForResult(Intent.createChooser(intent, "Select File"), FILE_CHOOSER_REQUEST_CODE);
+            }
+        } catch (ActivityNotFoundException e) {
+            // If no app can handle the specific MIME type, try with a more generic one
+            Log.e("InAppBrowser", "No app available for types: " + mimeTypes + ", trying with */*");
+            intent.setType("*/*");
+            intent.removeExtra(Intent.EXTRA_MIME_TYPES);
+            try {
+                if (activity instanceof androidx.activity.ComponentActivity) {
+                    androidx.activity.ComponentActivity componentActivity = (androidx.activity.ComponentActivity) activity;
+                    componentActivity
+                        .getActivityResultRegistry()
+                        .register(
+                            "file_chooser",
+                            new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                            (result) -> {
+                                if (!FileChooserRequestSupport.isActive(request, activeFileChooserRequest)) {
+                                    return;
+                                }
+                                Uri[] results = null;
+                                if (result.getResultCode() == Activity.RESULT_OK) {
+                                    Intent data = result.getData();
+                                    if (data != null) {
+                                        if (data.getClipData() != null) {
+                                            // Handle multiple files
+                                            int count = data.getClipData().getItemCount();
+                                            results = new Uri[count];
+                                            for (int i = 0; i < count; i++) {
+                                                results[i] = data.getClipData().getItemAt(i).getUri();
+                                            }
+                                        } else if (data.getData() != null) {
+                                            // Handle single file
+                                            results = new Uri[] { data.getData() };
+                                        }
+                                    }
+                                }
+                                if (FileChooserRequestSupport.completeIfActive(request, activeFileChooserRequest, results)) {
+                                    clearActiveFileChooserRequest(request);
+                                }
+                            }
+                        )
+                        .launch(Intent.createChooser(intent, "Select File"));
+                } else {
+                    // Fallback for non-ComponentActivity
+                    activity.startActivityForResult(Intent.createChooser(intent, "Select File"), FILE_CHOOSER_REQUEST_CODE);
+                }
+            } catch (ActivityNotFoundException ex) {
+                // If still failing, report error
+                Log.e("InAppBrowser", "No app can handle file picker", ex);
+                if (FileChooserRequestSupport.cancelIfActive(request, activeFileChooserRequest)) {
+                    clearActiveFileChooserRequest(request);
+                }
+            }
+        }
+    }
+
+    public void reload() {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot reload - WebView is null");
+            stopReloadGesture();
+            return;
+        }
+
+        try {
+            // First stop any ongoing loading
+            _webView.stopLoading();
+
+            // Check if there's a URL to reload
+            String currentUrl = getUrl();
+            if (currentUrl != null && !currentUrl.equals("about:blank")) {
+                // Reload the current page
+                _webView.reload();
+                Log.d("InAppBrowser", "Reloading page: " + currentUrl);
+            } else if (_options != null && _options.getUrl() != null) {
+                // If webView URL is null but we have an initial URL, load that
+                setUrl(_options.getUrl());
+                Log.d("InAppBrowser", "Loading initial URL: " + _options.getUrl());
+            } else {
+                Log.w("InAppBrowser", "Cannot reload - no valid URL available");
+                stopReloadGesture();
+            }
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error during reload: " + e.getMessage());
+            stopReloadGesture();
+        }
+    }
+
+    private void stopReloadGesture() {
+        boolean shouldResetScroll = reloadFromGestureInProgress;
+        reloadFromGestureInProgress = false;
+
+        if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
+
+        // Only reset scroll after a gesture reload. Ordinary page loads / intercepted navigations
+        // also call stopReloadGesture and must not jump the WebView to the top.
+        if (!shouldResetScroll || _webView == null) {
+            return;
+        }
+
+        // Sticky scrollY after reload makes canScrollVertically(-1) true, which blocks the next pull
+        // via setOnChildScrollUpCallback until a full document navigation resets scroll state.
+        final WebView webView = _webView;
+        webView.post(() -> {
+            if (_webView != webView) {
+                return;
+            }
+            if (webView.getScrollY() != 0) {
+                webView.scrollTo(webView.getScrollX(), 0);
+            }
+        });
+    }
+
+    public void destroy() {
+        if (_webView != null) {
+            _webView.destroy();
+        }
+    }
+
+    private String getWebViewUrlOnMainThread(String fallbackUrl) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return getWebViewUrlOrFallback(fallbackUrl);
+        }
+
+        FutureTask<String> task = new FutureTask<>(() -> getWebViewUrlOrFallback(fallbackUrl));
+        mainHandler.post(task);
+        try {
+            return task.get(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fallbackUrl;
+        } catch (Exception e) {
+            return fallbackUrl;
+        }
+    }
+
+    private String getWebViewUrlOrFallback(String fallbackUrl) {
+        String url = _webView != null ? _webView.getUrl() : null;
+        return TextUtils.isEmpty(url) ? fallbackUrl : url;
+    }
+
+    public String getUrl() {
+        try {
+            WebView webView = _webView;
+            if (webView != null) {
+                String url = webView.getUrl();
+                return url != null ? url : "";
+            }
+        } catch (Exception e) {
+            Log.w("InAppBrowser", "Error getting URL: " + e.getMessage());
+        }
+        return "";
+    }
+
+    public void executeScript(String script) {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot execute script - WebView is null");
+            return;
+        }
+
+        if (script == null || script.trim().isEmpty()) {
+            Log.w("InAppBrowser", "Cannot execute empty script");
+            return;
+        }
+
+        try {
+            _webView.evaluateJavascript(script, null);
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error executing script: " + e.getMessage());
+        }
+    }
+
+    private String resolveWebViewUserAgent() {
+        if (_options == null) {
+            return null;
+        }
+
+        if (!TextUtils.isEmpty(_options.getCustomUserAgent())) {
+            return _options.getCustomUserAgent();
+        }
+
+        if (_options.getHeaders() != null) {
+            Iterator<String> keys = _options.getHeaders().keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (TextUtils.equals(key.toLowerCase(), "user-agent")) {
+                    return _options.getHeaders().getString(key);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Map<String, String> buildRequestHeadersExcludingUserAgent() {
+        Map<String, String> requestHeaders = new HashMap<>();
+        if (_options == null || _options.getHeaders() == null) {
+            return requestHeaders;
+        }
+
+        Iterator<String> keys = _options.getHeaders().keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (TextUtils.equals(key.toLowerCase(), "user-agent")) {
+                continue;
+            }
+            requestHeaders.put(key, _options.getHeaders().getString(key));
+        }
+        return requestHeaders;
+    }
+
+    private void applyWebViewUserAgent() {
+        if (_webView == null) {
+            return;
+        }
+
+        String userAgent = resolveWebViewUserAgent();
+        if (!TextUtils.isEmpty(userAgent)) {
+            _webView.getSettings().setUserAgentString(userAgent);
+        }
+    }
+
+    private Map<String, String> buildRequestHeadersForNativeProxy(Map<String, String> requestHeaders) {
+        Map<String, String> proxyHeaders = new HashMap<>(requestHeaders);
+        String userAgent = resolveWebViewUserAgent();
+        if (!TextUtils.isEmpty(userAgent)) {
+            proxyHeaders.put("User-Agent", userAgent);
+        }
+        return proxyHeaders;
+    }
+
+    private void ensureBundledAssetLoader() {
+        synchronized (bundledAssetLoaderLock) {
+            ensureBundledAssetLoaderLocked();
+        }
+    }
+
+    private void ensureBundledAssetLoaderLocked() {
+        if (bundledAssetLoader != null || _options == null || !_options.getServeBundledAssets()) {
+            return;
+        }
+
+        bundledAssetLoader = BundledAssetSupport.createAssetLoader(
+            _context,
+            _options.getBundledAssetHost(),
+            _options.getBundledAssetScheme()
+        );
+    }
+
+    public void applyBundledAssetResolution(BundledAssetSupport.Resolution resolution, String localUrl) {
+        if (_options == null || resolution == null) {
+            return;
+        }
+
+        synchronized (bundledAssetLoaderLock) {
+            bundledAssetLoader = null;
+            _options.setUrl(resolution.url);
+            if (resolution.needsAssetLoader) {
+                BundledAssetSupport.LocalConfig localConfig = BundledAssetSupport.parseLocalConfig(localUrl);
+                _options.setBundledAssetHost(localConfig != null ? localConfig.host : "localhost");
+                _options.setBundledAssetScheme(localConfig != null ? BundledAssetSupport.assetLoaderScheme(localConfig) : "https");
+                _options.setServeBundledAssets(true);
+            } else {
+                _options.setServeBundledAssets(false);
+            }
+        }
+    }
+
+    private WebResourceResponse interceptBundledAssetRequest(WebResourceRequest request) {
+        final WebViewAssetLoader loader;
+        synchronized (bundledAssetLoaderLock) {
+            if (_options == null || !_options.getServeBundledAssets()) {
+                return null;
+            }
+
+            ensureBundledAssetLoaderLocked();
+            loader = bundledAssetLoader;
+        }
+
+        if (loader == null) {
+            return null;
+        }
+        return loader.shouldInterceptRequest(request.getUrl());
+    }
+
+    public void setUrl(String url) {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot set URL - WebView is null");
+            return;
+        }
+
+        if (url == null || url.trim().isEmpty()) {
+            Log.w("InAppBrowser", "Cannot set empty URL");
+            return;
+        }
+
+        try {
+            if (loadHtmlDataUrlIfNeeded(url)) {
+                return;
+            }
+
+            Map<String, String> requestHeaders = buildRequestHeadersExcludingUserAgent();
+            applyWebViewUserAgent();
+            _webView.loadUrl(url, requestHeaders);
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error setting URL: " + e.getMessage());
+        }
+    }
+
+    private void setTitle(String newTitleText) {
+        TextView textView = (TextView) _toolbar.findViewById(R.id.titleText);
+        if (_options.getVisibleTitle()) {
+            textView.setText(newTitleText);
+        } else {
+            textView.setText("");
+        }
+        applyTitleTextOptions(textView);
+    }
+
+    private void performToolbarCloseAction(String currentUrl) {
+        if (_options != null && "hide".equals(_options.getCloseAction())) {
+            if (toolbarHideInProgress) {
+                return;
+            }
+            toolbarHideInProgress = true;
+            if (_options.getScreenshotOnHide()) {
+                takeScreenshot(
+                    false,
+                    new ScreenshotResultCallback() {
+                        @Override
+                        public void onSuccess(JSObject screenshot) {
+                            hideAndEmit(currentUrl, screenshot);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Log.e("InAppBrowser", "Failed to capture screenshot before hiding: " + message);
+                            hideAndEmit(currentUrl, null);
+                        }
+                    }
+                );
+            } else {
+                hideAndEmit(currentUrl, null);
+            }
+            return;
+        }
+
+        dismiss();
+        if (_options != null && _options.getCallbacks() != null) {
+            _options.getCallbacks().closeEvent(currentUrl);
+        }
+    }
+
+    private void hideAndEmit(String currentUrl, JSObject screenshot) {
+        setHidden(true);
+        if (_options != null && _options.getCallbacks() != null) {
+            _options.getCallbacks().hideEvent(currentUrl, screenshot);
+        }
+    }
+
+    private void applyTitleTextOptions(TextView titleText) {
+        if (titleText == null || _options == null) {
+            return;
+        }
+
+        String fontFamily = _options.getTitleFontFamily();
+        if (!TextUtils.isEmpty(fontFamily)) {
+            if (!fontFamily.equals(cachedTitleFontFamily)) {
+                cachedTitleFontFamily = fontFamily;
+                cachedTitleTypeface = resolveTitleTypeface(fontFamily);
+            }
+            if (cachedTitleTypeface != null) {
+                titleText.setTypeface(cachedTitleTypeface);
+            }
+        } else {
+            cachedTitleFontFamily = null;
+            cachedTitleTypeface = null;
+        }
+
+        Options.ButtonNearDone titleIcon = _options.getTitleIcon();
+        if (titleIcon == null) {
+            titleText.setCompoundDrawablesRelative(null, null, null, null);
+            cachedTitleIconDrawable = null;
+            cachedTitleIconResolved = false;
+            return;
+        }
+
+        if (!cachedTitleIconResolved) {
+            cachedTitleIconDrawable = loadTitleIconDrawable(titleIcon);
+            cachedTitleIconResolved = true;
+        }
+
+        if (cachedTitleIconDrawable != null) {
+            titleText.setCompoundDrawablesRelative(cachedTitleIconDrawable, null, null, null);
+            titleText.setCompoundDrawablePadding(Math.round(6 * _context.getResources().getDisplayMetrics().density));
+        } else {
+            titleText.setCompoundDrawablesRelative(null, null, null, null);
+        }
+    }
+
+    private Typeface resolveTitleTypeface(String fontFamily) {
+        try {
+            int fontResourceId = _context.getResources().getIdentifier(fontFamily, "font", _context.getPackageName());
+            if (fontResourceId != 0) {
+                Typeface typeface = ResourcesCompat.getFont(_context, fontResourceId);
+                if (typeface != null) {
+                    return typeface;
+                }
+            }
+            return Typeface.create(fontFamily, Typeface.NORMAL);
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error loading title font: " + e.getMessage());
+            return Typeface.create(fontFamily, Typeface.NORMAL);
+        }
+    }
+
+    private Drawable loadTitleIconDrawable(Options.ButtonNearDone titleIcon) {
+        int width = Math.round(
+            (titleIcon.getWidth() > 0 ? titleIcon.getWidth() : 24) * _context.getResources().getDisplayMetrics().density
+        );
+        int height = Math.round(
+            (titleIcon.getHeight() > 0 ? titleIcon.getHeight() : 24) * _context.getResources().getDisplayMetrics().density
+        );
+
+        if ("vector".equals(titleIcon.getIconType())) {
+            try {
+                String iconName = titleIcon.getIcon();
+                if (iconName.endsWith(".xml")) {
+                    iconName = iconName.substring(0, iconName.length() - 4);
+                }
+                int resourceId = _context.getResources().getIdentifier(iconName, "drawable", _context.getPackageName());
+                if (resourceId == 0) {
+                    Log.e("InAppBrowser", "Title icon vector drawable not found: " + iconName);
+                    return null;
+                }
+                Drawable drawable = ResourcesCompat.getDrawable(_context.getResources(), resourceId, _context.getTheme());
+                if (drawable == null) {
+                    return null;
+                }
+                drawable = drawable.mutate();
+                drawable.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN);
+                drawable.setBounds(0, 0, width, height);
+                return drawable;
+            } catch (Exception e) {
+                Log.e("InAppBrowser", "Error loading title vector icon: " + e.getMessage());
+                return null;
+            }
+        }
+
+        if ("asset".equals(titleIcon.getIconType())) {
+            InputStream inputStream = null;
+            try {
+                AssetManager assetManager = _context.getAssets();
+                try {
+                    inputStream = assetManager.open("public/" + titleIcon.getIcon());
+                } catch (IOException e) {
+                    inputStream = assetManager.open(titleIcon.getIcon());
+                }
+
+                SVG svg = SVG.getFromInputStream(inputStream);
+                if (svg == null) {
+                    return null;
+                }
+
+                svg.setDocumentWidth(width);
+                svg.setDocumentHeight(height);
+                Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bitmap);
+                svg.renderToCanvas(canvas);
+
+                Paint paint = new Paint();
+                paint.setColorFilter(new PorterDuffColorFilter(iconColor, PorterDuff.Mode.SRC_IN));
+                Canvas colorFilterCanvas = new Canvas(bitmap);
+                colorFilterCanvas.drawBitmap(bitmap, 0, 0, paint);
+
+                BitmapDrawable drawable = new BitmapDrawable(_context.getResources(), bitmap);
+                drawable.setBounds(0, 0, width, height);
+                return drawable;
+            } catch (IOException | SVGParseException e) {
+                Log.e("InAppBrowser", "Error loading title asset icon: " + e.getMessage());
+            } finally {
+                if (inputStream != null) {
+                    try {
+                        inputStream.close();
+                    } catch (IOException e) {
+                        Log.e("InAppBrowser", "Error closing title icon stream: " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void setupToolbar() {
+        _toolbar = findViewById(R.id.tool_bar);
+
+        // Apply toolbar color early, for ALL toolbar types, before any view configuration
+        if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+            try {
+                int toolbarColor = Color.parseColor(_options.getToolbarColor());
+                _toolbar.setBackgroundColor(toolbarColor);
+
+                // Get toolbar title and ensure it gets the right color
+                TextView titleText = _toolbar.findViewById(R.id.titleText);
+
+                // Determine icon and text color
+                cachedTitleIconDrawable = null;
+                cachedTitleIconResolved = false;
+
+                int iconColor;
+                if (_options.getToolbarTextColor() != null && !_options.getToolbarTextColor().isEmpty()) {
+                    try {
+                        iconColor = Color.parseColor(_options.getToolbarTextColor());
+                    } catch (IllegalArgumentException e) {
+                        // Fallback to automatic detection if parsing fails
+                        boolean isDarkBackground = isDarkColor(toolbarColor);
+                        iconColor = isDarkBackground ? Color.WHITE : Color.BLACK;
+                    }
+                } else {
+                    // No explicit toolbarTextColor, use automatic detection based on background
+                    boolean isDarkBackground = isDarkColor(toolbarColor);
+                    iconColor = isDarkBackground ? Color.WHITE : Color.BLACK;
+                }
+
+                // Store for later use with navigation buttons
+                this.iconColor = iconColor;
+
+                // Set title text color directly
+                titleText.setTextColor(iconColor);
+
+                // Apply colors to all buttons
+                applyColorToAllButtons(toolbarColor, iconColor);
+
+                // Also ensure status bar gets the color
+                if (getWindow() != null) {
+                    // Set status bar color
+                    getWindow().setStatusBarColor(toolbarColor);
+
+                    // Determine proper status bar text color (light or dark icons)
+                    boolean isDarkBackground = isDarkColor(toolbarColor);
+                    WindowInsetsControllerCompat insetsController = new WindowInsetsControllerCompat(
+                        getWindow(),
+                        getWindow().getDecorView()
+                    );
+                    insetsController.setAppearanceLightStatusBars(!isDarkBackground);
+                }
+            } catch (IllegalArgumentException e) {
+                Log.e("InAppBrowser", "Invalid toolbar color: " + _options.getToolbarColor());
+            }
+        }
+
+        ImageButton closeButtonView = _toolbar.findViewById(R.id.closeButton);
+        closeButtonView.setOnClickListener(
+            new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    // if closeModal true then display a native modal to check if the user is sure to close the browser
+                    if (_options.getCloseModal()) {
+                        Pattern urlPattern = _options.getCloseModalURLPattern();
+                        final String currentUrl = getUrl();
+                        boolean shouldShowModal = urlPattern == null || urlPattern.matcher(currentUrl).find();
+                        if (shouldShowModal) {
+                            new AlertDialog.Builder(_context)
+                                .setTitle(_options.getCloseModalTitle())
+                                .setMessage(_options.getCloseModalDescription())
+                                .setPositiveButton(
+                                    _options.getCloseModalOk(),
+                                    new OnClickListener() {
+                                        public void onClick(DialogInterface dialog, int which) {
+                                            if (_options != null && _options.getCallbacks() != null) {
+                                                _options.getCallbacks().confirmBtnClicked(currentUrl);
+                                            }
+                                            performToolbarCloseAction(currentUrl);
+                                        }
+                                    }
+                                )
+                                .setNegativeButton(_options.getCloseModalCancel(), null)
+                                .show();
+                        } else {
+                            performToolbarCloseAction(currentUrl);
+                        }
+                    } else {
+                        String currentUrl = getUrl();
+                        performToolbarCloseAction(currentUrl);
+                    }
+                }
+            }
+        );
+
+        if (_options.showArrow()) {
+            closeButtonView.setImageResource(R.drawable.arrow_back_enabled);
+        }
+
+        // Handle reload button visibility
+        if (_options.getShowReloadButton() && !TextUtils.equals(_options.getToolbarType(), "activity")) {
+            View reloadButtonView = _toolbar.findViewById(R.id.reloadButton);
+            reloadButtonView.setVisibility(View.VISIBLE);
+            reloadButtonView.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (_webView != null) {
+                            // First stop any ongoing loading
+                            _webView.stopLoading();
+
+                            // Check if there's a URL to reload
+                            String currentUrl = getUrl();
+                            if (currentUrl != null) {
+                                // Reload the current page
+                                _webView.reload();
+                                Log.d("InAppBrowser", "Reloading page: " + currentUrl);
+                            } else if (_options.getUrl() != null) {
+                                // If webView URL is null but we have an initial URL, load that
+                                setUrl(_options.getUrl());
+                                Log.d("InAppBrowser", "Loading initial URL: " + _options.getUrl());
+                            }
+                        }
+                    }
+                }
+            );
+        } else {
+            View reloadButtonView = _toolbar.findViewById(R.id.reloadButton);
+            reloadButtonView.setVisibility(View.GONE);
+        }
+
+        if (TextUtils.equals(_options.getToolbarType(), "activity")) {
+            // Activity mode should ONLY have:
+            // 1. Close button
+            // 2. Share button (if shareSubject is provided)
+
+            // Hide all navigation buttons
+            _toolbar.findViewById(R.id.forwardButton).setVisibility(View.GONE);
+            _toolbar.findViewById(R.id.backButton).setVisibility(View.GONE);
+
+            // Hide buttonNearDone
+            ImageButton buttonNearDoneView = _toolbar.findViewById(R.id.buttonNearDone);
+            buttonNearDoneView.setVisibility(View.GONE);
+
+            // In activity mode, always make the share button visible by setting a default shareSubject if not provided
+            if (_options.getShareSubject() == null || _options.getShareSubject().isEmpty()) {
+                _options.setShareSubject("Share");
+                Log.d("InAppBrowser", "Activity mode: Setting default shareSubject");
+            }
+            // Status bar color is already set at the top of this method, no need to set again
+
+            // Share button visibility is handled separately later
+        } else if (TextUtils.equals(_options.getToolbarType(), "navigation")) {
+            ImageButton buttonNearDoneView = _toolbar.findViewById(R.id.buttonNearDone);
+            buttonNearDoneView.setVisibility(View.GONE);
+            // Status bar color is already set at the top of this method, no need to set again
+        } else if (TextUtils.equals(_options.getToolbarType(), "blank")) {
+            _toolbar.setVisibility(View.GONE);
+            configureBlankToolbarLayout();
+            requestSafeAreaInsets();
+
+            // Also set window background color to match status bar for blank toolbar
+            View statusBarColorView = findViewById(R.id.status_bar_color_view);
+            if (_options.getToolbarColor() != null && !_options.getToolbarColor().isEmpty()) {
+                try {
+                    int toolbarColor = Color.parseColor(_options.getToolbarColor());
+                    if (getWindow() != null) {
+                        getWindow().getDecorView().setBackgroundColor(toolbarColor);
+                    }
+                    // Also set status bar color view background if available
+                    if (statusBarColorView != null) {
+                        statusBarColorView.setBackgroundColor(toolbarColor);
+                    }
+                } catch (IllegalArgumentException e) {
+                    // Fallback to system default if color parsing fails
+                    boolean isDarkTheme = isDarkThemeEnabled();
+                    int windowBackgroundColor = isDarkTheme ? Color.BLACK : Color.WHITE;
+                    if (getWindow() != null) {
+                        getWindow().getDecorView().setBackgroundColor(windowBackgroundColor);
+                    }
+                    // Also set status bar color view background if available
+                    if (statusBarColorView != null) {
+                        statusBarColorView.setBackgroundColor(windowBackgroundColor);
+                    }
+                }
+            } else {
+                // Follow system dark mode
+                boolean isDarkTheme = isDarkThemeEnabled();
+                int windowBackgroundColor = isDarkTheme ? Color.BLACK : Color.WHITE;
+                if (getWindow() != null) {
+                    getWindow().getDecorView().setBackgroundColor(windowBackgroundColor);
+                }
+                // Also set status bar color view background if available
+                if (statusBarColorView != null) {
+                    statusBarColorView.setBackgroundColor(windowBackgroundColor);
+                }
+            }
+        } else {
+            _toolbar.findViewById(R.id.forwardButton).setVisibility(View.GONE);
+            _toolbar.findViewById(R.id.backButton).setVisibility(View.GONE);
+
+            // Status bar color is already set at the top of this method, no need to set again
+
+            Options.ButtonNearDone buttonNearDone = _options.getButtonNearDone();
+            if (buttonNearDone != null || _options.getShowScreenshotButton()) {
+                ImageButton buttonNearDoneView = _toolbar.findViewById(R.id.buttonNearDone);
+                buttonNearDoneView.setVisibility(View.VISIBLE);
+
+                if (_options.getShowScreenshotButton()) {
+                    buttonNearDoneView.setImageResource(android.R.drawable.ic_menu_camera);
+                    buttonNearDoneView.setColorFilter(iconColor);
+                    buttonNearDoneView.setOnClickListener((view) ->
+                        takeScreenshot(
+                            new ScreenshotResultCallback() {
+                                @Override
+                                public void onSuccess(JSObject screenshot) {}
+
+                                @Override
+                                public void onError(String message) {
+                                    Log.e("InAppBrowser", "Failed to capture screenshot from toolbar: " + message);
+                                }
+                            }
+                        )
+                    );
+                } else {
+                    // Handle different icon types
+                    String iconType = buttonNearDone.getIconType();
+                    if ("vector".equals(iconType)) {
+                        // Use native Android vector drawable
+                        try {
+                            String iconName = buttonNearDone.getIcon();
+                            if (iconName.endsWith(".xml")) {
+                                iconName = iconName.substring(0, iconName.length() - 4);
+                            }
+
+                            int resourceId = _context.getResources().getIdentifier(iconName, "drawable", _context.getPackageName());
+
+                            if (resourceId != 0) {
+                                buttonNearDoneView.setImageResource(resourceId);
+                                buttonNearDoneView.setColorFilter(iconColor);
+                                Log.d("InAppBrowser", "Successfully loaded vector drawable: " + iconName);
+                            } else {
+                                Log.e("InAppBrowser", "Vector drawable not found: " + iconName + ", using fallback");
+                                buttonNearDoneView.setImageResource(android.R.drawable.ic_menu_info_details);
+                                buttonNearDoneView.setColorFilter(iconColor);
+                            }
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error loading vector drawable: " + e.getMessage());
+                            buttonNearDoneView.setImageResource(android.R.drawable.ic_menu_info_details);
+                            buttonNearDoneView.setColorFilter(iconColor);
+                        }
+                    } else if ("asset".equals(iconType)) {
+                        // Handle SVG from assets
+                        AssetManager assetManager = _context.getAssets();
+                        InputStream inputStream = null;
+                        try {
+                            String iconPath = "public/" + buttonNearDone.getIcon();
+                            try {
+                                inputStream = assetManager.open(iconPath);
+                            } catch (IOException e) {
+                                try {
+                                    inputStream = assetManager.open(buttonNearDone.getIcon());
+                                } catch (IOException e2) {
+                                    Log.e("InAppBrowser", "SVG file not found in assets: " + buttonNearDone.getIcon());
+                                    buttonNearDoneView.setVisibility(View.GONE);
+                                    return;
+                                }
+                            }
+
+                            SVG svg = SVG.getFromInputStream(inputStream);
+                            if (svg == null) {
+                                Log.e("InAppBrowser", "Failed to parse SVG icon: " + buttonNearDone.getIcon());
+                                buttonNearDoneView.setVisibility(View.GONE);
+                                return;
+                            }
+
+                            float width = buttonNearDone.getWidth() > 0 ? buttonNearDone.getWidth() : 24;
+                            float height = buttonNearDone.getHeight() > 0 ? buttonNearDone.getHeight() : 24;
+                            float density = _context.getResources().getDisplayMetrics().density;
+                            int targetWidth = Math.round(width * density);
+                            int targetHeight = Math.round(height * density);
+
+                            svg.setDocumentWidth(targetWidth);
+                            svg.setDocumentHeight(targetHeight);
+
+                            Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+                            Canvas canvas = new Canvas(bitmap);
+                            svg.renderToCanvas(canvas);
+
+                            Paint paint = new Paint();
+                            paint.setColorFilter(new PorterDuffColorFilter(iconColor, PorterDuff.Mode.SRC_IN));
+                            Canvas colorFilterCanvas = new Canvas(bitmap);
+                            colorFilterCanvas.drawBitmap(bitmap, 0, 0, paint);
+
+                            buttonNearDoneView.setImageBitmap(bitmap);
+                            buttonNearDoneView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                            buttonNearDoneView.setPadding(12, 12, 12, 12);
+                        } catch (SVGParseException e) {
+                            Log.e("InAppBrowser", "Error loading SVG icon: " + e.getMessage(), e);
+                            buttonNearDoneView.setVisibility(View.GONE);
+                        } finally {
+                            if (inputStream != null) {
+                                try {
+                                    inputStream.close();
+                                } catch (IOException e) {
+                                    Log.e("InAppBrowser", "Error closing input stream: " + e.getMessage());
+                                }
+                            }
+                        }
+                    } else {
+                        // Default fallback or unsupported type
+                        Log.e("InAppBrowser", "Unsupported icon type: " + iconType);
+                        buttonNearDoneView.setVisibility(View.GONE);
+                    }
+
+                    buttonNearDoneView.setOnClickListener((view) -> _options.getCallbacks().buttonNearDoneClicked());
+                }
+            } else {
+                ImageButton buttonNearDoneView = _toolbar.findViewById(R.id.buttonNearDone);
+                buttonNearDoneView.setVisibility(View.GONE);
+            }
+        }
+
+        // Add share button functionality
+        ImageButton shareButton = _toolbar.findViewById(R.id.shareButton);
+        if (_options.getShareSubject() != null && !_options.getShareSubject().isEmpty()) {
+            shareButton.setVisibility(View.VISIBLE);
+            Log.d("InAppBrowser", "Share button should be visible, shareSubject: " + _options.getShareSubject());
+
+            // Apply the same color filter as other buttons to ensure visibility
+            shareButton.setColorFilter(iconColor);
+
+            // The color filter is now applied in applyColorToAllButtons
+            shareButton.setOnClickListener((view) -> {
+                JSObject shareDisclaimer = _options.getShareDisclaimer();
+                if (shareDisclaimer != null) {
+                    new AlertDialog.Builder(_context)
+                        .setTitle(shareDisclaimer.getString("title", "Title"))
+                        .setMessage(shareDisclaimer.getString("message", "Message"))
+                        .setPositiveButton(shareDisclaimer.getString("confirmBtn", "Confirm"), (dialog, which) -> {
+                            // Notify that confirm was clicked
+                            String currentUrl = getUrl();
+                            _options.getCallbacks().confirmBtnClicked(currentUrl);
+                            shareUrl();
+                        })
+                        .setNegativeButton(shareDisclaimer.getString("cancelBtn", "Cancel"), null)
+                        .show();
+                } else {
+                    shareUrl();
+                }
+            });
+        } else {
+            shareButton.setVisibility(View.GONE);
+        }
+
+        // Also color the title text
+        TextView titleText = _toolbar.findViewById(R.id.titleText);
+        if (titleText != null) {
+            titleText.setTextColor(iconColor);
+
+            // Set the title text
+            if (!TextUtils.isEmpty(_options.getTitle())) {
+                this.setTitle(_options.getTitle());
+            } else {
+                try {
+                    URI uri = new URI(_options.getUrl());
+                    this.setTitle(uri.getHost());
+                } catch (URISyntaxException e) {
+                    this.setTitle(_options.getTitle());
+                }
+            }
+        }
+    }
+
+    /**
+     * Applies background and tint colors to all buttons in the toolbar
+     */
+    private void applyColorToAllButtons(int backgroundColor, int iconColor) {
+        // Get all buttons
+        ImageButton backButton = _toolbar.findViewById(R.id.backButton);
+        ImageButton forwardButton = _toolbar.findViewById(R.id.forwardButton);
+        ImageButton closeButton = _toolbar.findViewById(R.id.closeButton);
+        ImageButton reloadButton = _toolbar.findViewById(R.id.reloadButton);
+        ImageButton shareButton = _toolbar.findViewById(R.id.shareButton);
+        ImageButton buttonNearDoneView = _toolbar.findViewById(R.id.buttonNearDone);
+
+        // Set button backgrounds
+        backButton.setBackgroundColor(backgroundColor);
+        forwardButton.setBackgroundColor(backgroundColor);
+        closeButton.setBackgroundColor(backgroundColor);
+        reloadButton.setBackgroundColor(backgroundColor);
+
+        // Apply tint colors to buttons
+        backButton.setColorFilter(iconColor);
+        forwardButton.setColorFilter(iconColor);
+        closeButton.setColorFilter(iconColor);
+        reloadButton.setColorFilter(iconColor);
+        shareButton.setColorFilter(iconColor);
+        buttonNearDoneView.setColorFilter(iconColor);
+    }
+
+    private void updateNavigationButtonsState() {
+        if (_toolbar == null || _webView == null) {
+            return;
+        }
+
+        ImageButton backButton = _toolbar.findViewById(R.id.backButton);
+        ImageButton forwardButton = _toolbar.findViewById(R.id.forwardButton);
+        if (backButton == null || forwardButton == null) {
+            return;
+        }
+
+        boolean canGoBack = _webView.canGoBack();
+        boolean canGoForward = _webView.canGoForward();
+
+        if (canGoBack) {
+            backButton.setImageResource(R.drawable.arrow_back_enabled);
+            backButton.setEnabled(true);
+            backButton.setColorFilter(iconColor);
+            backButton.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (_webView != null && _webView.canGoBack()) {
+                            _webView.goBack();
+                        }
+                    }
+                }
+            );
+        } else {
+            backButton.setImageResource(R.drawable.arrow_back_disabled);
+            backButton.setEnabled(false);
+            backButton.setColorFilter(Color.argb(128, Color.red(iconColor), Color.green(iconColor), Color.blue(iconColor)));
+            backButton.setOnClickListener(null);
+        }
+
+        if (canGoForward) {
+            forwardButton.setImageResource(R.drawable.arrow_forward_enabled);
+            forwardButton.setEnabled(true);
+            forwardButton.setColorFilter(iconColor);
+            forwardButton.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (_webView != null && _webView.canGoForward()) {
+                            _webView.goForward();
+                        }
+                    }
+                }
+            );
+        } else {
+            forwardButton.setImageResource(R.drawable.arrow_forward_disabled);
+            forwardButton.setEnabled(false);
+            forwardButton.setColorFilter(Color.argb(128, Color.red(iconColor), Color.green(iconColor), Color.blue(iconColor)));
+            forwardButton.setOnClickListener(null);
+        }
+    }
+
+    public void handleProxyResultError(String result, String id) {
+        Log.i("InAppBrowserProxy", String.format("handleProxyResultError: %s, ok: %s id: %s", result, false, id));
+        handleProxyResponse(id, null);
+    }
+
+    public void handleProxyResultOk(JSONObject result, String id) {
+        Log.i("InAppBrowserProxy", String.format("handleProxyResultOk: %s, ok: %s, id: %s", result, true, id));
+        JSObject response = new JSObject();
+        response.put("response", result);
+        handleProxyResponse(id, response);
+    }
+
+    private boolean isHttpOrHttpsUrl(String url) {
+        return url != null && (url.startsWith("https://") || url.startsWith("http://"));
+    }
+
+    private boolean isAuthorizedAppLink(String url, List<String> authorizedLinks) {
+        if (authorizedLinks == null || authorizedLinks.isEmpty() || url == null) {
+            return false;
+        }
+        final String urlHost;
+        try {
+            URI uri = new URI(url);
+            String parsedUrlHost = uri.getHost();
+            if (parsedUrlHost == null) return false;
+            urlHost = parsedUrlHost.startsWith("www.") ? parsedUrlHost.substring(4) : parsedUrlHost;
+        } catch (URISyntaxException e) {
+            Log.e("InAppBrowser", "Invalid popup URL in authorized app link check: " + url, e);
+            return false;
+        }
+
+        for (String authorized : authorizedLinks) {
+            try {
+                URI authUri = new URI(authorized);
+                String authHost = authUri.getHost();
+                if (authHost == null) continue;
+                if (authHost.startsWith("www.")) authHost = authHost.substring(4);
+                if (urlHost.equalsIgnoreCase(authHost)) {
+                    return true;
+                }
+            } catch (URISyntaxException e) {
+                Log.e("InAppBrowser", "Skipping invalid authorized app link: " + authorized, e);
+            }
+        }
+        return false;
+    }
+
+    private String buildAuthorizedHostsJson(List<String> authorizedLinks) {
+        if (authorizedLinks == null || authorizedLinks.isEmpty()) {
+            return "[]";
+        }
+
+        StringBuilder hostsJson = new StringBuilder("[");
+        boolean hasHost = false;
+        for (String authorized : authorizedLinks) {
+            if (authorized == null) {
+                continue;
+            }
+
+            try {
+                URI authUri = new URI(authorized);
+                String host = authUri.getHost();
+                if (host == null) {
+                    continue;
+                }
+
+                if (host.startsWith("www.")) {
+                    host = host.substring(4);
+                }
+
+                if (hasHost) {
+                    hostsJson.append(",");
+                }
+                hostsJson.append(JSONObject.quote(host.toLowerCase(Locale.ROOT)));
+                hasHost = true;
+            } catch (URISyntaxException e) {
+                Log.e("InAppBrowser", "Skipping invalid authorized app link: " + authorized, e);
+            }
+        }
+
+        hostsJson.append("]");
+        return hostsJson.toString();
+    }
+
+    private void injectBlankTargetInCurrentWebViewScript() {
+        if (_webView == null || _options == null || (!_options.getPreventDeeplink() && !_options.getOpenBlankTargetInWebView())) {
+            return;
+        }
+
+        String authorizedHostsJson = buildAuthorizedHostsJson(_options.getAuthorizedAppLinks());
+        String preventDeeplink = _options.getPreventDeeplink() ? "true" : "false";
+        String script = String.format(
+            Locale.US,
+            """
+            (function() {
+              if (window.__capgoInAppBrowserBlankTargetInCurrentWebView) {
+                return;
+              }
+              window.__capgoInAppBrowserBlankTargetInCurrentWebView = true;
+
+              var authorizedHosts = new Set(%s);
+              var preventDeeplink = %s;
+              var normalizeHost = function(host) {
+                return (host || '').replace(/^www\\./i, '').toLowerCase();
+              };
+
+              document.addEventListener('click', function(event) {
+                if (event.defaultPrevented) {
+                  return;
+                }
+
+                var element = event.target;
+                if (!element || typeof element.closest !== 'function') {
+                  return;
+                }
+
+                var anchor = element.closest('a[target][href]');
+                if (!anchor || (anchor.getAttribute('target') || '').toLowerCase() !== '_blank') {
+                  return;
+                }
+
+                var nextUrl;
+                try {
+                  nextUrl = new URL(anchor.href);
+                } catch (_) {
+                  return;
+                }
+
+                var protocol = nextUrl.protocol.toLowerCase();
+                if (protocol !== 'http:' && protocol !== 'https:') {
+                  return;
+                }
+
+                if (!preventDeeplink && authorizedHosts.has(normalizeHost(nextUrl.hostname))) {
+                  return;
+                }
+
+                event.preventDefault();
+                setTimeout(function() {
+                  window.location.assign(nextUrl.toString());
+                }, 0);
+              });
+            })();
+            """,
+            authorizedHostsJson,
+            preventDeeplink
+        );
+
+        _webView.post(() -> {
+            if (_webView != null) {
+                try {
+                    _webView.evaluateJavascript(script, null);
+                } catch (Exception e) {
+                    Log.e("InAppBrowser", "Error injecting blank target handler: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    private boolean shouldLoadBlankTargetInCurrentWebView(String url) {
+        if (!isHttpOrHttpsUrl(url)) {
+            return false;
+        }
+
+        if (!_options.getPreventDeeplink() && isAuthorizedAppLink(url, _options.getAuthorizedAppLinks())) {
+            return false;
+        }
+
+        return _options.getPreventDeeplink() || _options.getOpenBlankTargetInWebView();
+    }
+
+    private void setWebViewClient() {
+        _webView.setWebViewClient(
+            new WebViewClient() {
+                /**
+                 * Checks whether the given URL is authorized based on the provided list of authorized links.
+                 * <p>
+                 * For http(s) URLs, compares only the host (ignoring "www." prefix and case).
+                 * Each entry in authorizedLinks should be a base URL (e.g., "https://example.com").
+                 * If the host of the input URL matches (case-insensitive) the host of any authorized link, returns true.
+                 * <p>
+                 * This method is intended to limit which external links can be handled as authorized app links.
+                 *
+                 * @param url             The URL to check. Can be any valid absolute URL.
+                 * @param authorizedLinks List of authorized base URLs (e.g., "https://mydomain.com", "myapp://").
+                 * @return true if the URL is authorized (host matches one of the authorizedLinks); false otherwise.
+                 */
+                private boolean isUrlAuthorized(String url, List<String> authorizedLinks) {
+                    if (authorizedLinks == null || authorizedLinks.isEmpty() || url == null) {
+                        return false;
+                    }
+                    final String urlHost;
+                    try {
+                        URI uri = new URI(url);
+                        String parsedUrlHost = uri.getHost();
+                        if (parsedUrlHost == null) return false;
+                        urlHost = parsedUrlHost.startsWith("www.") ? parsedUrlHost.substring(4) : parsedUrlHost;
+                    } catch (URISyntaxException e) {
+                        Log.e("InAppBrowser", "Invalid URI in isUrlAuthorized: " + url, e);
+                        return false;
+                    }
+
+                    for (String authorized : authorizedLinks) {
+                        try {
+                            URI authUri = new URI(authorized);
+                            String authHost = authUri.getHost();
+                            if (authHost == null) continue;
+                            if (authHost.startsWith("www.")) authHost = authHost.substring(4);
+                            if (urlHost.equalsIgnoreCase(authHost)) {
+                                return true;
+                            }
+                        } catch (URISyntaxException e) {
+                            Log.e("InAppBrowser", "Skipping invalid authorized app link: " + authorized, e);
+                        }
+                    }
+                    return false;
+                }
+
+                /**
+                 * Checks if a host should be blocked based on the configured blocked hosts patterns
+                 * @param url The URL to check
+                 * @param blockedHosts The list of blocked hosts patterns
+                 * @return true if the host should be blocked, false otherwise
+                 */
+                private boolean shouldBlockHost(String url, List<String> blockedHosts) {
+                    Uri uri = Uri.parse(url);
+                    String host = uri.getHost();
+
+                    if (host == null || host.isEmpty()) {
+                        return false;
+                    }
+
+                    if (blockedHosts == null || blockedHosts.isEmpty()) {
+                        return false;
+                    }
+
+                    String normalizedHost = host.toLowerCase();
+
+                    for (String blockPattern : blockedHosts) {
+                        if (blockPattern != null && matchesBlockPattern(normalizedHost, blockPattern.toLowerCase())) {
+                            Log.d("InAppBrowser", "Blocked host detected: " + host);
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                /**
+                 * Matches a host against a blocking pattern (supports wildcards)
+                 * @param host The normalized host to check
+                 * @param pattern The normalized blocking pattern
+                 * @return true if the host matches the pattern
+                 */
+                private boolean matchesBlockPattern(String host, String pattern) {
+                    if (pattern == null || pattern.isEmpty()) {
+                        return false;
+                    }
+
+                    // Exact match - fastest check first
+                    if (host.equals(pattern)) {
+                        return true;
+                    }
+
+                    // No wildcards - already checked exact match above
+                    if (!pattern.contains("*")) {
+                        return false;
+                    }
+
+                    // Handle wildcard patterns
+                    if (pattern.startsWith("*.")) {
+                        return matchesWildcardDomain(host, pattern);
+                    } else if (pattern.contains("*")) {
+                        return matchesRegexPattern(host, pattern);
+                    }
+
+                    return false;
+                }
+
+                /**
+                 * Handles simple subdomain wildcard patterns like "*.example.com"
+                 * @param host The host to check
+                 * @param pattern The wildcard pattern starting with "*."
+                 * @return true if the host matches the wildcard domain
+                 */
+                private boolean matchesWildcardDomain(String host, String pattern) {
+                    String domain = pattern.substring(2); // Remove "*."
+
+                    if (domain.isEmpty()) {
+                        return false;
+                    }
+
+                    // Match exact domain or any subdomain
+                    return host.equals(domain) || host.endsWith("." + domain);
+                }
+
+                /**
+                 * Handles complex regex patterns with multiple wildcards
+                 * @param host The host to check
+                 * @param pattern The pattern with wildcards to convert to regex
+                 * @return true if the host matches the regex pattern
+                 */
+                private boolean matchesRegexPattern(String host, String pattern) {
+                    try {
+                        // Escape special regex characters except *
+                        String escapedPattern = pattern
+                            .replace("\\", "\\\\") // Must escape backslashes first
+                            .replace(".", "\\.")
+                            .replace("+", "\\+")
+                            .replace("?", "\\?")
+                            .replace("^", "\\^")
+                            .replace("$", "\\$")
+                            .replace("(", "\\(")
+                            .replace(")", "\\)")
+                            .replace("[", "\\[")
+                            .replace("]", "\\]")
+                            .replace("{", "\\{")
+                            .replace("}", "\\}")
+                            .replace("|", "\\|");
+
+                        // Convert wildcards to regex
+                        String regexPattern = "^" + escapedPattern.replace("*", ".*") + "$";
+
+                        return Pattern.matches(regexPattern, host);
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Invalid regex pattern '" + pattern + "': " + e.getMessage());
+                        return false;
+                    }
+                }
+
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    if (view == null || _webView == null) {
+                        return false;
+                    }
+                    Context context = view.getContext();
+                    String url = request.getUrl().toString();
+                    Log.d("InAppBrowser", "shouldOverrideUrlLoading: " + url);
+
+                    if (HtmlDataUrlSupport.isDataUrl(url)) {
+                        return false;
+                    }
+
+                    boolean isNotHttpOrHttps = !url.startsWith("https://") && !url.startsWith("http://");
+
+                    // If preventDeeplink is true, don't handle any non-http(s) URLs
+                    if (_options.getPreventDeeplink()) {
+                        Log.d("InAppBrowser", "preventDeeplink is true");
+                        if (isNotHttpOrHttps) {
+                            if (request.isForMainFrame()) {
+                                stopReloadGesture();
+                            }
+                            return true;
+                        }
+                    }
+
+                    // Handle authorized app links
+                    List<String> authorizedLinks = _options.getAuthorizedAppLinks();
+                    boolean urlAuthorized = isUrlAuthorized(url, authorizedLinks);
+
+                    Log.d("InAppBrowser", "authorizedLinks: " + authorizedLinks);
+                    Log.d("InAppBrowser", "urlAuthorized: " + urlAuthorized);
+
+                    if (urlAuthorized) {
+                        try {
+                            Log.d("InAppBrowser", "Launching intent for authorized link: " + url);
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            context.startActivity(intent);
+                            Log.i("InAppBrowser", "Intent started for authorized link: " + url);
+                            if (request.isForMainFrame()) {
+                                stopReloadGesture();
+                            }
+                            return true;
+                        } catch (ActivityNotFoundException e) {
+                            Log.e("InAppBrowser", "No app found to handle this authorized link", e);
+                            return false;
+                        }
+                    }
+
+                    if (isNotHttpOrHttps) {
+                        boolean shouldEmitCustomSchemeEvent = CustomSchemeInterceptSupport.shouldEmitInterceptEvent(url);
+                        try {
+                            Intent intent;
+                            if (url.startsWith("intent:")) {
+                                intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                            } else {
+                                intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                            }
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            context.startActivity(intent);
+                            if (shouldEmitCustomSchemeEvent && _options.getCallbacks() != null) {
+                                _options.getCallbacks().customSchemeIntercepted(url, true);
+                            }
+                            if (request.isForMainFrame()) {
+                                stopReloadGesture();
+                            }
+                            return true;
+                        } catch (ActivityNotFoundException e) {
+                            Log.w("InAppBrowser", "No handler for external URL: " + url, e);
+                            if (shouldEmitCustomSchemeEvent && _options.getCallbacks() != null) {
+                                _options.getCallbacks().customSchemeIntercepted(url, false);
+                            }
+                            // Notify that a page load error occurred
+                            if (_options.getCallbacks() != null && request.isForMainFrame()) {
+                                _options.getCallbacks().pageLoadError();
+                                rejectOpenWebViewIfNeeded("No handler available for external URL: " + url);
+                            }
+                            if (request.isForMainFrame()) {
+                                stopReloadGesture();
+                            }
+                            return true; // prevent WebView from attempting to load the custom scheme
+                        } catch (URISyntaxException e) {
+                            Log.w("InAppBrowser", "No handler for external URL: " + url, e);
+                            // Notify that a page load error occurred
+                            if (_options.getCallbacks() != null && request.isForMainFrame()) {
+                                _options.getCallbacks().pageLoadError();
+                                rejectOpenWebViewIfNeeded("No handler available for external URL: " + url);
+                            }
+                            if (request.isForMainFrame()) {
+                                stopReloadGesture();
+                            }
+                            return true; // prevent WebView from attempting to load the custom scheme
+                        }
+                    }
+
+                    // Check for blocked hosts (main-frame only) using the extracted function
+                    List<String> blockedHosts = _options.getBlockedHosts();
+                    if (blockedHosts != null && !blockedHosts.isEmpty() && request.isForMainFrame()) {
+                        Log.d("InAppBrowser", "Checking for blocked hosts (on main frame)");
+                        if (shouldBlockHost(url, blockedHosts)) {
+                            // Make sure to notify that a URL has changed even when it was blocked
+                            if (_options.getCallbacks() != null) {
+                                _options.getCallbacks().urlChangeEvent(url);
+                            }
+                            Log.d("InAppBrowser", "Navigation blocked for URL: " + url);
+                            stopReloadGesture();
+                            return true; // Block the navigation
+                        }
+                    }
+
+                    return false;
+                }
+
+                @Override
+                public void onReceivedClientCertRequest(WebView view, android.webkit.ClientCertRequest request) {
+                    Log.i("InAppBrowser", "onReceivedClientCertRequest CALLED");
+
+                    if (request == null) {
+                        Log.e("InAppBrowser", "ClientCertRequest is null");
+                        return;
+                    }
+
+                    if (activity == null) {
+                        Log.e("InAppBrowser", "Activity is null, canceling request");
+                        try {
+                            request.cancel();
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error canceling request: " + e.getMessage());
+                        }
+                        return;
+                    }
+
+                    String identityKey = clientCertificateIdentityKey(request.getHost(), request.getPort(), "https");
+                    ClientCertificateIdentity storedIdentity = clientCertificateIdentities.get(identityKey);
+                    if (storedIdentity != null) {
+                        try {
+                            request.proceed(storedIdentity.privateKey, storedIdentity.certificateChain);
+                            Log.i("InAppBrowser", "Proceeding with stored client certificate");
+                            return;
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error proceeding with stored certificate: " + e.getMessage());
+                            clientCertificateIdentities.remove(identityKey);
+                        }
+                    }
+
+                    boolean promptForCertificate = _options != null && _options.clientCertificatePrompt();
+                    if (!promptForCertificate) {
+                        try {
+                            request.cancel();
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error canceling client cert request: " + e.getMessage());
+                        }
+                        Log.d("InAppBrowser", "Canceled optional client certificate request");
+                        return;
+                    }
+
+                    try {
+                        Log.i("InAppBrowser", "Host: " + request.getHost());
+                        Log.i("InAppBrowser", "Port: " + request.getPort());
+                        Log.i("InAppBrowser", "Principals: " + java.util.Arrays.toString(request.getPrincipals()));
+                        Log.i("InAppBrowser", "KeyTypes: " + java.util.Arrays.toString(request.getKeyTypes()));
+
+                        KeyChain.choosePrivateKeyAlias(
+                            activity,
+                            new KeyChainAliasCallback() {
+                                @Override
+                                public void alias(String alias) {
+                                    if (alias != null) {
+                                        try {
+                                            PrivateKey privateKey = KeyChain.getPrivateKey(activity, alias);
+                                            X509Certificate[] certChain = KeyChain.getCertificateChain(activity, alias);
+                                            clientCertificateIdentities.put(
+                                                clientCertificateIdentityKey(request.getHost(), request.getPort(), "https"),
+                                                new ClientCertificateIdentity(privateKey, certChain)
+                                            );
+                                            request.proceed(privateKey, certChain);
+                                            Log.i("InAppBrowser", "Selected certificate: " + alias);
+                                        } catch (Exception e) {
+                                            clientCertificateIdentities.remove(
+                                                clientCertificateIdentityKey(request.getHost(), request.getPort(), "https")
+                                            );
+                                            try {
+                                                request.cancel();
+                                            } catch (Exception cancelEx) {
+                                                Log.e("InAppBrowser", "Error canceling request: " + cancelEx.getMessage());
+                                            }
+                                            Log.e("InAppBrowser", "Error selecting certificate: " + e.getMessage());
+                                        }
+                                    } else {
+                                        clientCertificateIdentities.remove(
+                                            clientCertificateIdentityKey(request.getHost(), request.getPort(), "https")
+                                        );
+                                        try {
+                                            request.cancel();
+                                        } catch (Exception e) {
+                                            Log.e("InAppBrowser", "Error canceling request: " + e.getMessage());
+                                        }
+                                        Log.i("InAppBrowser", "No certificate found");
+                                    }
+                                }
+                            },
+                            null, // keyTypes
+                            null, // issuers
+                            request.getHost(),
+                            request.getPort(),
+                            null // alias (null = system asks user to choose)
+                        );
+                    } catch (Exception e) {
+                        Log.e("InAppBrowser", "Error in onReceivedClientCertRequest: " + e.getMessage());
+                        clientCertificateIdentities.remove(clientCertificateIdentityKey(request.getHost(), request.getPort(), "https"));
+                        try {
+                            request.cancel();
+                        } catch (Exception cancelEx) {
+                            Log.e("InAppBrowser", "Error canceling request after exception: " + cancelEx.getMessage());
+                        }
+                    }
+                }
+
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (view == null || _webView == null) {
+                        return null;
+                    }
+
+                    WebResourceResponse fingerprintFreeResponse = interceptFingerprintFreeRequest(request);
+                    if (fingerprintFreeResponse != null) {
+                        return fingerprintFreeResponse;
+                    }
+
+                    if (shouldUseNativeProxy()) {
+                        String requestUrl = request.getUrl().toString();
+                        boolean bridgeBackedRequest = ProxyRequestSupport.isBridgeMarkerRequestUrl(requestUrl);
+                        String originalUrl;
+                        String method;
+                        Map<String, String> requestHeaders = new HashMap<>();
+                        String base64Body = "";
+                        String credentialsMode = "same-origin";
+
+                        if (bridgeBackedRequest) {
+                            Uri uri = request.getUrl();
+                            originalUrl = uri.getQueryParameter("u");
+                            String requestId = uri.getQueryParameter("rid");
+                            if (originalUrl == null || requestId == null) {
+                                return null;
+                            }
+
+                            if (
+                                ProxyRequestSupport.usesLegacyJsProxyMode(_options) &&
+                                !ProxyRequestSupport.shouldDelegateLegacyJsProxyRequest(_options, originalUrl)
+                            ) {
+                                if (proxyBridge != null) {
+                                    proxyBridge.getAndRemove(requestId);
+                                }
+                                Log.w("InAppBrowserProxy", "Ignoring legacy regex miss for bridge-backed request: " + originalUrl);
+                                return createCanceledResponse();
+                            }
+
+                            ProxyBridge.StoredRequest stored = proxyBridge != null ? proxyBridge.getAndRemove(requestId) : null;
+                            if (stored == null) {
+                                Log.e("InAppBrowserProxy", "Missing stored proxy bridge payload for request id: " + requestId);
+                                return createCanceledResponse();
+                            }
+                            method = stored.method;
+                            base64Body = stored.base64Body;
+                            credentialsMode = stored.credentialsMode;
+                            Map<String, String> safeMarkerHeaders = ProxyRequestSupport.extractSafeMarkerHeaders(
+                                request.getRequestHeaders()
+                            );
+                            try {
+                                requestHeaders = ProxyRequestSupport.mergeRequestHeaders(null, stored.headersJson);
+                                requestHeaders = ProxyRequestSupport.mergeMissingHeaders(requestHeaders, safeMarkerHeaders);
+                            } catch (JSONException error) {
+                                Log.e("InAppBrowserProxy", "Failed to parse stored proxy headers", error);
+                                return createCanceledResponse();
+                            }
+                            String initiatorUrl = request.getRequestHeaders().get("Referer");
+                            if (initiatorUrl == null || initiatorUrl.isBlank()) {
+                                initiatorUrl = getWebViewUrlOrFallback(
+                                    _options != null && _options.getUrl() != null ? _options.getUrl() : originalUrl
+                                );
+                            }
+                            String targetCookies = CookieManager.getInstance().getCookie(originalUrl);
+                            if (
+                                targetCookies != null &&
+                                !targetCookies.isBlank() &&
+                                ProxyRequestSupport.shouldInjectCookies(credentialsMode, initiatorUrl, originalUrl, requestHeaders)
+                            ) {
+                                requestHeaders.put("Cookie", targetCookies);
+                            }
+                        } else {
+                            if (!ProxyRequestSupport.shouldHandleNonBridgeRequest(_options, requestUrl)) {
+                                return interceptBundledAssetRequest(request);
+                            }
+
+                            originalUrl = requestUrl;
+                            method = request.getMethod();
+                            if (request.getRequestHeaders() != null) {
+                                requestHeaders.putAll(request.getRequestHeaders());
+                            }
+                        }
+
+                        NativeRequestContext requestContext = new NativeRequestContext(
+                            originalUrl,
+                            method,
+                            requestHeaders,
+                            base64Body,
+                            request.isForMainFrame(),
+                            credentialsMode
+                        );
+
+                        if (
+                            ProxyRequestSupport.shouldLetWebViewHandleMissingBody(
+                                requestUrl,
+                                requestContext.method,
+                                requestContext.base64Body
+                            )
+                        ) {
+                            Log.w("InAppBrowserProxy", "Allowing WebView to handle request with uncaptured body: " + requestContext.url);
+                            return null;
+                        }
+
+                        boolean legacyProxyMode = ProxyRequestSupport.usesLegacyJsProxyMode(_options);
+                        boolean shouldDelegateLegacyRequest = ProxyRequestSupport.shouldDelegateLegacyJsProxyRequest(
+                            _options,
+                            requestContext.url
+                        );
+                        NativeResponseData directResponseData = null;
+
+                        NativeProxyRule outboundRule =
+                            legacyProxyMode && shouldDelegateLegacyRequest
+                                ? new NativeProxyRule(
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      false,
+                                      NativeProxyRule.Action.DELEGATE_TO_JS
+                                  )
+                                : findMatchingRule(_options.getOutboundProxyRules(), requestContext, null);
+
+                        if (outboundRule != null && outboundRule.getAction() == NativeProxyRule.Action.CANCEL) {
+                            return createCanceledResponse();
+                        }
+
+                        if (outboundRule != null && outboundRule.getAction() == NativeProxyRule.Action.DELEGATE_TO_JS) {
+                            String proxyId = UUID.randomUUID().toString();
+                            ProxiedRequest proxiedRequest = new ProxiedRequest();
+                            proxiedRequest.requestContext = requestContext;
+                            addProxiedRequest(proxyId, proxiedRequest);
+
+                            String dialogId = instanceId != null ? instanceId : "";
+                            _options
+                                .getCallbacks()
+                                .proxyRequestEvent(
+                                    proxyId,
+                                    "outbound",
+                                    requestContext.url,
+                                    requestContext.method,
+                                    serializeHeaders(requestContext.headers),
+                                    requestContext.base64Body.isEmpty() ? null : requestContext.base64Body,
+                                    null,
+                                    null,
+                                    null,
+                                    dialogId
+                                );
+
+                            try {
+                                if (proxiedRequest.semaphore.tryAcquire(1, 10, TimeUnit.SECONDS)) {
+                                    if (proxiedRequest.canceled) {
+                                        return createCanceledResponse();
+                                    }
+                                    if (proxiedRequest.response != null) {
+                                        return proxiedRequest.response;
+                                    }
+                                    if (proxiedRequest.nativeResponse != null) {
+                                        directResponseData = proxiedRequest.nativeResponse;
+                                    } else {
+                                        requestContext =
+                                            proxiedRequest.requestContext != null ? proxiedRequest.requestContext : requestContext;
+                                    }
+                                } else {
+                                    synchronized (proxiedRequest) {
+                                        proxiedRequest.timedOut = true;
+                                    }
+                                    removeProxiedRequest(proxyId);
+                                    Log.w("InAppBrowserProxy", "Proxy timeout, falling back to native replay for: " + requestContext.url);
+                                }
+                            } catch (InterruptedException error) {
+                                removeProxiedRequest(proxyId);
+                                Thread.currentThread().interrupt();
+                                Log.e("InAppBrowserProxy", "Semaphore wait error", error);
+                                return bridgeBackedRequest ? createCanceledResponse() : null;
+                            }
+                        }
+
+                        NativeResponseData nativeResponse = directResponseData;
+                        if (nativeResponse == null) {
+                            try {
+                                nativeResponse = performNativeRequest(requestContext);
+                            } catch (IOException error) {
+                                Log.e("InAppBrowserProxy", "Native request failed for: " + requestContext.url, error);
+                                return createProxiedNativeFailureResponse(requestContext.url, bridgeBackedRequest, error);
+                            }
+                        }
+
+                        int redirectsFollowed = 0;
+                        while (true) {
+                            NativeProxyRule inboundRule = findMatchingRule(_options.getInboundProxyRules(), requestContext, nativeResponse);
+                            if (inboundRule == null || inboundRule.getAction() == NativeProxyRule.Action.CONTINUE) {
+                                RedirectReplayResult redirectReplay;
+                                try {
+                                    redirectReplay = followRedirectForWebView(requestContext, nativeResponse, redirectsFollowed);
+                                } catch (IOException error) {
+                                    Log.e("InAppBrowserProxy", "Native redirect replay failed for: " + requestContext.url, error);
+                                    return createProxiedNativeFailureResponse(requestContext.url, bridgeBackedRequest, error);
+                                }
+                                if (redirectReplay != null) {
+                                    requestContext = redirectReplay.requestContext;
+                                    nativeResponse = redirectReplay.responseData;
+                                    redirectsFollowed++;
+                                    continue;
+                                }
+                                return createWebResourceResponseOrFallback(nativeResponse, bridgeBackedRequest, requestContext.url);
+                            }
+                            if (inboundRule.getAction() == NativeProxyRule.Action.CANCEL) {
+                                return createCanceledResponse();
+                            }
+
+                            String proxyId = UUID.randomUUID().toString();
+                            ProxiedRequest proxiedRequest = new ProxiedRequest();
+                            proxiedRequest.requestContext = requestContext;
+                            proxiedRequest.nativeResponse = nativeResponse;
+                            addProxiedRequest(proxyId, proxiedRequest);
+
+                            String dialogId = instanceId != null ? instanceId : "";
+                            _options
+                                .getCallbacks()
+                                .proxyRequestEvent(
+                                    proxyId,
+                                    "inbound",
+                                    requestContext.url,
+                                    requestContext.method,
+                                    serializeHeaders(requestContext.headers),
+                                    requestContext.base64Body.isEmpty() ? null : requestContext.base64Body,
+                                    nativeResponse.statusCode,
+                                    serializeHeaders(nativeResponse.headers),
+                                    Base64.encodeToString(nativeResponse.bodyBytes, Base64.NO_WRAP),
+                                    dialogId
+                                );
+
+                            try {
+                                if (proxiedRequest.semaphore.tryAcquire(1, 10, TimeUnit.SECONDS)) {
+                                    if (proxiedRequest.canceled) {
+                                        return createCanceledResponse();
+                                    }
+                                    if (proxiedRequest.response != null) {
+                                        return proxiedRequest.response;
+                                    }
+                                    if (proxiedRequest.nativeResponse != null) {
+                                        nativeResponse = proxiedRequest.nativeResponse;
+                                    }
+                                } else {
+                                    synchronized (proxiedRequest) {
+                                        proxiedRequest.timedOut = true;
+                                    }
+                                    removeProxiedRequest(proxyId);
+                                }
+                            } catch (InterruptedException error) {
+                                Thread.currentThread().interrupt();
+                                Log.e("InAppBrowserProxy", "Semaphore wait error", error);
+                            }
+
+                            RedirectReplayResult redirectReplay;
+                            try {
+                                redirectReplay = followRedirectForWebView(requestContext, nativeResponse, redirectsFollowed);
+                            } catch (IOException error) {
+                                Log.e("InAppBrowserProxy", "Native redirect replay failed for: " + requestContext.url, error);
+                                return createProxiedNativeFailureResponse(requestContext.url, bridgeBackedRequest, error);
+                            }
+                            if (redirectReplay != null) {
+                                requestContext = redirectReplay.requestContext;
+                                nativeResponse = redirectReplay.responseData;
+                                redirectsFollowed++;
+                                continue;
+                            }
+                            return createWebResourceResponseOrFallback(nativeResponse, bridgeBackedRequest, requestContext.url);
+                        }
+                    }
+
+                    return interceptBundledAssetRequest(request);
+                }
+
+private static final OkHttpClient SP_OKHTTP_CLIENT = new OkHttpClient.Builder()
+                    .protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .followRedirects(true)
+                    .followSslRedirects(true)
+                    .build();
+
+                private WebResourceResponse interceptFingerprintFreeRequest(WebResourceRequest request) {
+                    if (shouldUseNativeProxy()) {
+                        return null;
+                    }
+                    String requestUrl = request.getUrl().toString();
+                    String requestHost = request.getUrl().getHost();
+                    if (
+                        requestUrl == null ||
+                        requestHost == null ||
+                        !"GET".equalsIgnoreCase(request.getMethod()) ||
+                        !"sp.srmist.edu.in".equalsIgnoreCase(requestHost)
+                    ) {
+                        return null;
+                    }
+                    try {
+                        Map<String, String> requestHeaders = new HashMap<>();
+                        if (request.getRequestHeaders() != null) {
+                            for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
+                                if (
+                                    entry.getKey() == null ||
+                                    entry.getValue() == null ||
+                                    entry.getValue().isBlank() ||
+                                    isWebViewFingerprintHeader(entry.getKey()) ||
+                                    "Accept-Encoding".equalsIgnoreCase(entry.getKey())
+                                ) {
+                                    continue;
+                                }
+                                requestHeaders.put(entry.getKey(), entry.getValue());
+                            }
+                        }
+                        String cookies = CookieManager.getInstance().getCookie(requestUrl);
+                        if (cookies != null && !cookies.isBlank()) {
+                            requestHeaders.put("Cookie", cookies);
+                        }
+                        String userAgent = resolveWebViewUserAgent();
+                        if (!TextUtils.isEmpty(userAgent)) {
+                            requestHeaders.put("User-Agent", userAgent);
+                        }
+                        Log.i("InAppBrowserCaptcha", "Replaying SP request without fingerprint headers: " + requestUrl);
+                        Log.i("InAppBrowserCaptcha", "Replay headers: " + requestHeaders.toString());
+                        Log.i("InAppBrowserCaptcha", "Replay cookie raw: " + (cookies != null ? cookies : "null"));
+
+                        Request.Builder requestBuilder = new Request.Builder()
+                            .url(requestUrl)
+                            .get()
+                            .headers(Headers.of(requestHeaders));
+                        Response okResponse = SP_OKHTTP_CLIENT.newCall(requestBuilder.build()).execute();
+                        int statusCode = okResponse.code();
+                        Log.i("InAppBrowserCaptcha", "SP replay status " + statusCode + " for: " + requestUrl);
+                        if (statusCode < 200 || statusCode >= 300) {
+                            okResponse.close();
+                            return null;
+                        }
+                        byte[] bodyBytes = okResponse.body() != null ? okResponse.body().bytes() : null;
+                        if (bodyBytes == null) {
+                            okResponse.close();
+                            return null;
+                        }
+
+                        Map<String, String> responseHeaders = new HashMap<>();
+                        for (String headerName : okResponse.headers().names()) {
+                            if (
+                                "Transfer-Encoding".equalsIgnoreCase(headerName) ||
+                                "Connection".equalsIgnoreCase(headerName) ||
+                                "Content-Length".equalsIgnoreCase(headerName) ||
+                                "Content-Encoding".equalsIgnoreCase(headerName)
+                            ) {
+                                continue;
+                            }
+                            if ("Set-Cookie".equalsIgnoreCase(headerName)) {
+                                for (String cookieValue : okResponse.headers(headerName)) {
+                                    if (cookieValue != null) {
+                                        CookieManager.getInstance().setCookie(requestUrl, cookieValue);
+                                    }
+                                }
+                                continue;
+                            }
+                            responseHeaders.put(headerName, TextUtils.join(", ", okResponse.headers(headerName)));
+                        }
+
+                        String contentType = okResponse.header("Content-Type");
+                        String mimeType = "application/octet-stream";
+                        String encoding = null;
+                        if (contentType != null && !contentType.isBlank()) {
+                            String[] contentTypeParts = contentType.split(";");
+                            mimeType = contentTypeParts[0].trim();
+                            for (int i = 1; i < contentTypeParts.length; i++) {
+                                String part = contentTypeParts[i].trim();
+                                if (part.toLowerCase(Locale.ROOT).startsWith("charset=")) {
+                                    encoding = part.substring("charset=".length()).trim();
+                                    break;
+                                }
+                            }
+                        }
+                        WebResourceResponse response = new WebResourceResponse(mimeType, encoding, new ByteArrayInputStream(bodyBytes));
+                        String reasonPhrase = getReasonPhrase(statusCode);
+                        if (reasonPhrase.isEmpty()) {
+                            reasonPhrase = "OK";
+                        }
+                        response.setStatusCodeAndReasonPhrase(statusCode, reasonPhrase);
+                        response.setResponseHeaders(responseHeaders);
+                        okResponse.close();
+                        return response;
+                    } catch (Exception error) {
+                        Log.e("InAppBrowser", "SP fingerprint-stripped replay failed for: " + requestUrl, error);
+                        return null;
+                    }
+                }
+
+                private boolean isWebViewFingerprintHeader(String headerName) {
+                    return "X-Requested-With".equalsIgnoreCase(headerName)
+                        || "Sec-CH-UA".equalsIgnoreCase(headerName)
+                        || "Sec-CH-UA-Mobile".equalsIgnoreCase(headerName)
+                        || "Sec-CH-UA-Platform".equalsIgnoreCase(headerName);
+                }
+
+                @Override
+                public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) {
+                    if (view == null || _webView == null) {
+                        if (handler != null) {
+                            handler.cancel();
+                        }
+                        return;
+                    }
+                    final String sourceUrl = _options.getUrl();
+                    final String url = view.getUrl();
+                    final JSObject credentials = _options.getCredentials();
+
+                    if (
+                        credentials != null &&
+                        credentials.getString("username") != null &&
+                        credentials.getString("password") != null &&
+                        sourceUrl != null &&
+                        url != null
+                    ) {
+                        String sourceProtocol = "";
+                        String sourceHost = "";
+                        int sourcePort = -1;
+                        try {
+                            URI uri = new URI(sourceUrl);
+                            sourceProtocol = uri.getScheme();
+                            sourceHost = uri.getHost();
+                            sourcePort = uri.getPort();
+                            if (sourcePort == -1 && Objects.equals(sourceProtocol, "https")) sourcePort = 443;
+                            else if (sourcePort == -1 && Objects.equals(sourceProtocol, "http")) sourcePort = 80;
+                        } catch (URISyntaxException e) {
+                            e.printStackTrace();
+                        }
+
+                        String protocol = "";
+                        int port = -1;
+                        try {
+                            URI uri = new URI(url);
+                            protocol = uri.getScheme();
+                            port = uri.getPort();
+                            if (port == -1 && Objects.equals(protocol, "https")) port = 443;
+                            else if (port == -1 && Objects.equals(protocol, "http")) port = 80;
+                        } catch (URISyntaxException e) {
+                            e.printStackTrace();
+                        }
+
+                        if (Objects.equals(sourceHost, host) && Objects.equals(sourceProtocol, protocol) && sourcePort == port) {
+                            final String username = Objects.requireNonNull(credentials.getString("username"));
+                            final String password = Objects.requireNonNull(credentials.getString("password"));
+                            handler.proceed(username, password);
+                            return;
+                        }
+                    }
+
+                    super.onReceivedHttpAuthRequest(view, handler, host, realm);
+                }
+
+                @Override
+                public void onLoadResource(WebView view, String url) {
+                    if (view == null || _webView == null) {
+                        return;
+                    }
+                    super.onLoadResource(view, url);
+                }
+
+                @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    if (view == null || _webView == null) {
+                        return;
+                    }
+                    if (_options.getCallbacks() != null) {
+                        _options.getCallbacks().pageLoadStart();
+                    }
+                    if (ProxyRequestSupport.shouldInjectBridge(_options) && proxyBridgeScript != null && proxyAccessToken != null) {
+                        String preparedProxyBridgeScript = prepareProxyBridgeScript();
+                        if (preparedProxyBridgeScript != null) {
+                            view.evaluateJavascript(preparedProxyBridgeScript, null);
+                        }
+                    }
+                    try {
+                        URI uri = new URI(url);
+                        if (TextUtils.isEmpty(_options.getTitle())) {
+                            setTitle(uri.getHost());
+                        }
+                    } catch (URISyntaxException e) {
+                        // Do nothing
+                    }
+                }
+
+                public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                    if (view == null || _webView == null) {
+                        return;
+                    }
+                    if (!isReload) {
+                        _options.getCallbacks().urlChangeEvent(url);
+                    }
+                    updateNavigationButtonsState();
+                    super.doUpdateVisitedHistory(view, url, isReload);
+                    injectJavaScriptInterface();
+
+                    // Inject Google Pay polyfills if enabled
+                    if (_options.getEnableGooglePaySupport()) {
+                        injectGooglePayPolyfills();
+                    }
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    if (view == null || _webView == null) {
+                        return;
+                    }
+                    if (!isInitialized) {
+                        isInitialized = true;
+                        _webView.clearHistory();
+                        if (_options.isPresentAfterPageLoad()) {
+                            boolean usePreShowScript =
+                                _options.getPreShowScript() != null &&
+                                !_options.getPreShowScript().isEmpty() &&
+                                !preShowInjectedAtDocumentStart;
+                            if (!usePreShowScript) {
+                                showAccordingToLayerModeOrFallback();
+                                resolveOpenWebViewIfNeeded();
+                            } else {
+                                executorService.execute(
+                                    new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (_options.getPreShowScript() != null && !_options.getPreShowScript().isEmpty()) {
+                                                injectPreShowScript();
+                                            }
+
+                                            activity.runOnUiThread(
+                                                new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        showAccordingToLayerModeOrFallback();
+                                                        resolveOpenWebViewIfNeeded();
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    }
+                                );
+                            }
+                        }
+                    } else if (
+                        _options.getPreShowScript() != null && !_options.getPreShowScript().isEmpty() && !preShowInjectedAtDocumentStart
+                    ) {
+                        executorService.execute(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    injectPreShowScript();
+                                }
+                            }
+                        );
+                    }
+
+                    updateNavigationButtonsState();
+
+                    _options.getCallbacks().pageLoaded();
+                    stopReloadGesture();
+                    injectJavaScriptInterface();
+                    // The freshly parsed document carries no safe-area variables, whatever was
+                    // injected into the previous one, so drop the cache and serve them again.
+                    resetInjectedSafeAreaCssVariables();
+                    reapplyInsetsFromWindowRoot();
+
+                    // Inject Google Pay polyfills if enabled
+                    if (_options.getEnableGooglePaySupport()) {
+                        injectGooglePayPolyfills();
+                    }
+                }
+
+                @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                    super.onReceivedError(view, request, error);
+                    if (view == null || _webView == null) {
+                        return;
+                    }
+                    if (request == null || !request.isForMainFrame()) {
+                        return;
+                    }
+                    stopReloadGesture();
+                    if (_options.getCallbacks() != null) {
+                        _options.getCallbacks().pageLoadError();
+                    }
+                    if (!isInitialized) {
+                        CharSequence description = error != null ? error.getDescription() : null;
+                        String message = description != null ? "Initial page load failed: " + description : "Initial page load failed";
+                        rejectOpenWebViewIfNeeded(message);
+                    }
+                }
+
+                @SuppressLint("WebViewClientOnReceivedSslError")
+                @Override
+                public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                    if (view == null || _webView == null) {
+                        if (handler != null) {
+                            handler.cancel();
+                        }
+                        return;
+                    }
+                    boolean ignoreSSLUntrustedError = _options.ignoreUntrustedSSLError();
+                    if (ignoreSSLUntrustedError && error.getPrimaryError() == SslError.SSL_UNTRUSTED) handler.proceed();
+                    else {
+                        super.onReceivedSslError(view, handler, error);
+                    }
+                }
+            }
+        );
+    }
+
+    /**
+     * Navigates back in the WebView history if possible
+     * @return true if navigation was successful, false otherwise
+     */
+    public boolean goBack() {
+        if (_webView != null && _webView.canGoBack()) {
+            _webView.goBack();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (
+            _webView != null &&
+            _webView.canGoBack() &&
+            (TextUtils.equals(_options.getToolbarType(), "navigation") || _options.getActiveNativeNavigationForWebview())
+        ) {
+            _webView.goBack();
+        } else if (!_options.getDisableGoBackOnNativeApplication()) {
+            String currentUrl = getUrl();
+            _options.getCallbacks().closeEvent(currentUrl);
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // Forward volume key events to the MainActivity
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_UP:
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                return activity.onKeyDown(keyCode, event);
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        // Forward volume key events to the MainActivity
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_UP:
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                return activity.onKeyUp(keyCode, event);
+        }
+        return super.onKeyUp(keyCode, event);
+    }
+
+    public static String getReasonPhrase(int statusCode) {
+        return switch (statusCode) {
+            case (200) -> "OK";
+            case (201) -> "Created";
+            case (202) -> "Accepted";
+            case (203) -> "Non Authoritative Information";
+            case (204) -> "No Content";
+            case (205) -> "Reset Content";
+            case (206) -> "Partial Content";
+            case (207) -> "Partial Update OK";
+            case (300) -> "Multiple Choices";
+            case (301) -> "Moved Permanently";
+            case (302) -> "Moved Temporarily";
+            case (303) -> "See Other";
+            case (304) -> "Not Modified";
+            case (305) -> "Use Proxy";
+            case (307) -> "Temporary Redirect";
+            case (400) -> "Bad Request";
+            case (401) -> "Unauthorized";
+            case (402) -> "Payment Required";
+            case (403) -> "Forbidden";
+            case (404) -> "Not Found";
+            case (405) -> "Method Not Allowed";
+            case (406) -> "Not Acceptable";
+            case (407) -> "Proxy Authentication Required";
+            case (408) -> "Request Timeout";
+            case (409) -> "Conflict";
+            case (410) -> "Gone";
+            case (411) -> "Length Required";
+            case (412) -> "Precondition Failed";
+            case (413) -> "Request Entity Too Large";
+            case (414) -> "Request-URI Too Long";
+            case (415) -> "Unsupported Media Type";
+            case (416) -> "Requested Range Not Satisfiable";
+            case (417) -> "Expectation Failed";
+            case (418) -> "Reauthentication Required";
+            case (419) -> "Proxy Reauthentication Required";
+            case (422) -> "Unprocessable Entity";
+            case (423) -> "Locked";
+            case (424) -> "Failed Dependency";
+            case (500) -> "Server Error";
+            case (501) -> "Not Implemented";
+            case (502) -> "Bad Gateway";
+            case (503) -> "Service Unavailable";
+            case (504) -> "Gateway Timeout";
+            case (505) -> "HTTP Version Not Supported";
+            case (507) -> "Insufficient Storage";
+            case (599) -> "Network Error";
+            default -> "";
+        };
+    }
+
+    @Override
+    public void dismiss() {
+        unregisterConfigurationCallbacks();
+        scheduleHostWebViewInsetRestore();
+        detachBackLayer();
+
+        // First, stop any ongoing operations and disable further interactions
+        if (_webView != null) {
+            try {
+                isDismissing = true;
+
+                // Stop loading first to prevent any ongoing operations
+                _webView.stopLoading();
+
+                if (pendingCameraLaunchPermissionRequest != null) {
+                    permissionHandler.clearPendingPermissionRequest(pendingCameraLaunchPermissionRequest);
+                    pendingCameraLaunchPermissionRequest = null;
+                }
+
+                if (currentPermissionRequest != null) {
+                    try {
+                        permissionHandler.clearPendingPermissionRequest(currentPermissionRequest);
+                        currentPermissionRequest.deny();
+                    } catch (Exception e) {
+                        Log.w("InAppBrowser", "Could not deny pending media permission request: " + e.getMessage());
+                    } finally {
+                        currentPermissionRequest = null;
+                    }
+                }
+
+                // Clear any pending callbacks to prevent memory leaks
+                if (activeFileChooserRequest != null) {
+                    FileChooserRequestSupport.cancel(activeFileChooserRequest);
+                    activeFileChooserRequest = null;
+                    syncFileChooserPublicFields();
+                }
+
+                // Clear file inputs for security/privacy before destroying WebView
+                try {
+                    String clearInputsScript = """
+                        (function() {
+                          try {
+                            var inputs = document.querySelectorAll('input[type="file"]');
+                            for (var i = 0; i < inputs.length; i++) {
+                              inputs[i].value = '';
+                            }
+                            return true;
+                          } catch(e) {
+                            console.log('Error clearing file inputs:', e);
+                            return false;
+                          }
+                        })();
+                        """;
+                    _webView.evaluateJavascript(clearInputsScript, null);
+                } catch (Exception e) {
+                    Log.w("InAppBrowser", "Could not clear file inputs (WebView may be in invalid state): " + e.getMessage());
+                }
+
+                if (_options != null && !_options.getPersistWebViewData()) {
+                    _webView.clearCache(true);
+                    _webView.clearHistory();
+                    _webView.clearFormData();
+                    _webView.clearSslPreferences();
+                }
+
+                forceStopMediaCapture(_webView);
+
+                // Remove JavaScript interfaces before destroying
+                _webView.removeJavascriptInterface("AndroidInterface");
+                _webView.removeJavascriptInterface("PreShowScriptInterface");
+                _webView.removeJavascriptInterface("PrintInterface");
+
+                _webView.removeAllViews();
+
+                final WebView webViewToDestroy = _webView;
+                _webView = null;
+                final Handler mainHandler = new Handler(Looper.getMainLooper());
+                final AtomicBoolean destroyCalled = new AtomicBoolean(false);
+
+                final Runnable doDestroy = () -> {
+                    if (!destroyCalled.getAndSet(true)) {
+                        try {
+                            webViewToDestroy.onPause();
+                            webViewToDestroy.destroy();
+                        } catch (Exception e) {
+                            Log.e("InAppBrowser", "Error destroying WebView: " + e.getMessage());
+                        }
+                    }
+                };
+
+                // Schedule the fallback before the navigation handoff so destroy still
+                // runs if setWebViewClient/loadUrl throws.
+                mainHandler.postDelayed(doDestroy, 3000);
+
+                // Let Chromium finish unloading the page before pausing and destroying
+                // the renderer so active media capture can be released cleanly.
+                try {
+                    webViewToDestroy.setWebViewClient(
+                        new WebViewClient() {
+                            @Override
+                            public void onPageFinished(WebView view, String url) {
+                                if ("about:blank".equals(url)) {
+                                    mainHandler.postDelayed(doDestroy, 200);
+                                }
+                            }
+                        }
+                    );
+                    webViewToDestroy.loadUrl("about:blank");
+                } catch (Exception e) {
+                    Log.e("InAppBrowser", "Falling back to immediate WebView destroy: " + e.getMessage());
+                    doDestroy.run();
+                }
+            } catch (Exception e) {
+                Log.e("InAppBrowser", "Error during WebView cleanup: " + e.getMessage());
+                _webView = null;
+            }
+        }
+
+        for (BlobDownloadSession session : new java.util.ArrayList<>(blobDownloadSessions.values())) {
+            cleanupBlobDownloadSession(session, true);
+        }
+        blobDownloadSessions.clear();
+        clientCertificateIdentities.clear();
+
+        // Shutdown executor service asynchronously to avoid blocking UI thread
+        shutdownExecutorServiceAsync();
+
+        // Clear any remaining proxied requests
+        proxiedRequestsHashmap.clear();
+
+        try {
+            super.dismiss();
+        } catch (Exception e) {
+            Log.e("InAppBrowser", "Error dismissing dialog: " + e.getMessage());
+        }
+
+        scheduleHostWebViewInsetRestore();
+    }
+
+    private void requestInsetsOnHostView(View view) {
+        if (view == null) {
+            return;
+        }
+
+        view.requestLayout();
+        ViewCompat.requestApplyInsets(view);
+    }
+
+    private void scheduleHostWebViewInsetRestore() {
+        if (activity == null) {
+            return;
+        }
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            return;
+        }
+
+        Window dialogWindow = getWindow();
+        View dialogDecorView = dialogWindow != null ? dialogWindow.getDecorView() : null;
+        if (dialogWindow != null && dialogDecorView != null) {
+            dialogDecorView.clearFocus();
+
+            WindowInsetsControllerCompat insetsController = new WindowInsetsControllerCompat(dialogWindow, dialogDecorView);
+            insetsController.hide(WindowInsetsCompat.Type.ime());
+
+            InputMethodManager inputMethodManager = (InputMethodManager) _context.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (inputMethodManager != null) {
+                inputMethodManager.hideSoftInputFromWindow(dialogDecorView.getWindowToken(), 0);
+            }
+        }
+
+        if (_webView != null) {
+            _webView.clearFocus();
+        }
+        if (capacitorWebView == null) {
+            return;
+        }
+
+        Window hostWindow = activity.getWindow();
+        if (hostWindow == null) {
+            return;
+        }
+
+        View hostDecorView = hostWindow.getDecorView();
+        if (hostDecorView == null) {
+            return;
+        }
+
+        View hostContentView = activity.findViewById(android.R.id.content);
+        Runnable restoreInsets = () -> {
+            try {
+                capacitorWebView.clearFocus();
+                capacitorWebView.requestFocus();
+
+                requestInsetsOnHostView(hostDecorView);
+                requestInsetsOnHostView(hostContentView);
+
+                if (capacitorWebView.getParent() instanceof View parentView) {
+                    requestInsetsOnHostView(parentView);
+                }
+
+                requestInsetsOnHostView(capacitorWebView);
+            } catch (Exception e) {
+                Log.w("InAppBrowser", "Failed to restore host window insets after dismiss: " + e.getMessage());
+            }
+        };
+
+        hostDecorView.post(restoreInsets);
+        hostDecorView.postDelayed(restoreInsets, HOST_WEBVIEW_INSET_RETRY_DELAY_MS);
+    }
+
+    private void forceStopMediaCapture(WebView webView) {
+        try {
+            String stopMediaCaptureScript = """
+                (function() {
+                  var stoppedTracks = 0;
+                  function stopStream(value) {
+                    try {
+                      if (!value || typeof value.getTracks !== 'function') {
+                        return;
+                      }
+                      var tracks = value.getTracks();
+                      for (var i = 0; i < tracks.length; i++) {
+                        try {
+                          tracks[i].stop();
+                          stoppedTracks++;
+                        } catch (e) {}
+                      }
+                    } catch (e) {}
+                  }
+
+                  try {
+                    var mediaElements = document.querySelectorAll('audio,video');
+                    for (var i = 0; i < mediaElements.length; i++) {
+                      var element = mediaElements[i];
+                      try { stopStream(element.srcObject); } catch (e) {}
+                      try { element.pause(); } catch (e) {}
+                      try { element.srcObject = null; } catch (e) {}
+                    }
+                  } catch (e) {}
+
+                  try {
+                    var windowKeys = Object.keys(window);
+                    for (var j = 0; j < windowKeys.length; j++) {
+                      var value = window[windowKeys[j]];
+                      stopStream(value);
+                      if (Array.isArray(value)) {
+                        for (var k = 0; k < value.length; k++) {
+                          stopStream(value[k]);
+                        }
+                      }
+                    }
+                  } catch (e) {}
+
+                  return stoppedTracks;
+                })();
+                """;
+            webView.evaluateJavascript(stopMediaCaptureScript, (result) ->
+                Log.d("InAppBrowser", "Stopped active media tracks before dismiss: " + result)
+            );
+        } catch (Exception e) {
+            Log.w("InAppBrowser", "Could not force-stop media capture before dismiss: " + e.getMessage());
+        }
+    }
+
+    private void shutdownExecutorServiceAsync() {
+        if (executorService.isShutdown()) {
+            return;
+        }
+        Thread shutdownThread = new Thread(
+            () -> {
+                try {
+                    executorService.shutdown();
+                    if (!executorService.awaitTermination(500, TimeUnit.MILLISECONDS)) {
+                        executorService.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    executorService.shutdownNow();
+                } catch (Exception e) {
+                    Log.e("InAppBrowser", "Error shutting down executor: " + e.getMessage());
+                }
+            },
+            "InAppBrowser-ExecutorShutdown"
+        );
+        shutdownThread.setDaemon(true);
+        shutdownThread.start();
+    }
+
+    public void addProxiedRequest(String key, ProxiedRequest request) {
+        synchronized (proxiedRequestsHashmap) {
+            proxiedRequestsHashmap.put(key, request);
+        }
+    }
+
+    public ProxiedRequest getProxiedRequest(String key) {
+        synchronized (proxiedRequestsHashmap) {
+            ProxiedRequest request = proxiedRequestsHashmap.get(key);
+            proxiedRequestsHashmap.remove(key);
+            return request;
+        }
+    }
+
+    public void removeProxiedRequest(String key) {
+        synchronized (proxiedRequestsHashmap) {
+            proxiedRequestsHashmap.remove(key);
+        }
+    }
+
+    private String loadProxyBridgeScript() {
+        try (InputStream is = _context.getAssets().open("proxy-bridge.js")) {
+            ByteArrayOutputStream result = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                result.write(buffer, 0, bytesRead);
+            }
+            return result.toString(StandardCharsets.UTF_8.name());
+        } catch (IOException e) {
+            Log.e("InAppBrowserProxy", "Failed to load proxy-bridge.js", e);
+            return null;
+        }
+    }
+
+    private static String escapeJavaScriptLiteral(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        return value
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+            .replace("\u2028", "\\u2028")
+            .replace("\u2029", "\\u2029");
+    }
+
+    private String prepareProxyBridgeScript() {
+        if (proxyBridgeScript == null || proxyAccessToken == null) {
+            return null;
+        }
+
+        String proxyRegexSource = "";
+        if (ProxyRequestSupport.usesLegacyJsProxyMode(_options) && _options.getProxyRequestsPattern() != null) {
+            proxyRegexSource = _options.getProxyRequestsPattern().pattern();
+        }
+
+        return proxyBridgeScript
+            .replace("___CAPGO_PROXY_TOKEN___", escapeJavaScriptLiteral(proxyAccessToken))
+            .replace("___CAPGO_PROXY_REGEX___", escapeJavaScriptLiteral(proxyRegexSource));
+    }
+
+    private boolean loadHtmlDataUrlIfNeeded(String url) {
+        if (_webView == null) {
+            return false;
+        }
+
+        String html = HtmlDataUrlSupport.parseHtml(url);
+        if (html == null) {
+            return false;
+        }
+
+        _webView.loadDataWithBaseURL("about:blank", html, "text/html", "utf-8", null);
+        return true;
+    }
+
+    private boolean shouldUseNativeProxy() {
+        return _options != null && _options.shouldEnableNativeProxy();
+    }
+
+    private boolean shouldBootstrapInitialLegacyProxyLoad() {
+        return ProxyRequestSupport.shouldBootstrapInitialProxyLoad(_options);
+    }
+
+    private void loadInitialUrlDirect(Map<String, String> requestHeaders, String httpMethod, String httpBody) {
+        if (_webView == null || _options == null) {
+            return;
+        }
+
+        if (loadHtmlDataUrlIfNeeded(_options.getUrl())) {
+            return;
+        }
+
+        Map<String, String> headers = requestHeaders != null ? requestHeaders : new HashMap<>();
+        if (supportsRequestBody(httpMethod) && httpBody != null) {
+            byte[] postData = httpBody.getBytes(StandardCharsets.UTF_8);
+            _webView.postUrl(_options.getUrl(), postData);
+            if (!headers.isEmpty()) {
+                Log.w(
+                    "InAppBrowser",
+                    "Custom headers were provided but may not be sent with POST request. " +
+                        "Android WebView's postUrl method has limited header support."
+                );
+            }
+            return;
+        }
+
+        _webView.loadUrl(_options.getUrl(), headers);
+    }
+
+    private void loadInitialLegacyProxyContent(
+        Map<String, String> directRequestHeaders,
+        Map<String, String> proxyRequestHeaders,
+        String httpMethod,
+        String httpBody
+    ) {
+        final String initialUrl = _options.getUrl();
+        final Map<String, String> initialDirectHeaders =
+            directRequestHeaders != null ? new HashMap<>(directRequestHeaders) : new HashMap<>();
+        final Map<String, String> initialProxyHeaders = proxyRequestHeaders != null ? new HashMap<>(proxyRequestHeaders) : new HashMap<>();
+        final String initialMethod = httpMethod != null && !httpMethod.isBlank() ? httpMethod : "GET";
+        final String initialBody =
+            supportsRequestBody(initialMethod) && httpBody != null
+                ? Base64.encodeToString(httpBody.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP)
+                : "";
+
+        executorService.execute(() -> {
+            NativeRequestContext requestContext = new NativeRequestContext(
+                initialUrl,
+                initialMethod,
+                initialProxyHeaders,
+                initialBody,
+                true,
+                "same-origin"
+            );
+
+            try {
+                LegacyInitialProxyResult proxyResult = resolveLegacyInitialProxyResponse(requestContext);
+                if (proxyResult.canceled) {
+                    rejectOpenWebViewIfNeeded("Initial legacy proxy request canceled");
+                    return;
+                }
+
+                NativeResponseData responseData = proxyResult.responseData;
+                if (responseData == null || !canBootstrapHtmlResponse(responseData.contentType)) {
+                    if (_webView == null) {
+                        return;
+                    }
+                    _webView.post(() -> loadInitialUrlDirect(initialDirectHeaders, initialMethod, httpBody));
+                    return;
+                }
+
+                ProxyRequestSupport.WebResourceResponseMetadata metadata = ProxyRequestSupport.resolveWebResourceResponseMetadata(
+                    responseData.contentType,
+                    responseData.headers
+                );
+                String encoding = metadata.encoding() != null && !metadata.encoding().isBlank() ? metadata.encoding() : "utf-8";
+                String body = decodeResponseBody(responseData.bodyBytes, encoding);
+                String bootstrapUrl = ProxyRequestSupport.resolveBootstrapBaseUrl(initialUrl, proxyResult.requestUrl);
+
+                if (_webView == null) {
+                    return;
+                }
+
+                _webView.post(() -> {
+                    if (_webView == null) {
+                        return;
+                    }
+                    _webView.loadDataWithBaseURL(bootstrapUrl, body, metadata.mimeType(), encoding, bootstrapUrl);
+                });
+            } catch (IOException error) {
+                Log.e("InAppBrowserProxy", "Initial legacy proxy bootstrap failed for: " + initialUrl, error);
+                if (_webView == null) {
+                    return;
+                }
+                String failureBody = new String(
+                    ProxyRequestSupport.createNativeRequestFailureBody(initialUrl, error),
+                    StandardCharsets.UTF_8
+                );
+                _webView.post(() -> {
+                    if (_webView == null) {
+                        return;
+                    }
+                    _webView.loadDataWithBaseURL(initialUrl, failureBody, "text/plain", "utf-8", initialUrl);
+                });
+            }
+        });
+    }
+
+    private LegacyInitialProxyResult resolveLegacyInitialProxyResponse(NativeRequestContext requestContext) throws IOException {
+        String proxyId = UUID.randomUUID().toString();
+        ProxiedRequest proxiedRequest = new ProxiedRequest();
+        proxiedRequest.requestContext = requestContext;
+        addProxiedRequest(proxyId, proxiedRequest);
+
+        String dialogId = instanceId != null ? instanceId : "";
+        _options
+            .getCallbacks()
+            .proxyRequestEvent(
+                proxyId,
+                "outbound",
+                requestContext.url,
+                requestContext.method,
+                serializeHeaders(requestContext.headers),
+                requestContext.base64Body.isEmpty() ? null : requestContext.base64Body,
+                null,
+                null,
+                null,
+                dialogId
+            );
+
+        try {
+            if (proxiedRequest.semaphore.tryAcquire(1, 10, TimeUnit.SECONDS)) {
+                if (proxiedRequest.canceled) {
+                    return new LegacyInitialProxyResult(true, null, requestContext.url);
+                }
+                if (proxiedRequest.nativeResponse != null) {
+                    return new LegacyInitialProxyResult(false, proxiedRequest.nativeResponse, requestContext.url);
+                }
+                requestContext = proxiedRequest.requestContext != null ? proxiedRequest.requestContext : requestContext;
+            } else {
+                synchronized (proxiedRequest) {
+                    proxiedRequest.timedOut = true;
+                }
+                removeProxiedRequest(proxyId);
+            }
+        } catch (InterruptedException error) {
+            removeProxiedRequest(proxyId);
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for initial proxy response", error);
+        }
+
+        NativeResponseData nativeResponse = performNativeRequest(requestContext);
+        int redirectsFollowed = 0;
+        while (true) {
+            RedirectReplayResult redirectReplay = followRedirectForWebView(requestContext, nativeResponse, redirectsFollowed);
+            if (redirectReplay == null) {
+                return new LegacyInitialProxyResult(false, nativeResponse, requestContext.url);
+            }
+            requestContext = redirectReplay.requestContext;
+            nativeResponse = redirectReplay.responseData;
+            redirectsFollowed++;
+        }
+    }
+
+    private boolean canBootstrapHtmlResponse(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return false;
+        }
+        String normalizedContentType = contentType.toLowerCase(Locale.US);
+        return (
+            normalizedContentType.startsWith("text/html") ||
+            normalizedContentType.startsWith("application/xhtml+xml") ||
+            normalizedContentType.startsWith("text/plain")
+        );
+    }
+
+    private String decodeResponseBody(byte[] bodyBytes, String encoding) {
+        if (bodyBytes == null || bodyBytes.length == 0) {
+            return "";
+        }
+        try {
+            return new String(bodyBytes, Charset.forName(encoding));
+        } catch (Exception _error) {
+            return new String(bodyBytes, StandardCharsets.UTF_8);
+        }
+    }
+
+    private String decodeBase64Body(String base64Body) {
+        if (base64Body == null || base64Body.isEmpty()) {
+            return null;
+        }
+        try {
+            return new String(Base64.decode(base64Body, Base64.DEFAULT), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String serializeHeaders(Map<String, String> headers) {
+        JSONObject jsonObject = new JSONObject();
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                try {
+                    jsonObject.put(entry.getKey(), entry.getValue());
+                } catch (JSONException ignored) {}
+            }
+        }
+        return jsonObject.toString();
+    }
+
+    private NativeProxyRule findMatchingRule(
+        List<NativeProxyRule> rules,
+        NativeRequestContext requestContext,
+        NativeResponseData responseData
+    ) {
+        if (rules == null) {
+            return null;
+        }
+        String decodedRequestBody = decodeBase64Body(requestContext.base64Body);
+        String serializedRequestHeaders = serializeHeaders(requestContext.headers);
+        String serializedResponseHeaders = responseData != null ? serializeHeaders(responseData.headers) : null;
+        String decodedResponseBody = responseData != null ? new String(responseData.bodyBytes, StandardCharsets.UTF_8) : null;
+        Integer statusCode = responseData != null ? responseData.statusCode : null;
+
+        for (NativeProxyRule rule : rules) {
+            if (
+                rule.matches(
+                    requestContext.url,
+                    requestContext.method,
+                    serializedRequestHeaders,
+                    decodedRequestBody,
+                    requestContext.mainFrame,
+                    statusCode,
+                    serializedResponseHeaders,
+                    decodedResponseBody
+                )
+            ) {
+                return rule;
+            }
+        }
+        return null;
+    }
+
+    private WebResourceResponse createCanceledResponse() {
+        WebResourceResponse response = new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
+        response.setStatusCodeAndReasonPhrase(204, "No Content");
+        response.setResponseHeaders(new HashMap<>());
+        return response;
+    }
+
+    private WebResourceResponse createProxiedNativeFailureResponse(String requestUrl, boolean bridgeBackedRequest, IOException error) {
+        if (!ProxyRequestSupport.shouldReturnSyntheticNativeFailure(bridgeBackedRequest, _options, requestUrl)) {
+            return null;
+        }
+        return createNativeFailureResponse(requestUrl, error);
+    }
+
+    private WebResourceResponse createNativeFailureResponse(String requestUrl, IOException error) {
+        NativeResponseData responseData = new NativeResponseData(
+            ProxyRequestSupport.SYNTHETIC_NATIVE_FAILURE_STATUS,
+            "text/plain; charset=utf-8",
+            ProxyRequestSupport.createNativeRequestFailureHeaders(error),
+            ProxyRequestSupport.createNativeRequestFailureBody(requestUrl, error)
+        );
+        WebResourceResponse response = buildWebResourceResponse(responseData);
+        return response != null ? response : createCanceledResponse();
+    }
+
+    private WebResourceResponse createWebResourceResponseOrFallback(
+        NativeResponseData responseData,
+        boolean bridgeBackedRequest,
+        String requestUrl
+    ) {
+        WebResourceResponse response = buildWebResourceResponse(responseData);
+        if (response != null) {
+            return response;
+        }
+
+        // Android WebResourceResponse rejects 3xx statuses; let the original WebView request handle them.
+        if (ProxyRequestSupport.shouldFallbackToWebViewForUnsupportedStatus(bridgeBackedRequest, responseData.statusCode)) {
+            Log.w(
+                "InAppBrowserProxy",
+                "Allowing WebView to handle unsupported proxy response status " + responseData.statusCode + " for: " + requestUrl
+            );
+            return null;
+        }
+
+        Log.w("InAppBrowserProxy", "Canceling bridge proxy response with unsupported status: " + responseData.statusCode);
+        return createCanceledResponse();
+    }
+
+    private WebResourceResponse buildWebResourceResponse(NativeResponseData responseData) {
+        if (!ProxyRequestSupport.supportsWebResourceResponseStatus(responseData.statusCode)) {
+            return null;
+        }
+
+        ProxyRequestSupport.WebResourceResponseMetadata metadata = ProxyRequestSupport.resolveWebResourceResponseConstructorMetadata(
+            responseData.contentType,
+            responseData.headers
+        );
+        WebResourceResponse webResourceResponse = new WebResourceResponse(
+            metadata.mimeType(),
+            metadata.encoding(),
+            new ByteArrayInputStream(responseData.bodyBytes)
+        );
+        String reasonPhrase = getReasonPhrase(responseData.statusCode);
+        if (reasonPhrase.isEmpty()) {
+            reasonPhrase = "Unknown";
+        }
+        webResourceResponse.setStatusCodeAndReasonPhrase(responseData.statusCode, reasonPhrase);
+        webResourceResponse.setResponseHeaders(responseData.headers);
+        return webResourceResponse;
+    }
+
+    private RedirectReplayResult followRedirectForWebView(
+        NativeRequestContext requestContext,
+        NativeResponseData responseData,
+        int redirectsFollowed
+    ) throws IOException {
+        String redirectUrl = ProxyRequestSupport.resolveRedirectUrl(requestContext.url, responseData.statusCode, responseData.headers);
+        if (redirectUrl == null) {
+            return null;
+        }
+        if (redirectsFollowed >= MAX_WEBVIEW_PROXY_REDIRECTS) {
+            throw new IOException("Too many proxy redirects for: " + requestContext.url);
+        }
+
+        NativeRequestContext redirectRequestContext = createRedirectRequestContext(requestContext, responseData.statusCode, redirectUrl);
+        NativeResponseData redirectResponse = performNativeRequest(redirectRequestContext);
+        return new RedirectReplayResult(redirectRequestContext, redirectResponse);
+    }
+
+    private NativeRequestContext createRedirectRequestContext(NativeRequestContext requestContext, int statusCode, String redirectUrl) {
+        boolean preserveRequestBody = ProxyRequestSupport.shouldPreserveRequestBodyOnRedirect(requestContext.method, statusCode);
+        String redirectMethod = ProxyRequestSupport.resolveRedirectMethod(requestContext.method, statusCode);
+        Map<String, String> redirectHeaders = ProxyRequestSupport.prepareRedirectHeaders(
+            requestContext.headers,
+            preserveRequestBody,
+            requestContext.url,
+            redirectUrl
+        );
+        String redirectCookies = CookieManager.getInstance().getCookie(redirectUrl);
+        if (
+            redirectCookies != null &&
+            !redirectCookies.isBlank() &&
+            ProxyRequestSupport.shouldInjectCookies(requestContext.credentialsMode, requestContext.url, redirectUrl, redirectHeaders)
+        ) {
+            redirectHeaders.put("Cookie", redirectCookies);
+        }
+        String redirectBody = preserveRequestBody ? requestContext.base64Body : "";
+        return new NativeRequestContext(
+            redirectUrl,
+            redirectMethod,
+            redirectHeaders,
+            redirectBody,
+            requestContext.mainFrame,
+            requestContext.credentialsMode
+        );
+    }
+
+    private NativeResponseData performNativeRequest(NativeRequestContext requestContext) throws IOException {
+        URL url = new URL(requestContext.url);
+        if (!ProxyRequestSupport.supportsNativeHttpRequest(url)) {
+            throw new IOException("Unsupported proxy URL: " + requestContext.url);
+        }
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        try {
+            conn.setConnectTimeout(REQUEST_CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(REQUEST_READ_TIMEOUT_MS);
+            conn.setRequestMethod(requestContext.method != null ? requestContext.method : "GET");
+            conn.setInstanceFollowRedirects(false);
+
+            // Strip conditional cache validators on the wire so upstream cannot return 304/3xx,
+            // which WebResourceResponse.setStatusCodeAndReasonPhrase rejects (kills the renderer).
+            Map<String, String> wireHeaders = ProxyRequestSupport.stripCacheValidatorHeaders(requestContext.headers);
+            for (Map.Entry<String, String> entry : wireHeaders.entrySet()) {
+                conn.setRequestProperty(entry.getKey(), entry.getValue());
+            }
+
+            if (requestContext.base64Body != null && !requestContext.base64Body.isEmpty()) {
+                byte[] bodyBytes = ProxyRequestSupport.decodeBase64Body(requestContext.base64Body);
+                conn.setDoOutput(true);
+                try (java.io.OutputStream outputStream = conn.getOutputStream()) {
+                    outputStream.write(bodyBytes);
+                }
+            }
+
+            int status = conn.getResponseCode();
+            InputStream inputStream;
+            try {
+                inputStream = conn.getInputStream();
+            } catch (IOException e) {
+                inputStream = conn.getErrorStream();
+            }
+
+            byte[] bodyBytes = new byte[0];
+            if (inputStream != null) {
+                try (InputStream stream = inputStream; ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[4096];
+                    int n;
+                    while ((n = stream.read(buf)) != -1) {
+                        baos.write(buf, 0, n);
+                    }
+                    bodyBytes = baos.toByteArray();
+                }
+            }
+
+            ProxyRequestSupport.ParsedResponseHeaders parsedHeaders = ProxyRequestSupport.splitResponseHeaders(conn.getHeaderFields());
+            applyResponseCookies(requestContext.url, parsedHeaders.cookieHeaders());
+            Map<String, String> responseHeaders = parsedHeaders.responseHeaders();
+
+            String contentType = responseHeaders.get("Content-Type");
+            if (contentType == null) {
+                contentType = responseHeaders.get("content-type");
+            }
+            if (contentType == null) {
+                contentType = conn.getContentType();
+            }
+
+            ProxyRequestSupport.ProxiedResponseMetadata normalizedResponse = ProxyRequestSupport.normalizeProxiedResponseMetadata(
+                contentType,
+                responseHeaders,
+                requestContext.url
+            );
+
+            return new NativeResponseData(status, normalizedResponse.contentType(), normalizedResponse.headers(), bodyBytes);
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private void applyResponseCookies(String requestUrl, java.util.List<String> cookieHeaders) {
+        if (requestUrl == null || requestUrl.isBlank() || cookieHeaders == null || cookieHeaders.isEmpty()) {
+            return;
+        }
+        CookieManager cookieManager = CookieManager.getInstance();
+        boolean wroteCookie = false;
+        for (String cookieHeader : cookieHeaders) {
+            if (cookieHeader == null || cookieHeader.isBlank()) {
+                continue;
+            }
+            cookieManager.setCookie(requestUrl, cookieHeader);
+            wroteCookie = true;
+        }
+        if (wroteCookie) {
+            scheduleCookieFlush();
+        }
+    }
+
+    private void scheduleCookieFlush() {
+        if (!cookieFlushScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        mainHandler.post(() -> {
+            cookieFlushScheduled.set(false);
+            CookieManager.getInstance().flush();
+        });
+    }
+
+    public void handleProxyResponse(String requestId, JSObject response) {
+        ProxiedRequest proxiedRequest = proxiedRequestsHashmap.get(requestId);
+        if (proxiedRequest == null) {
+            Log.e("InAppBrowserProxy", "No pending request for id: " + requestId);
+            return;
+        }
+        synchronized (proxiedRequest) {
+            if (proxiedRequest.timedOut) {
+                return;
+            }
+        }
+
+        if (response == null) {
+            proxiedRequestsHashmap.remove(requestId);
+            proxiedRequest.semaphore.release();
+            return;
+        }
+
+        synchronized (proxiedRequest) {
+            if (proxiedRequest.timedOut) {
+                return;
+            }
+            try {
+                Boolean canceled = response.getBool("cancel");
+                proxiedRequest.canceled = Boolean.TRUE.equals(canceled);
+
+                JSObject requestOverride = response.getJSObject("request");
+                if (requestOverride != null && proxiedRequest.requestContext != null) {
+                    String url = ProxyRequestSupport.resolveOverrideUrl(
+                        proxiedRequest.requestContext.url,
+                        requestOverride.getString("url", proxiedRequest.requestContext.url)
+                    );
+                    String method = ProxyRequestSupport.normalizeOverrideMethod(
+                        requestOverride.getString("method", proxiedRequest.requestContext.method)
+                    );
+                    JSObject headersObject = requestOverride.getJSObject("headers");
+                    Map<String, String> headers = ProxyRequestSupport.prepareOverrideHeaders(
+                        proxiedRequest.requestContext.headers,
+                        proxiedRequest.requestContext.url,
+                        url
+                    );
+                    if (headersObject != null) {
+                        headers = new HashMap<>();
+                        Iterator<String> keys = headersObject.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            headers.put(key, headersObject.getString(key));
+                        }
+                    }
+                    boolean hasBodyOverride = requestOverride.has("body");
+                    Object rawOverrideBody = hasBodyOverride ? requestOverride.opt("body") : null;
+                    String body = ProxyRequestSupport.resolveOverrideBody(
+                        proxiedRequest.requestContext.base64Body,
+                        method,
+                        hasBodyOverride,
+                        rawOverrideBody == null || rawOverrideBody == JSONObject.NULL ? null : String.valueOf(rawOverrideBody)
+                    );
+                    proxiedRequest.requestContext = new NativeRequestContext(
+                        url,
+                        method,
+                        headers,
+                        body,
+                        proxiedRequest.requestContext.mainFrame,
+                        proxiedRequest.requestContext.credentialsMode
+                    );
+                }
+
+                JSObject responseOverride = response.getJSObject("response");
+                if (responseOverride == null && response.has("status")) {
+                    responseOverride = response;
+                }
+
+                if (responseOverride != null) {
+                    String base64Body = responseOverride.getString("body");
+                    int status = responseOverride.getInteger("status", 200);
+                    JSObject headers = responseOverride.getJSObject("headers");
+
+                    Map<String, String> responseHeaders = new HashMap<>();
+                    if (headers != null) {
+                        Iterator<String> keys = headers.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            responseHeaders.put(key, headers.getString(key));
+                        }
+                    }
+
+                    byte[] bodyBytes = ProxyRequestSupport.decodeBase64Body(base64Body);
+                    ProxyRequestSupport.ParsedResponseHeaders parsedHeaders = ProxyRequestSupport.splitSyntheticResponseHeaders(
+                        responseHeaders
+                    );
+                    applyResponseCookies(proxiedRequest.requestContext.url, parsedHeaders.cookieHeaders());
+                    responseHeaders = parsedHeaders.responseHeaders();
+
+                    String contentType = responseHeaders.get("content-type");
+                    if (contentType == null) {
+                        contentType = responseHeaders.get("Content-Type");
+                    }
+                    ProxyRequestSupport.ProxiedResponseMetadata normalizedResponse = ProxyRequestSupport.normalizeProxiedResponseMetadata(
+                        contentType,
+                        responseHeaders,
+                        proxiedRequest.requestContext != null ? proxiedRequest.requestContext.url : null
+                    );
+
+                    if (status < 100 || status > 599) {
+                        status = 200;
+                    }
+                    proxiedRequest.nativeResponse = new NativeResponseData(
+                        status,
+                        normalizedResponse.contentType(),
+                        normalizedResponse.headers(),
+                        bodyBytes
+                    );
+                    proxiedRequest.response = buildWebResourceResponse(proxiedRequest.nativeResponse);
+                }
+            } catch (IOException invalidBodyError) {
+                proxiedRequest.canceled = true;
+                Log.e("InAppBrowserProxy", "Invalid proxy response body for request: " + requestId, invalidBodyError);
+            } catch (Exception e) {
+                Log.e("InAppBrowserProxy", "Error building proxy response", e);
+            }
+        }
+
+        proxiedRequestsHashmap.remove(requestId);
+        proxiedRequest.semaphore.release();
+    }
+
+    @Override
+    public boolean hasPendingProxyRequest(String requestId) {
+        return proxiedRequestsHashmap.containsKey(requestId);
+    }
+
+    private void shareUrl() {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, _options.getShareSubject());
+        shareIntent.putExtra(Intent.EXTRA_TEXT, _options.getUrl());
+        _context.startActivity(Intent.createChooser(shareIntent, "Share"));
+    }
+
+    private boolean isDarkColor(int color) {
+        int red = Color.red(color);
+        int green = Color.green(color);
+        int blue = Color.blue(color);
+        double luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255.0;
+        return luminance < 0.5;
+    }
+
+    private boolean isDarkThemeEnabled() {
+        // This method checks if dark theme is currently enabled without using Configuration class
+        try {
+            // On Android 10+, check via resources for night mode
+            Resources.Theme theme = _context.getTheme();
+            TypedValue typedValue = new TypedValue();
+
+            if (theme.resolveAttribute(android.R.attr.isLightTheme, typedValue, true)) {
+                // isLightTheme exists - returns true if light, false if dark
+                return typedValue.data != 1;
+            }
+
+            // Fallback method - check background color of window
+            if (theme.resolveAttribute(android.R.attr.windowBackground, typedValue, true)) {
+                int backgroundColor = typedValue.data;
+                return isDarkColor(backgroundColor);
+            }
+        } catch (Exception e) {
+            // Ignore and fallback to light theme
+        }
+        return false;
+    }
+
+    private void injectDatePickerFixes() {
+        if (_webView == null) {
+            Log.w("InAppBrowser", "Cannot inject date picker fixes - WebView is null");
+            return;
+        }
+
+        if (datePickerInjected) {
+            return;
+        }
+
+        datePickerInjected = true;
+
+        // This script adds minimal fixes for date inputs to use Material Design
+        String script = """
+            (function() {
+              try {
+                // Find all date inputs
+                const dateInputs = document.querySelectorAll('input[type="date"]');
+                dateInputs.forEach(input => {
+                  // Ensure change events propagate correctly
+                  let lastValue = input.value;
+                  input.addEventListener('change', () => {
+                    try {
+                      if (input.value !== lastValue) {
+                        lastValue = input.value;
+                        // Dispatch an input event to ensure frameworks detect the change
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                    } catch(e) {
+                      console.error('Error in date input change handler:', e);
+                    }
+                  });
+                });
+              } catch(e) {
+                console.error('Error applying date picker fixes:', e);
+              }
+            })();""";
+
+        // Execute the script in the WebView
+        _webView.post(() -> {
+            if (_webView != null) {
+                try {
+                    _webView.evaluateJavascript(script, null);
+                    Log.d("InAppBrowser", "Applied minimal date picker fixes");
+                } catch (Exception e) {
+                    Log.e("InAppBrowser", "Error injecting date picker fixes: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Creates a temporary URI for storing camera capture
+     * @return URI for the temporary file or null if creation failed
+     */
+    private Uri createTempImageUri() {
+        try {
+            String fileName = "capture_" + System.currentTimeMillis() + ".jpg";
+            java.io.File cacheDir = _context.getCacheDir();
+
+            // Make sure cache directory exists
+            if (!cacheDir.exists() && !cacheDir.mkdirs()) {
+                return null;
+            }
+
+            // Create temporary file
+            java.io.File tempFile = new java.io.File(cacheDir, fileName);
+            if (!tempFile.createNewFile()) {
+                return null;
+            }
+
+            // Get content URI through FileProvider
+            try {
+                return androidx.core.content.FileProvider.getUriForFile(_context, _context.getPackageName() + ".fileprovider", tempFile);
+            } catch (IllegalArgumentException e) {
+                // Try using external storage as fallback
+                java.io.File externalCacheDir = _context.getExternalCacheDir();
+                if (externalCacheDir != null) {
+                    tempFile = new java.io.File(externalCacheDir, fileName);
+                    final boolean newFile = tempFile.createNewFile();
+                    if (!newFile) {
+                        Log.d("InAppBrowser", "Error creating new file");
+                    }
+                    return androidx.core.content.FileProvider.getUriForFile(
+                        _context,
+                        _context.getPackageName() + ".fileprovider",
+                        tempFile
+                    );
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private File createImageFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(imageFileName /* prefix */, ".jpg" /* suffix */, storageDir /* directory */);
+        return image;
+    }
+
+    /**
+     * Apply dimensions to the webview window
+     */
+    private void applyDimensions() {
+        Integer width = _options.getWidth();
+        Integer height = _options.getHeight();
+        Integer x = _options.getX();
+        Integer y = _options.getY();
+
+        Window window = getWindow();
+        if (window == null) {
+            return;
+        }
+
+        WindowManager.LayoutParams params = window.getAttributes();
+
+        // If both width and height are specified, use custom dimensions
+        if (width != null && height != null) {
+            params.gravity = Gravity.TOP | Gravity.LEFT;
+            params.width = (int) getPixels(width);
+            params.height = (int) getPixels(height);
+            params.x = (x != null) ? (int) getPixels(x) : 0;
+            params.y = (y != null) ? (int) getPixels(y) : 0;
+            params.gravity = Gravity.TOP | Gravity.START;
+            window.setAttributes(params);
+        } else if (height != null && width == null) {
+            // If only height is specified, use custom height with fullscreen width
+            params.gravity = Gravity.TOP | Gravity.LEFT;
+            params.width = WindowManager.LayoutParams.MATCH_PARENT;
+            params.height = (int) getPixels(height);
+            params.x = 0;
+            params.y = (y != null) ? (int) getPixels(y) : 0;
+            params.gravity = Gravity.TOP | Gravity.START;
+            window.setAttributes(params);
+        } else {
+            // Default to fullscreen. Prefer setLayout so MATCH_PARENT is not replaced by
+            // previously resolved portrait/landscape pixel sizes after a configuration change.
+            params.x = 0;
+            params.y = 0;
+            params.gravity = Gravity.TOP | Gravity.START;
+            window.setAttributes(params);
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
+        }
+    }
+
+    /**
+     * Update dimensions at runtime
+     */
+    public void updateDimensions(Integer width, Integer height, Integer x, Integer y) {
+        // Update options
+        if (width != null) {
+            _options.setWidth(width);
+        }
+        if (height != null) {
+            _options.setHeight(height);
+        }
+        if (x != null) {
+            _options.setX(x);
+        }
+        if (y != null) {
+            _options.setY(y);
+        }
+
+        // Apply new dimensions
+        if (backLayerActive) {
+            applyBackLayerDimensions();
+        } else {
+            applyDimensions();
+        }
+    }
+
+    public void setEnabledSafeTopMargin(boolean enabled) {
+        if (_options.getEnabledSafeTopMargin() == enabled) return;
+        _options.setEnabledSafeTopMargin(enabled);
+        requestSafeAreaInsets();
+    }
+
+    public void setEnabledSafeBottomMargin(boolean enabled) {
+        if (_options.getEnabledSafeMargin() == enabled) return;
+        _options.setEnabledSafeMargin(enabled);
+        requestSafeAreaInsets();
+    }
+
+    /**
+     * Convert density-independent pixels (dp) to actual pixels
+     */
+    private float getPixels(int dp) {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, _context.getResources().getDisplayMetrics());
+    }
+
+    private float getPixels(double dp) {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (float) dp, _context.getResources().getDisplayMetrics());
+    }
+}

@@ -21,6 +21,10 @@ const config: CapacitorConfig = {
       backgroundColor: '#09090f',
       overlaysWebView: true,
     },
+    LocalNotifications: {
+      smallIcon: 'ic_launcher',
+      iconColor: '#6366f1',
+    },
   },
   android: {
     backgroundColor: '#09090f',

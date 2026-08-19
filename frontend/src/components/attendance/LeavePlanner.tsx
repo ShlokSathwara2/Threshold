@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fromInputValue, toDateStr, displayDate } from '@/lib/day-order';
+import { fromInputValue, toDate, toDateStr, displayDate } from '@/lib/day-order';
 import { useTheme, overlay, overlayBg, type ThemePalette } from '@/lib/theme';
 
 interface Props {
@@ -10,8 +10,20 @@ interface Props {
   onReset: () => void;
   active: boolean;
   leaveDays: number;
+  leaveFrom?: string | null;
+  leaveTo?: string | null;
   missedTotal: number;
   subjectsDropping: number;
+  overall?: {
+    present: number;
+    absent: number;
+    total: number;
+    percentage: number;
+    margin: number;
+    canBunk: number;
+    mustAttend: number;
+    below75: boolean;
+  } | null;
 }
 
 const inputStyle = (theme: ThemePalette): React.CSSProperties => ({
@@ -46,8 +58,11 @@ export default function LeavePlanner({
   onReset,
   active,
   leaveDays,
+  leaveFrom,
+  leaveTo,
   missedTotal,
   subjectsDropping,
+  overall,
 }: Props) {
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -101,6 +116,17 @@ export default function LeavePlanner({
   };
 
   const today = toDateStr(new Date());
+
+  // Day before the leave starts — every class up to (and including) this day
+  // is assumed attended in the projection.
+  const assumeTill = leaveFrom
+    ? (() => {
+        const d = toDate(leaveFrom);
+        if (!d) return null;
+        d.setDate(d.getDate() - 1);
+        return d;
+      })()
+    : null;
 
   return (
     <div style={{ marginBottom: '16px' }}>
@@ -166,6 +192,11 @@ export default function LeavePlanner({
                   Add range
                 </button>
               </div>
+
+              <p style={{ margin: 0, fontSize: '0.68rem', color: W(0.4), lineHeight: 1.5 }}>
+                The projection assumes you attend <span style={{ fontWeight: 800, color: W(0.6) }}>every class from today</span> until
+                your leave starts, then miss every class during the leave — totals update to the end of the leave.
+              </p>
 
               {/* Single date */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -271,6 +302,44 @@ export default function LeavePlanner({
                   ? ` ${subjectsDropping} subject${subjectsDropping === 1 ? '' : 's'} drop below 75%`
                   : ' no subject drops below 75%'}
               </p>
+
+              {assumeTill && leaveFrom && leaveTo && (
+                <p style={{
+                  margin: 0,
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: W(0.5),
+                  lineHeight: 1.5,
+                }}>
+                  Assumes you attend every class till{' '}
+                  <span style={{ fontWeight: 800, color: W(0.75) }}>{displayDate(toDateStr(assumeTill))}</span>, then miss{' '}
+                  {displayDate(leaveFrom)} – {displayDate(leaveTo)}
+                </p>
+              )}
+
+              {overall && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: overall.below75 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                  border: `1px solid ${overall.below75 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`,
+                }}>
+                  <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: overall.below75 ? '#fca5a5' : '#86efac' }}>
+                    Projected overall: {overall.present} present · {overall.absent} absent · {overall.total} total →{' '}
+                    <span style={{ fontWeight: 800 }}>{overall.percentage.toFixed(1)}%</span>
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 600, color: overall.below75 ? '#fca5a5' : '#86efac' }}>
+                    {overall.below75 ? (
+                      <>Attend <span style={{ fontWeight: 800 }}>{overall.mustAttend}</span> more class{overall.mustAttend === 1 ? '' : 'es'} to reach 75% (−{overall.margin.toFixed(1)}% margin)</>
+                    ) : (
+                      <>You can still skip <span style={{ fontWeight: 800 }}>{overall.canBunk}</span> more class{overall.canBunk === 1 ? '' : 'es'} (+{overall.margin.toFixed(1)}% margin)</>
+                    )}
+                  </p>
+                </div>
+              )}
               <button
                 onClick={handleReset}
                 style={{

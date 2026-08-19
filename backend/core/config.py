@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_origins: str = (
         "http://localhost:3000,https://localhost,capacitor://localhost,"
-        "https://threshold-jet.vercel.app"
+        "https://threshold-jet.vercel.app,https://threshold20.vercel.app"
     )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

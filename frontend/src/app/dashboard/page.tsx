@@ -17,14 +17,20 @@ import {
   type InternalMark,
 } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
-import { useSubjectRegistry } from '@/lib/subject-registry';
 import { getCached, setCached } from '@/lib/cache';
 import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
-import { loadExams, nextExamDate, daysUntil, formatExamDate, type ExamEntry } from '@/lib/exams';
+import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
+import { lastSyncTime } from '@/lib/api';
+import { refreshNotifications } from '@/lib/notifications';
 import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
+import HappyUpdates from '@/components/dashboard/HappyUpdates';
+import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
+import { recordAttendanceSnapshot } from '@/lib/habits';
+import { toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -69,7 +75,6 @@ export default function DashboardPage() {
   const WB = (a: number) => overlayBg(theme, a);
   const { subjects, overall, loading, refetch: refetchAttendance } = useAttendance();
   const [gradesKey, setGradesKey] = useState(0);
-  const { getSubject } = useSubjectRegistry();
   usePullToRefresh(async () => {
     await refetchAttendance();
     setGradesKey((k) => k + 1);
@@ -86,10 +91,38 @@ export default function DashboardPage() {
   const [staleAsOf, setStaleAsOf] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [exams, setExams] = useState<ExamEntry[]>([]);
+  const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLastSyncAt(lastSyncTime());
+    const id = setInterval(() => setLastSyncAt(lastSyncTime()), 15000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     setExams(loadExams());
+    setOptedOut(loadOptionalHours());
+    syncExamsFromCloud().then((cloud) => {
+      if (cloud) setExams(cloud);
+    });
   }, []);
+
+  // Smart local notifications: morning brief + exam reminders. Rescheduled
+  // whenever attendance/exams/preferences change (debounced).
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    const t = window.setTimeout(() => {
+      void refreshNotifications(subjects, exams, notif);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [subjects, exams, notif]);
+
+  // Log skip attributions once per day (powers habit insights).
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    recordAttendanceSnapshot(subjects, toDateStr(new Date()), todayDO);
+  }, [subjects, todayDO]);
 
   const loadTimetable = async () => {
     if (!isAcademiaLoggedIn()) return;
@@ -113,14 +146,28 @@ export default function DashboardPage() {
   }, [router]);
 
   const applyToday = (cal: CalendarResponse | null) => {
-    if (!cal || cal.error || !cal.today) {
-      setTodayDO(null);
-      setCalError(cal?.error ? (cal.message || 'Calendar unavailable') : null);
+    // Resolve today's DO from the date-keyed calendar months — a cached
+    // response (or an offline fetch) can never freeze a stale day order.
+    const resolved = resolveTodayDayOrder(cal?.calendar ?? []);
+    if (resolved) {
+      setTodayDO(resolved);
+      setCalError(null);
       return;
     }
-    const m = cal.today.dayOrder?.match(/Day\s*(\d)/i);
-    setTodayDO(m ? `DO-${m[1]}` : null);
-    setCalError(null);
+    if (cal?.calendar?.length) {
+      // Planner is too stale to resolve; don't trust cal.today either.
+      setTodayDO(null);
+      setCalError(cal.error ? (cal.message || 'Calendar unavailable') : null);
+      return;
+    }
+    if (cal?.today) {
+      const m = cal.today.dayOrder?.match(/Day\s*(\d)/i);
+      setTodayDO(m ? `DO-${m[1]}` : null);
+      setCalError(null);
+      return;
+    }
+    setTodayDO(null);
+    setCalError(cal?.error ? (cal.message || 'Calendar unavailable') : null);
   };
 
   // Fetches everything in parallel (profile + calendar + internal marks,
@@ -184,9 +231,11 @@ export default function DashboardPage() {
   }, [fetchAll]);
 
   const firstName = profile?.name?.split(' ')[0] || 'Student';
+  // Opted-out optional hours are free periods — they never appear in the
+  // dashboard's today timetable (count, timeline, current/next class).
   const todaysSlots = todayClasses
     ? todayClasses
-        .filter((s) => todayDO && s.day === todayDO)
+        .filter((s) => todayDO && s.day === todayDO && !optedOut.has(slotKey(s)))
         .sort((a, b) => a.hour - b.hour)
     : [];
 
@@ -221,7 +270,7 @@ export default function DashboardPage() {
     .filter((x): x is { entry: ExamEntry; next: Date } => !!x.next)
     .sort((a, b) => a.next.getTime() - b.next.getTime());
   const upcomingExams = enrichedExams
-    .filter((x) => daysUntil(x.next, todayD) <= 14)
+    .filter((x) => daysUntil(x.next, todayD) <= 4)
     .slice(0, 4);
   const nextExam = enrichedExams[0] ?? null;
   const upcomingCount = enrichedExams.length;
@@ -233,11 +282,16 @@ export default function DashboardPage() {
   });
   const nextClass = todaysSlots.find((s) => slotWindow(s).start > nowMin);
 
-  // ── Marks lookup for the quick list ──
-  const marksByCode = new Map<string, InternalMark>();
-  internalMarks?.forEach((m) => {
-    if (!marksByCode.has(m.code)) marksByCode.set(m.code, m);
-  });
+  // ── Bunk planner data (used by Happy Updates) ──
+  const futureToday = todaysSlots.filter((s) => slotWindow(s).end > nowMin);
+
+  // ── Today at a glance data ──
+  const todayCodes = new Set(todaysSlots.map((s) => s.courseCode));
+  const atRiskToday = subjects.filter((s) => s.isBelowThreshold && todayCodes.has(s.courseCode));
+  const todayBunkable = todaysSlots.filter((s) => {
+    const att = subjects.find((x) => x.courseCode === s.courseCode);
+    return (att?.canBunk ?? 0) > 0;
+  }).length;
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', position: 'relative' }}>
@@ -344,41 +398,22 @@ export default function DashboardPage() {
               Here&apos;s your academic pulse today
             </p>
           </div>
-          {profile?.photo ? (
-            <div style={{
-              flexShrink: 0,
-              width: 56,
-              height: 56,
-              borderRadius: '18px',
-              overflow: 'hidden',
-              border: '2px solid rgba(var(--threshold-accent-rgb),0.5)',
-              boxShadow: '0 0 20px rgba(var(--threshold-accent-rgb),0.35)',
-            }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={profile.photo}
-                alt="profile"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </div>
-          ) : (
-            <div style={{
-              flexShrink: 0,
-              width: 56,
-              height: 56,
-              borderRadius: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.35), rgba(59,130,246,0.25))',
-              border: '1px solid rgba(var(--threshold-accent-rgb),0.4)',
-              fontSize: '1.4rem',
-              fontWeight: 800,
-              color: (theme.isLight ? theme.accent : '#e9d5ff'),
-            }}>
-              {firstName[0]}
-            </div>
-          )}
+          <div style={{
+            flexShrink: 0,
+            width: 56,
+            height: 56,
+            borderRadius: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.35), rgba(59,130,246,0.25))',
+            border: '1px solid rgba(var(--threshold-accent-rgb),0.4)',
+            fontSize: '1.4rem',
+            fontWeight: 800,
+            color: (theme.isLight ? theme.accent : '#e9d5ff'),
+          }}>
+            {firstName[0]}
+          </div>
         </div>
 
         {/* Bottom row: DO chip + overall ring inline */}
@@ -480,6 +515,153 @@ export default function DashboardPage() {
               <>You&apos;re offline — connect to the internet to load your data.</>
             )}
           </p>
+        </motion.div>
+      )}
+
+      {/* ── Universal search (item 19) ── */}
+      <div style={{ position: 'relative', zIndex: 40 }}>
+        <UniversalSearch
+          subjects={subjects}
+          marks={internalMarks ?? []}
+          schedule={todayClasses ?? []}
+        />
+      </div>
+
+      {/* ── Sync status ── */}
+      {lastSyncAt !== null && (
+        <p style={{
+          margin: '-8px 0 14px',
+          textAlign: 'center',
+          fontSize: '0.6rem',
+          fontWeight: 600,
+          letterSpacing: '0.4px',
+          color: W(0.35),
+        }}>
+          LAST SYNCED {new Date(lastSyncAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · PULL DOWN TO REFRESH
+        </p>
+      )}
+
+      {/* ── Today at a glance (morning brief, item 18) ── */}
+      {(todayDO || todaysSlots.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            borderRadius: '16px',
+            marginBottom: '16px',
+            background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.08), rgba(59,130,246,0.04))',
+            border: '1px solid rgba(var(--threshold-accent-rgb),0.2)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 16px',
+            borderBottom: `1px solid ${WB(0.05)}`,
+          }}>
+            <span style={{ fontSize: '1rem', flexShrink: 0 }}>☀️</span>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
+              Today at a Glance
+            </h2>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <button
+              onClick={() => router.push('/dashboard/timetable')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '11px 16px',
+                background: 'none',
+                border: 'none',
+                borderBottom: `1px solid ${WB(0.04)}`,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>📅</span>
+              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
+                {todayDO ? `${todayDO} schedule` : 'Schedule unavailable'}
+              </span>
+              <span style={{
+                flexShrink: 0,
+                padding: '3px 9px',
+                borderRadius: '999px',
+                background: 'rgba(var(--threshold-accent-rgb),0.15)',
+                border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
+                fontSize: '0.62rem',
+                fontWeight: 700,
+                color: 'var(--threshold-accent-text)',
+              }}>
+                {todaysSlots.length} class{todaysSlots.length === 1 ? '' : 'es'}
+                {todayBunkable > 0 ? ` · ${todayBunkable} spare` : ''}
+              </span>
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/attendance')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '11px 16px',
+                background: 'none',
+                border: 'none',
+                borderBottom: `1px solid ${WB(0.04)}`,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>⚠️</span>
+              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
+                {atRiskToday.length > 0
+                  ? `${atRiskToday.length} subject${atRiskToday.length > 1 ? 's' : ''} below 75% today`
+                  : "Today's subjects are all above 75%"}
+              </span>
+              <span style={{
+                flexShrink: 0,
+                fontSize: '0.66rem',
+                fontWeight: 800,
+                color: atRiskToday.length > 0 ? '#f87171' : '#4ade80',
+              }}>
+                {atRiskToday.length > 0 ? atRiskToday.map((s) => s.courseCode).join(', ') : '✓'}
+              </span>
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/exams')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '11px 16px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ flexShrink: 0, fontSize: '0.85rem' }}>📝</span>
+              <span style={{ flex: 1, fontSize: '0.76rem', fontWeight: 600, color: 'var(--threshold-text)' }}>
+                {nextExam
+                  ? `Next exam: ${nextExam.entry.subjectTitle}`
+                  : 'No upcoming exams'}
+              </span>
+              <span style={{
+                flexShrink: 0,
+                fontSize: '0.66rem',
+                fontWeight: 700,
+                color: '#e879f9',
+              }}>
+                {nextExam
+                  ? daysUntil(nextExam.next, todayD) === 0 ? 'TODAY' : daysUntil(nextExam.next, todayD) === 1 ? 'TOMORROW' : `IN ${daysUntil(nextExam.next, todayD)}d`
+                  : ''}
+              </span>
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -630,6 +812,11 @@ export default function DashboardPage() {
             Safe (≥75%)
           </p>
         </motion.div>
+      </div>
+
+      {/* ── Internal Marks (above Alerts) ── */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <InternalMarks refreshKey={gradesKey} subjects={subjects} />
       </div>
 
       {/* ── Exams strip ── */}
@@ -838,6 +1025,18 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       )}
+
+      {/* ── Happy updates: bunk planner + spare classes ── */}
+      <HappyUpdates
+        subjects={subjects}
+        schedule={todayClasses ?? []}
+        todaySlotsFuture={futureToday}
+        todayDO={todayDO}
+        optedOut={optedOut}
+        onOpenTimetable={() => router.push('/dashboard/timetable')}
+        onOpenAttendance={() => router.push('/dashboard/attendance')}
+        onOpenExams={() => router.push('/dashboard/exams')}
+      />
 
       {/* ── Today's Classes ── */}
       <motion.div
@@ -1233,128 +1432,9 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* ── Subjects at Risk ── */}
-      {!loading && subjects.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          style={{ position: 'relative', zIndex: 1 }}
-        >
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '12px',
-          }}>
-            <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
-              Subjects at Risk
-            </h2>
-            <button
-              onClick={() => router.push('/dashboard/attendance')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--threshold-accent-text)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
-            >
-              View all →
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {atRisk.slice(0, 3).map((subject, i) => (
-              <motion.div
-                key={subject.courseCode}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 + i * 0.05 }}
-                onClick={() => router.push('/dashboard/attendance')}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px 14px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(160deg, rgba(239,68,68,0.1), rgba(239,68,68,0.02))',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                  cursor: 'pointer',
-                }}
-              >
-                <div>
-                  <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--threshold-text)', margin: 0 }}>
-                    {subject.courseTitle.length > 30 ? subject.courseTitle.slice(0, 28) + '…' : subject.courseTitle}
-                  </p>
-                  <p style={{ fontSize: '0.7rem', color: 'var(--threshold-text-faint)', margin: '2px 0 0' }}>
-                    {subject.courseCode} • {subject.facultyName}
-                  </p>
-                  <p style={{
-                    fontSize: '0.66rem',
-                    color: 'rgba(255,255,255,0.3)',
-                    margin: '3px 0 0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    flexWrap: 'wrap',
-                  }}>
-                    {[
-                      getSubject(subject.courseCode)?.category,
-                      getSubject(subject.courseCode)?.credit && getSubject(subject.courseCode)!.credit !== 'N/A'
-                        ? `${getSubject(subject.courseCode)!.credit} cr`
-                        : null,
-                      getSubject(subject.courseCode)?.slot ? `Slot ${getSubject(subject.courseCode)!.slot}` : null,
-                      marksByCode.get(subject.courseCode)
-                        ? `${marksByCode.get(subject.courseCode)!.scored}/${marksByCode.get(subject.courseCode)!.maxMark} marks`
-                        : null,
-                    ].filter(Boolean).map((chip) => (
-                      <span
-                        key={chip}
-                        style={{
-                          padding: '1px 6px',
-                          borderRadius: '5px',
-                          background: WB(0.05),
-                          border: `1px solid ${WB(0.06)}`,
-                        }}
-                      >
-                        {chip}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-                <span style={{
-                  fontSize: '0.9rem',
-                  fontWeight: 800,
-                  color: subject.percentage >= 60 ? '#f97316' : '#f87171',
-                }}>
-                  {subject.percentage.toFixed(1)}%
-                </span>
-              </motion.div>
-            ))}
-
-            {atRisk.length === 0 && (
-              <div style={{
-                padding: '20px',
-                borderRadius: '14px',
-                background: 'linear-gradient(160deg, rgba(34,197,94,0.1), rgba(34,197,94,0.02))',
-                border: '1px solid rgba(34,197,94,0.2)',
-                textAlign: 'center',
-              }}>
-                <p style={{ color: '#86efac', fontSize: '0.85rem', fontWeight: 600 }}>
-                  All subjects above 75% — you&apos;re safe!
-                </p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Grades & Internal Marks */}
+      {/* Grades summary */}
       <div style={{ position: 'relative', zIndex: 1 }}>
         <GradesSummary refreshKey={gradesKey} />
-        <InternalMarks refreshKey={gradesKey} />
       </div>
     </div>
   );

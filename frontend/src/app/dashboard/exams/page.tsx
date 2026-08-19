@@ -15,6 +15,7 @@ import {
   examStatus,
   formatExamDate,
   parseDate,
+  syncExamsFromCloud,
   type ExamEntry,
 } from '@/lib/exams';
 
@@ -43,6 +44,7 @@ export default function ExamsPage() {
   const [subject, setSubject] = useState('');
   const [dates, setDates] = useState<string[]>(['']);
   const [description, setDescription] = useState('');
+  const [subjectFocus, setSubjectFocus] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) router.push('/welcome');
@@ -50,6 +52,16 @@ export default function ExamsPage() {
 
   useEffect(() => {
     setExams(loadExams());
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    syncExamsFromCloud().then((cloud) => {
+      if (mounted && cloud) setExams(cloud);
+    });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const today = new Date();
@@ -70,6 +82,14 @@ export default function ExamsPage() {
   const nextUpcoming = sorted.find((x) => x.next) ?? null;
 
   const knownCodes = new Set(courses.map((c) => c.code.toUpperCase()));
+
+  const subjectMatches = useMemo(() => {
+    const q = subject.trim().toLowerCase();
+    if (!q) return courses;
+    return courses
+      .filter((c) => c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [courses, subject]);
 
   const handleAdd = () => {
     const validDates = dates.map((d) => d.trim()).filter(Boolean);
@@ -99,7 +119,7 @@ export default function ExamsPage() {
           Exams
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-          Exam dates, countdowns and reminders — stored on your device
+          Exam dates, countdowns and reminders — synced to your login
         </p>
       </motion.div>
 
@@ -190,7 +210,6 @@ export default function ExamsPage() {
           background: WB(0.02),
           border: `1px solid ${WB(0.08)}`,
           marginBottom: '16px',
-          overflow: 'hidden',
         }}
       >
         <div style={{
@@ -210,24 +229,98 @@ export default function ExamsPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px 16px 16px' }}>
           {/* Subject */}
-          <div>
+          <div style={{ position: 'relative' }}>
             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: W(0.6), marginBottom: '5px' }}>
               SUBJECT
             </label>
             <input
-              list="exam-subjects"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
+              onFocus={() => setSubjectFocus(true)}
+              onBlur={() => setTimeout(() => setSubjectFocus(false), 150)}
               placeholder="e.g. CS201 — Data Structures"
-              style={inputStyle(theme)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              style={{ ...inputStyle(theme), width: '100%' }}
             />
-            <datalist id="exam-subjects">
-              {courses.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.title}
-                </option>
-              ))}
-            </datalist>
+            {subjectFocus && courses.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                left: 0,
+                right: 0,
+                zIndex: 20,
+                borderRadius: '12px',
+                background: theme.bg,
+                border: `1px solid ${WB(0.14)}`,
+                boxShadow: '0 14px 36px rgba(0,0,0,0.5)',
+                overflow: 'hidden',
+                maxHeight: '264px',
+                overflowY: 'auto',
+              }}>
+                {subjectMatches.length === 0 ? (
+                  <p style={{ margin: 0, padding: '13px 14px', fontSize: '0.72rem', color: W(0.45) }}>
+                    No matching subject — it will be saved as a custom exam.
+                  </p>
+                ) : (
+                  subjectMatches.map((c) => {
+                    const selected = subject.trim().toUpperCase() === c.code.toUpperCase();
+                    return (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setSubject(c.code);
+                          setSubjectFocus(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          width: '100%',
+                          padding: '11px 14px',
+                          background: selected ? 'rgba(var(--threshold-accent-rgb),0.12)' : 'none',
+                          border: 'none',
+                          borderBottom: `1px solid ${WB(0.04)}`,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span style={{
+                          flexShrink: 0,
+                          fontSize: '0.66rem',
+                          fontWeight: 800,
+                          color: 'var(--threshold-accent-text)',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(var(--threshold-accent-rgb),0.15)',
+                          border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
+                        }}>
+                          {c.code}
+                        </span>
+                        <span style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: '0.74rem',
+                          color: W(0.6),
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {c.title}
+                        </span>
+                        {selected && (
+                          <span style={{ flexShrink: 0, color: 'var(--threshold-accent-text)', fontSize: '0.72rem', fontWeight: 800 }}>
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
           {/* Dates */}

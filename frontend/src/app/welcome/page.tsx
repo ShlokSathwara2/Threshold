@@ -2,23 +2,24 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+import InstallApp from '@/components/ui/InstallApp';
 
 const ThresholdText = dynamic(() => import('@/components/effects/ThresholdText'), { ssr: false });
 const RippleDistortion = dynamic(() => import('@/components/effects/RippleDistortion'), { ssr: false });
 
-const tagline = "Attendance, marks, CGPA — finally in one intelligent dashboard.";
+const tagline = "Attendance, exams, insights — your semester copilot.";
 const taglineWords = tagline.split(' ');
 
 const features = [
-  { title: 'Attendance', description: 'Per-subject tracking with bunk calculator & margin alerts', color: '#22c55e', icon: 'attendance' },
-  { title: 'Marks & CGPA', description: 'Grade-target calculator, SGPA/CGPA tools & what-if simulator', color: '#3b82f6', icon: 'marks' },
-  { title: 'Smart Fallback', description: 'Dual sources — Academia + Student Portal, auto-failover', color: '#f59e0b', icon: 'fallback' },
-  { title: 'Leave Planner', description: 'Project attendance impact before you take leaves', color: '#ef4444', icon: 'leave' },
-  { title: 'Exam Readiness', description: 'Risk scores combining attendance + marks + test weightage', color: '#8b5cf6', icon: 'exam' },
-  { title: 'Privacy First', description: 'Your password never touches our servers — ever', color: '#06b6d4', icon: 'privacy' },
+  { title: 'Attendance', description: 'Per-subject tracking with recovery plans & 75% guards', color: '#22c55e', icon: 'attendance' },
+  { title: 'Bunk Planner', description: 'Know which classes you can safely skip today — and what each skip costs', color: '#8b5cf6', icon: 'bunk' },
+  { title: 'Exam Tracker', description: 'Cloud-synced countdowns, date alerts & hall-ticket access', color: '#3b82f6', icon: 'exam' },
+  { title: 'Smart Notifications', description: 'Morning briefs & exam reminders fired at the right time', color: '#f59e0b', icon: 'bell' },
+  { title: 'App Lock', description: 'Fingerprint, face or PIN gate — cached data stays private', color: '#06b6d4', icon: 'lock' },
+  { title: 'Universal Search', description: 'One bar — subjects, marks & timetable slots in a tap', color: '#ef4444', icon: 'search' },
 ];
 
 const FeatureIcon = ({ type, color }: { type: string; color: string }) => {
@@ -32,22 +33,10 @@ const FeatureIcon = ({ type, color }: { type: string; color: string }) => {
         <polyline points="9 16 10.5 17.5 15 13" />
       </svg>
     ),
-    marks: (
+    bunk: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 6v6l4 2" />
-      </svg>
-    ),
-    fallback: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="23 4 23 10 17 10" />
-        <polyline points="1 20 1 14 7 14" />
-        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-      </svg>
-    ),
-    leave: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="M9 12l2 2 4-4" />
       </svg>
     ),
     exam: (
@@ -55,10 +44,29 @@ const FeatureIcon = ({ type, color }: { type: string; color: string }) => {
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
       </svg>
     ),
-    privacy: (
+    insights: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <polyline points="9 12 11 14 15 10" />
+        <line x1="12" y1="20" x2="12" y2="10" />
+        <line x1="18" y1="20" x2="18" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="16" />
+      </svg>
+    ),
+    search: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
+    bell: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+    lock: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
     ),
   };
@@ -78,10 +86,47 @@ export default function WelcomePage() {
     window.setTimeout(() => router.push('/login'), 750);
   };
 
+  // Swipe-to-start: the handle must be dragged all the way across the track.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const TRACK_W = 288;
+  const HANDLE = 40;
+  const PAD = 8;
+  const maxX = TRACK_W - HANDLE - PAD * 2;
+
+  useEffect(() => {
+    setDragX(PAD);
+  }, []);
+
+  const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (starting) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+
+  const onHandleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging || starting) return;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left - HANDLE / 2;
+    setDragX(Math.max(PAD, Math.min(PAD + maxX, x)));
+  };
+
+  const onHandleUp = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (dragX >= PAD + maxX - 4) {
+      handleGetStarted();
+    } else {
+      setDragX(PAD);
+    }
+  };
+
   return (
     <div style={{ position: 'relative', height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#09090f' }}>
       {/* Background */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: '#09090f' }}>
         <RippleDistortion
           src="https://images.unsplash.com/photo-1507400492013-162706c8c05e?q=80&w=3432&auto=format&fit=crop"
           brushSize={100}
@@ -106,9 +151,37 @@ export default function WelcomePage() {
           padding: '0 24px',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}>
-          {/* ThresholdText — only animation in this zone */}
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+            style={{
+              width: 'clamp(120px, 30vw, 180px)',
+              height: 'clamp(120px, 30vw, 180px)',
+              borderRadius: '28px',
+              overflow: 'hidden',
+              boxShadow: `0 20px 60px ${theme.glow}, 0 0 40px ${theme.accent}33`,
+              border: `2px solid ${theme.accent}44`,
+              marginBottom: '20px',
+              position: 'relative',
+              zIndex: 5,
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="Threshold"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+          </motion.div>
+
+          {/* ThresholdText — animated text below logo */}
           <div
-            style={{ width: '100%', maxWidth: '500px', height: '160px', position: 'relative', zIndex: 5 }}
+            style={{ width: '100%', maxWidth: '500px', height: '80px', position: 'relative', zIndex: 5 }}
           >
             <ThresholdText
               text="THRESHOLD"
@@ -120,7 +193,7 @@ export default function WelcomePage() {
               gatherDuration={1800}
               stagger={400}
               trigger="mount"
-              fontSize="clamp(2.5rem, 10vw, 4rem)"
+              fontSize="clamp(2rem, 8vw, 3rem)"
               fontWeight={800}
               glow
             />
@@ -166,26 +239,71 @@ export default function WelcomePage() {
             ))}
           </motion.p>
 
-          {/* Get Started — sliding arrow button */}
+          {/* Get Started — swipe the handle all the way across to launch */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 3.0, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
             style={{ marginTop: '36px' }}
           >
-            <button
+            <div
+              ref={trackRef}
               className={`get-started-btn${starting ? ' get-started-btn--animating' : ''}`}
-              disabled={starting}
-              onClick={handleGetStarted}
+              style={{
+                width: TRACK_W,
+                height: 56,
+                padding: 0,
+                cursor: 'default',
+                touchAction: 'none',
+                userSelect: 'none',
+              }}
             >
-              <div className="get-started-btn__slider">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+              <span
+                className="get-started-btn__text"
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  textAlign: 'center',
+                  marginLeft: 0,
+                  color: 'rgba(255,255,255,0.92)',
+                  pointerEvents: 'none',
+                }}
+              >
+                Swipe to get started
+              </span>              <div
+                className="get-started-btn__slider"
+                onPointerDown={onHandleDown}
+                onPointerMove={onHandleMove}
+                onPointerUp={onHandleUp}
+                onPointerCancel={onHandleUp}
+                style={{
+                  width: HANDLE,
+                  height: HANDLE,
+                  left: starting ? undefined : dragX,
+                  cursor: dragging ? 'grabbing' : 'grab',
+                  transition: dragging ? 'none' : undefined,
+                  touchAction: 'none',
+                  background: 'rgba(255,255,255,0.22)',
+                  border: '1px solid rgba(255,255,255,0.45)',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="19" height="19">
                   <line x1="5" y1="12" x2="19" y2="12" />
                   <polyline points="12 5 19 12 12 19" />
                 </svg>
               </div>
-              <span className="get-started-btn__text">Get Started</span>
-            </button>
+            </div>
+          </motion.div>
+
+          {/* Install as app (web only) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 3.4, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+            style={{ marginTop: '14px', maxWidth: 288 }}
+          >
+            <InstallApp />
           </motion.div>
         </section>
 

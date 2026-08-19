@@ -1,9 +1,13 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { fetchCourses, type Course } from '@/lib/api';
+import { fetchCourses, fetchSpAttendance, type Course } from '@/lib/api';
+import { scopedKey, isSingleUserDevice } from '@/lib/user-scope';
 
-const CACHE_KEY = 'threshold_subject_registry';
+// Course registry cache is per-login — each student's subject list stays
+// their own, even on a shared phone.
+const LEGACY_CACHE_KEY = 'threshold_subject_registry';
+const CACHE_KEY = () => scopedKey('threshold_subject_registry');
 
 interface SubjectRegistryValue {
   courses: Course[];
@@ -23,7 +27,15 @@ const SubjectRegistryContext = createContext<SubjectRegistryValue>({
 
 function loadCache(): Course[] | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    let raw = localStorage.getItem(CACHE_KEY());
+    if (!raw) {
+      if (!isSingleUserDevice()) return null;
+      raw = localStorage.getItem(LEGACY_CACHE_KEY);
+      if (raw) {
+        localStorage.setItem(CACHE_KEY(), raw);
+        localStorage.removeItem(LEGACY_CACHE_KEY);
+      }
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -43,12 +55,34 @@ export function SubjectRegistryProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await fetchCourses();
-      if (res.error) throw new Error(res.error);
-      const list = res.courses || [];
+      let list: Course[] = res.courses || [];
+
+      // Academia's /courses endpoint is paused — fall back to the Student
+      // Portal attendance list so subject pickers (e.g. add-exam dropdown)
+      // always have the student's real enrolled subjects.
+      if (list.length === 0 && !res.error) {
+        const att = await fetchSpAttendance();
+        list = (att.attendance || []).map((a) => ({
+          code: a.courseCode,
+          title: a.courseTitle,
+          credit: '',
+          category: a.category || '',
+          courseCategory: '',
+          type: '',
+          slotType: '',
+          faculty: a.facultyName || '',
+          facultyName: a.facultyName || '',
+          facultyId: '',
+          slot: a.slot || '',
+          room: '',
+          academicYear: '',
+        }));
+      }
+
       if (list.length > 0) {
         setCourses(list);
         try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(list));
+          localStorage.setItem(CACHE_KEY(), JSON.stringify(list));
         } catch {
           /* ignore */
         }

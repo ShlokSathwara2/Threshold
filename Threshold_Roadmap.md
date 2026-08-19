@@ -91,7 +91,7 @@
 - Per-subject quick list: marks scored/total (live, per Phase 4) and attendance %/margin together, compact — this is the daily-check view, deeper charts live in Phase 7.6 instead.
 - "Your Standings" (attendance %, marks summary).
 - Alerts section (holiday reminders, below-75% warnings, upcoming exam dates once Phase 9's exam tracker exists).
-- Profile: reg number, batch, alerts, switch account, logout.
+- Profile: reg number, batch, alerts, switch account, logout.like 
 - **Design rule**: if a piece of data needs a chart/trend/comparison to be useful, it belongs in Phase 7.6 (Analytics), not here — Dashboard stays scannable in a few seconds, matching how your existing screenshots already separate quick-glance (Dashboard) from deep-dive (Marks/CGPA) screens.
 - **Deliverable:** Full dashboard matching your reference screenshots functionally, with attendance, live marks, and timetable as the clear priority.
 

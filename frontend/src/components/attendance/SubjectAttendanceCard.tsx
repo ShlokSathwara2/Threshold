@@ -78,7 +78,7 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
   const WB = (a: number) => overlayBg(theme, a);
   const colors = statusColors[subject.status];
 
-  const projected = projection && projection.missed > 0 ? projection : null;
+  const projected = projection && (projection.missed > 0 || projection.attendedBefore > 0) ? projection : null;
 
   const shortTitle = subject.courseTitle.length > 28
     ? subject.courseTitle.slice(0, 26) + '…'
@@ -204,20 +204,35 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
 
       {/* Stat Pills */}
       <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-        <StatPill label="Present" value={subject.present} color="#22c55e" />
-        <StatPill label="Absent" value={subject.absent} color="#ef4444" />
+        <StatPill label="Present" value={projected ? projected.projectedPresent : subject.present} color="#22c55e" />
+        <StatPill label="Absent" value={projected ? projected.projectedAbsent : subject.absent} color="#ef4444" />
         <StatPill label="Total" value={projected ? projected.projectedTotal : subject.total} />
-        {projected ? (
+        <StatPill
+          label={projected ? 'Margin (after)' : 'Margin'}
+          value={
+            projected
+              ? projected.projectedCanBunk > 0
+                ? `+${projected.projectedCanBunk}`
+                : `−${projected.projectedMustAttend}`
+              : subject.isBelowThreshold
+                ? `−${subject.mustAttend}`
+                : `+${subject.canBunk}`
+          }
+          color={
+            projected
+              ? projected.dropsBelow75
+                ? '#ef4444'
+                : '#22c55e'
+              : subject.isBelowThreshold
+                ? '#ef4444'
+                : '#22c55e'
+          }
+        />
+        {projected && (
           <StatPill
-            label={projected.dropsBelow75 ? 'After leave' : 'After leave'}
+            label="After leave"
             value={`${projected.projectedPercentage.toFixed(1)}%`}
             color={projected.dropsBelow75 ? '#ef4444' : '#22c55e'}
-          />
-        ) : (
-          <StatPill
-            label="Margin"
-            value={subject.isBelowThreshold ? `−${subject.mustAttend}` : `+${subject.canBunk}`}
-            color={subject.isBelowThreshold ? '#ef4444' : '#22c55e'}
           />
         )}
       </div>

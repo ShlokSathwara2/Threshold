@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,6 +16,11 @@ import {
 } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import { useAttendance } from '@/hooks/useAttendance';
+import { computeDayRecommendations, slotKey } from '@/lib/bunk-planner';
+import { loadOptionalHours, toggleOptionalHour } from '@/lib/optional-hours';
+import { loadExams, nextExamDate, daysUntil, type ExamEntry } from '@/lib/exams';
+import { resolveTodayDayOrder } from '@/lib/day-order';
 
 const CACHE_PREFIX = 'threshold_timetable_cache';
 
@@ -57,11 +62,32 @@ function clearCache(username: string | null) {
   }
 }
 
+// Times arrive as 12-hour strings without AM/PM: hours ≤ 6 are afternoon
+// (e.g. "01:25 - 02:15" = 1:25 PM), 12 is midday, 7–11 are morning.
+function parseClock(t: string | undefined): number | null {
+  if (!t) return null;
+  const m = t.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let min = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  if (Math.floor(min / 60) <= 6) min += 12 * 60;
+  return min;
+}
+
+function fmtClock(min: number): string {
+  const h = Math.floor(min / 60);
+  const mm = min % 60;
+  const hh = ((h + 11) % 12) + 1;
+  const ap = h >= 12 ? 'PM' : 'AM';
+  return `${hh}:${mm.toString().padStart(2, '0')} ${ap}`;
+}
+
 export default function TimetablePage() {
   const router = useRouter();
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
+  const { subjects } = useAttendance();
+  const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [academiaReady] = useState(() => isAcademiaLoggedIn());
   const [schedule, setSchedule] = useState<TimetableSlot[]>([]);
   const [batch, setBatch] = useState('');
@@ -80,7 +106,30 @@ export default function TimetablePage() {
     if (!isLoggedIn()) {
       router.push('/welcome');
     }
+    setOptedOut(loadOptionalHours());
   }, [router]);
+
+  const allHours = [...new Set(schedule.map((s) => s.hour))].sort((a, b) => a - b);
+
+  // Safe-day recommendations per DO column (item 8: optimal bunk planner)
+  const dayRecs = useMemo(
+    () => computeDayRecommendations(schedule, subjects, optedOut),
+    [schedule, subjects, optedOut]
+  );
+
+  const [exams, setExams] = useState<ExamEntry[]>([]);
+  useEffect(() => {
+    setExams(loadExams());
+  }, []);
+  const nextExamSoon = useMemo(() => {
+    const todayD = new Date();
+    todayD.setHours(0, 0, 0, 0);
+    const next = exams
+      .map((e) => ({ entry: e, next: nextExamDate(e, todayD) }))
+      .filter((x): x is { entry: ExamEntry; next: Date } => !!x.next)
+      .sort((a, b) => a.next.getTime() - b.next.getTime())[0] ?? null;
+    return next && daysUntil(next.next, todayD) <= 7 ? next : null;
+  }, [exams]);
 
   // Show a cached timetable only for the currently logged-in academia user
   useEffect(() => {
@@ -179,12 +228,12 @@ export default function TimetablePage() {
     fetchCalendar()
       .then((res) => {
         if (cancelled) return;
-        if (res.error || !res.today) {
+        if (res.error || !res.calendar) {
           setTodayIndex(-1);
           return;
         }
-        const m = res.today.dayOrder?.match(/Day\s*(\d)/i);
-        const n = m ? parseInt(m[1], 10) : NaN;
+        const doName = resolveTodayDayOrder(res.calendar);
+        const n = doName ? parseInt(doName.split('-')[1], 10) : NaN;
         setTodayIndex(n >= 1 && n <= 5 ? n - 1 : -1);
       })
       .catch(() => {
@@ -195,7 +244,30 @@ export default function TimetablePage() {
     };
   }, []);
 
-  const allHours = [...new Set(schedule.map((s) => s.hour))].sort((a, b) => a - b);
+  // Free-hour finder (item 15): today's hours with no class or only
+  // opted-out optional hours, plus long gaps between consecutive classes.
+  const freeHours = useMemo(() => {
+    if (todayIndex < 0 || schedule.length === 0) return null;
+    const day = DAYS[todayIndex];
+    const todays = schedule
+      .filter((s) => s.day === day)
+      .sort((a, b) => a.hour - b.hour);
+    const freeHrs = allHours.filter((h) => {
+      const inCell = todays.filter((s) => s.hour === h);
+      return inCell.length === 0 || inCell.every((s) => optedOut.has(slotKey(s)));
+    });
+    const gaps: { from: string; to: string; mins: number }[] = [];
+    for (let i = 0; i < todays.length - 1; i++) {
+      const endRaw = (todays[i].time || '').split('-')[1];
+      const startRaw = (todays[i + 1].time || '').split('-')[0];
+      const end = parseClock(endRaw);
+      const start = parseClock(startRaw);
+      if (end !== null && start !== null && start - end >= 40) {
+        gaps.push({ from: fmtClock(end), to: fmtClock(start), mins: start - end });
+      }
+    }
+    return { freeHrs, gaps };
+  }, [todayIndex, schedule, optedOut, allHours]);
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
@@ -261,9 +333,11 @@ export default function TimetablePage() {
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Academia username (reg number)"
+                placeholder="NetID — ....@srmist.edu.in"
                 autoCapitalize="none"
                 autoCorrect="off"
+                autoComplete="username"
+                inputMode="email"
                 style={{
                   padding: '12px 14px',
                   borderRadius: '12px',
@@ -278,7 +352,8 @@ export default function TimetablePage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                placeholder="Password (academia portal)"
+                autoComplete="current-password"
                 style={{
                   padding: '12px 14px',
                   borderRadius: '12px',
@@ -389,6 +464,91 @@ export default function TimetablePage() {
         </div>
       )}
 
+      {/* ── Free-hour finder (today) ── */}
+      {schedule.length > 0 && freeHours && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            borderRadius: '16px',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
+            background: 'linear-gradient(165deg, rgba(59,130,246,0.06), rgba(59,130,246,0.015))',
+            marginBottom: '14px',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 14px',
+            borderBottom: `1px solid ${WB(0.05)}`,
+          }}>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--threshold-text)', margin: 0 }}>
+              Free hours {todayIndex >= 0 ? `today (${DAYS[todayIndex]})` : ''}
+            </h2>
+            <span style={{ color: '#60a5fa', fontSize: '0.9rem' }}>⏳</span>
+          </div>
+          <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {freeHours.freeHrs.length > 0 || freeHours.gaps.length > 0 ? (
+              <>
+                {freeHours.freeHrs.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {freeHours.freeHrs.map((h) => {
+                      const tl = schedule.find((s) => s.hour === h)?.time;
+                      return (
+                        <span key={h} style={{
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          background: 'rgba(59, 130, 246, 0.12)',
+                          border: '1px solid rgba(59, 130, 246, 0.3)',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          color: '#93c5fd',
+                        }}>
+                          H{h}{tl ? ` · ${tl}` : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {freeHours.gaps.length > 0 && (
+                  <p style={{ margin: 0, fontSize: '0.7rem', color: W(0.5), lineHeight: 1.5 }}>
+                    Long gaps between classes:{' '}
+                    {freeHours.gaps.map((g) => `${g.from}–${g.to} (${g.mins} min)`).join(', ')}
+                  </p>
+                )}
+                {nextExamSoon && (
+                  <button
+                    onClick={() => router.push('/dashboard/exams')}
+                    style={{
+                      alignSelf: 'flex-start',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: 'var(--threshold-accent-text)',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    📝 {nextExamSoon.entry.subjectTitle} exam{' '}
+                    {daysUntil(nextExamSoon.next, new Date()) === 0 ? 'today' : `in ${daysUntil(nextExamSoon.next, new Date())} days`} — use a free hour to revise →
+                  </button>
+                )}
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: '0.72rem', color: W(0.45) }}>
+                No free hours today — full day of classes.
+              </p>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* ── AcadLoop-style grid: hours × DO columns ── */}
       {!needsLogin && schedule.length === 0 && !loading && !error && (
         <div style={{
@@ -439,6 +599,8 @@ export default function TimetablePage() {
                 </div>
                 {DAYS.map((day, di) => {
                   const isToday = di === todayIndex;
+                  const rec = dayRecs[di];
+                  const isSafe = !!rec && rec.hasClasses && rec.safe;
                   return (
                     <div key={day} style={{
                       flex: 1,
@@ -446,7 +608,11 @@ export default function TimetablePage() {
                       padding: '10px 8px',
                       textAlign: 'center',
                       borderLeft: `1px solid ${WB(0.05)}`,
-                      background: isToday ? 'rgba(139, 92, 246, 0.18)' : 'transparent',
+                      background: isToday
+                        ? 'rgba(139, 92, 246, 0.18)'
+                        : isSafe
+                          ? 'rgba(34, 197, 94, 0.08)'
+                          : 'transparent',
                     }}>
                       <span style={{
                         fontSize: '0.78rem',
@@ -464,6 +630,22 @@ export default function TimetablePage() {
                           color: 'var(--threshold-accent-text)',
                         }}>
                           TODAY
+                        </span>
+                      )}
+                      {isSafe && (
+                        <span style={{
+                          display: 'inline-block',
+                          marginTop: '3px',
+                          padding: '1px 7px',
+                          borderRadius: '999px',
+                          fontSize: '0.52rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.3px',
+                          color: '#4ade80',
+                          background: 'rgba(34, 197, 94, 0.14)',
+                          border: '1px solid rgba(34, 197, 94, 0.35)',
+                        }}>
+                          SAFE
                         </span>
                       )}
                     </div>
@@ -526,37 +708,75 @@ export default function TimetablePage() {
                           flexDirection: 'column',
                           gap: '5px',
                         }}>
-                          {inCell.map((s) => (
+                          {inCell.map((s) => {
+                          const isOpt = optedOut.has(slotKey(s));
+                          return (
                             <div
                               key={`${s.courseCode}-${hour}-${s.slot}`}
                               style={{
                                 padding: '7px 8px',
                                 borderRadius: '10px',
-                                background:
-                                  s.slot.startsWith('L')
+                                background: isOpt
+                                  ? 'rgba(245, 158, 11, 0.09)'
+                                  : s.slot.startsWith('L')
                                     ? 'rgba(59, 130, 246, 0.12)'
                                     : s.slot.startsWith('P')
                                       ? 'rgba(34, 197, 94, 0.1)'
                                       : 'rgba(139, 92, 246, 0.12)',
-                                border: '1px solid var(--threshold-border)',
+                                border: isOpt
+                                  ? '1px dashed rgba(245, 158, 11, 0.45)'
+                                  : '1px solid var(--threshold-border)',
                               }}
                             >
-                              <span style={{
-                                display: 'block',
-                                fontSize: '0.62rem',
-                                fontWeight: 700,
-                                color: 'var(--threshold-accent-text)',
-                                letterSpacing: '0.2px',
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '4px',
                               }}>
-                                {s.courseCode}
-                              </span>
+                                <span style={{
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  color: isOpt ? '#fbbf24' : 'var(--threshold-accent-text)',
+                                  letterSpacing: '0.2px',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}>
+                                  {s.courseCode}
+                                </span>
+                                <button
+                                  onClick={() => setOptedOut(toggleOptionalHour(slotKey(s)))}
+                                  title={isOpt ? 'Unmark as optional hour' : 'Mark as optional hour'}
+                                  style={{
+                                    flexShrink: 0,
+                                    padding: '1px 6px',
+                                    borderRadius: '6px',
+                                    border: isOpt
+                                      ? '1px solid rgba(245, 158, 11, 0.5)'
+                                      : '1px solid rgba(255,255,255,0.12)',
+                                    background: isOpt
+                                      ? 'rgba(245, 158, 11, 0.15)'
+                                      : 'transparent',
+                                    color: isOpt ? '#fbbf24' : W(0.35),
+                                    fontSize: '0.5rem',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.3px',
+                                    cursor: 'pointer',
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {isOpt ? 'OPT ✓' : 'OPT'}
+                                </button>
+                              </div>
                               <span style={{
                                 display: 'block',
                                 fontSize: '0.68rem',
                                 fontWeight: 600,
-                                color: 'var(--threshold-text)',
+                                color: isOpt ? W(0.5) : 'var(--threshold-text)',
                                 margin: '2px 0',
                                 lineHeight: 1.2,
+                                textDecoration: isOpt ? 'line-through' : 'none',
                               }}>
                                 {s.courseTitle}
                               </span>
@@ -574,7 +794,8 @@ export default function TimetablePage() {
                                 {s.room && s.room !== 'N/A' ? ` · ${s.room}` : ''}
                               </span>
                             </div>
-                          ))}
+                          );
+                        })}
                         </div>
                       );
                     })}
@@ -604,6 +825,22 @@ export default function TimetablePage() {
             {loading ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
+      )}
+
+      {schedule.length > 0 && (
+        <p style={{
+          margin: '12px auto 0',
+          maxWidth: '520px',
+          textAlign: 'center',
+          fontSize: '0.62rem',
+          color: W(0.3),
+          lineHeight: 1.5,
+        }}>
+          Tap <span style={{ fontWeight: 800, color: W(0.45) }}>OPT</span> on a class to mark it as an
+          optional hour you&apos;ve opted out of — it then counts as free time above.
+          Green <span style={{ fontWeight: 800, color: '#4ade80' }}>SAFE</span> columns are days where
+          skipping every class keeps you above 75%.
+        </p>
       )}
     </div>
   );
