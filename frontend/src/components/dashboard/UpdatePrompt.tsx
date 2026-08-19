@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { dismissUpdate, type UpdateInfo } from '@/lib/update-check';
+import { FileBridge } from '@/lib/backup';
 
 interface Props {
   info: UpdateInfo | null;
@@ -14,21 +15,24 @@ export default function UpdatePrompt({ info, onClose }: Props) {
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
+  const [status, setStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
 
   if (!info) return null;
 
   const handleUpdate = async () => {
     try {
-      await InAppBrowser.open({
+      setStatus('downloading');
+      await FileBridge.downloadAndInstall({
         url: info.apkUrl,
-        isPresentAfterPageLoad: true,
-        showArrow: true,
-        showTitle: true,
-        disableShare: true,
-        toolbarColor: '#09090f',
+        filename: 'Threshold.apk',
       });
+      setStatus('done');
     } catch {
+      // Native downloader unavailable (e.g. web preview) — open the APK page.
+      setStatus('idle');
       window.open(info.apkUrl, '_blank');
+      onClose();
+      return;
     }
     onClose();
   };
@@ -128,12 +132,15 @@ export default function UpdatePrompt({ info, onClose }: Props) {
             color: W(0.4),
             lineHeight: 1.5,
           }}>
-            Tap update — the new version downloads and installs on its own.
+            {status === 'downloading'
+              ? 'Downloading — Android will install it once it finishes.'
+              : 'Tap update — it downloads and installs on its own.'}
           </p>
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
             <button
               onClick={handleLater}
+              disabled={status === 'downloading'}
               style={{
                 flex: 1,
                 padding: '12px 0',
@@ -143,7 +150,8 @@ export default function UpdatePrompt({ info, onClose }: Props) {
                 color: W(0.55),
                 fontSize: '0.8rem',
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: status === 'downloading' ? 'wait' : 'pointer',
+                opacity: status === 'downloading' ? 0.5 : 1,
               }}
             >
               Later
@@ -151,6 +159,7 @@ export default function UpdatePrompt({ info, onClose }: Props) {
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={handleUpdate}
+              disabled={status === 'downloading'}
               style={{
                 flex: 1.4,
                 padding: '12px 0',
@@ -160,11 +169,12 @@ export default function UpdatePrompt({ info, onClose }: Props) {
                 color: '#fff',
                 fontSize: '0.8rem',
                 fontWeight: 800,
-                cursor: 'pointer',
+                cursor: status === 'downloading' ? 'wait' : 'pointer',
+                opacity: status === 'downloading' ? 0.6 : 1,
                 boxShadow: '0 8px 24px rgba(139,92,246,0.4)',
               }}
             >
-              Update now
+              {status === 'downloading' ? 'Downloading…' : 'Update now'}
             </motion.button>
           </div>
         </motion.div>

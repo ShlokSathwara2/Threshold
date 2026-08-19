@@ -2,6 +2,7 @@ import { registerPlugin } from '@capacitor/core';
 
 interface FileBridgeApi {
   saveToDownloads(options: { filename: string; mime: string; data: string }): Promise<{ path: string }>;
+  downloadAndInstall(options: { url: string; filename: string }): Promise<{ status: string }>;
 }
 
 export const FileBridge = registerPlugin<FileBridgeApi>('FileBridge');
