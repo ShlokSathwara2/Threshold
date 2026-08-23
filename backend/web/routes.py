@@ -255,6 +255,20 @@ async def sp_login_verify(body: dict):
         return {"success": False, "status": 500, "message": f"Login error ({type(e).__name__}: {e})"}
 
 
+@router.post("/sp/refresh-captcha")
+async def sp_refresh_captcha(body: dict):
+    session_id = body.get("session_id", "")
+    if not session_id:
+        return {"success": False, "status": 400, "message": "session_id required"}
+    try:
+        return await browser_login.refresh_captcha(session_id)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": f"Refresh error ({type(e).__name__}: {e})"}
+
+
+
 @router.post("/sp/curl-login-init")
 def sp_curl_login_init(body: dict):
     """Start curl-based login: fetch CAPTCHA image via curl (bypasses WAF TLS fingerprint)."""

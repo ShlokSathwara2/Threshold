@@ -190,7 +190,7 @@ export default function LoginPage() {
             setWebLoginError(data.message);
             setCaptchaAnswer('');
             // Refresh CAPTCHA
-            const refreshRes = await fetch(`${API_BASE}/sp/curl-refresh-captcha`, {
+            const refreshRes = await fetch(`${API_BASE}/sp/refresh-captcha`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ session_id: captchaSessionId }),
