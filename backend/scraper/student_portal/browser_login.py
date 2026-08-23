@@ -10,6 +10,7 @@ Stealth settings hide the headless/automation markers that the WAF detects.
 from __future__ import annotations
 
 import base64
+import os
 import sys
 import threading
 import time
@@ -164,9 +165,16 @@ async def _start_login_impl(username: str) -> dict:
     netid = username.split("@")[0] if "@" in username else username
     print(f"[SP-LOGIN-INIT] Starting browser login for NetID: {netid}")
 
+    proxy_setting = None
+    proxy_url = os.environ.get("HTTP_PROXY") or os.environ.get("INDIAN_PROXY")
+    if proxy_url:
+        print(f"[SP-LOGIN-INIT] Using proxy: {proxy_url}")
+        proxy_setting = {"server": proxy_url}
+
     pw = await _get_playwright()
     browser = await pw.chromium.launch(
         headless=True,
+        proxy=proxy_setting,
         args=[
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
