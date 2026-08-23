@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
-import { saveSession } from '@/lib/api';
+import { saveSession, campusWebLogin, campusWebAttendance } from '@/lib/api';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -33,6 +33,14 @@ export default function LoginPage() {
   const [nativeLoginError, setNativeLoginError] = useState('');
   const [nativeAnimating, setNativeAnimating] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [netId, setNetId] = useState('');
+  const [password, setPassword] = useState('');
+  const [webLoginLoading, setWebLoginLoading] = useState(false);
+  const [webLoginError, setWebLoginError] = useState('');
+  const [captchaSessionId, setCaptchaSessionId] = useState('');
+  const [captchaImage, setCaptchaImage] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [captchaStep, setCaptchaStep] = useState<'credentials' | 'captcha'>('credentials');
 
   useEffect(() => {
     setIsNative(isNativePlatform());
@@ -125,6 +133,90 @@ export default function LoginPage() {
       handleNativeLogin();
     }, 650);
   }, [nativeAnimating, nativeLoginLoading, handleNativeLogin]);
+
+  const handleWebLogin = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWebLoginError('');
+
+    if (captchaStep === 'credentials') {
+      // Step 1: Submit Net ID + Password to get CAPTCHA
+      if (!netId.trim() || !password.trim()) {
+        setWebLoginError('Please enter your Net ID and password');
+        return;
+      }
+      setWebLoginLoading(true);
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${API_BASE}/sp/login-init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: netId.trim() }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'Failed to load CAPTCHA');
+        }
+        setCaptchaSessionId(data.session_id);
+        setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
+        setCaptchaStep('captcha');
+      } catch (err) {
+        setWebLoginError(err instanceof Error ? err.message : 'Failed to connect to backend (http://localhost:8000)');
+      } finally {
+        setWebLoginLoading(false);
+      }
+    } else {
+      // Step 2: Submit CAPTCHA answer
+      if (!captchaAnswer.trim()) {
+        setWebLoginError('Please enter the CAPTCHA answer');
+        return;
+      }
+      setWebLoginLoading(true);
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${API_BASE}/sp/login-verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: captchaSessionId,
+            username: netId.trim(),
+            password: password.trim(),
+            captcha: captchaAnswer.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          // If CAPTCHA was wrong, refresh it
+          if (data.message?.toLowerCase().includes('captcha')) {
+            setWebLoginError(data.message);
+            setCaptchaAnswer('');
+            // Refresh CAPTCHA
+            const refreshRes = await fetch(`${API_BASE}/sp/curl-refresh-captcha`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: captchaSessionId }),
+            });
+            const refreshData = await refreshRes.json();
+            if (refreshData.success) {
+              setCaptchaImage(`data:image/png;base64,${refreshData.captcha_image_base64}`);
+            }
+            return;
+          }
+          throw new Error(data.message || 'Login failed');
+        }
+        // Store cookies and redirect
+        const cookieStr = data.cookies || '';
+        if (cookieStr) {
+          await storeAndNavigate(cookieStr);
+        } else {
+          throw new Error('No session cookies received');
+        }
+      } catch (err) {
+        setWebLoginError(err instanceof Error ? err.message : 'Login failed');
+      } finally {
+        setWebLoginLoading(false);
+      }
+    }
+  }, [captchaStep, netId, password, captchaAnswer, captchaSessionId, storeAndNavigate]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,7 +355,7 @@ export default function LoginPage() {
             textAlign: 'center',
             marginBottom: '6px',
           }}>
-            {isNative ? 'Student Portal' : 'Welcome back'}
+            {isNative ? 'Student Portal' : 'Student Portal Credentials'}
           </h1>
           <p style={{
             color: W(0.45),
@@ -273,7 +365,7 @@ export default function LoginPage() {
           }}>
             {isNative
               ? 'Log in with your SRM credentials'
-              : 'Paste your Student Portal session cookie'}
+              : 'Enter your SRM Student Portal NetID and password'}
           </p>
 
           {isNative ? (
@@ -334,38 +426,113 @@ export default function LoginPage() {
               </p>
             </div>
           ) : (
-            /* ── Web: Manual Cookie Paste ── */
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
-                  Session Cookie
-                </label>
-                <textarea
-                  value={cookie}
-                  onChange={(e) => setCookie(e.target.value)}
-                  placeholder="JSESSIONID=...; other cookies..."
-                  rows={3}
-                  spellCheck={false}
-                  style={{
-                    ...inputStyle,
-                    resize: 'vertical',
-                    lineHeight: 1.4,
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
-                />
-                <p style={{
-                  color: W(0.3),
-                  fontSize: '0.7rem',
-                  marginTop: '6px',
-                  lineHeight: 1.4,
-                }}>
-                  Log into sp.srmist.edu.in, open DevTools (F12) → Network → any request → copy the Cookie header value.
-                </p>
-              </div>
+            /* ── Web: Email/Password + CAPTCHA Login ── */
+            <form onSubmit={handleWebLogin}>
+              {captchaStep === 'credentials' ? (
+                <>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
+                      Net ID
+                    </label>
+                    <input
+                      type="text"
+                      value={netId}
+                      onChange={(e) => setNetId(e.target.value)}
+                      placeholder="e.g. xy2423"
+                      spellCheck={false}
+                      style={inputStyle}
+                      onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
+                      onBlur={(e) => e.target.style.borderColor = WB(0.1)}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Your SRM password"
+                      spellCheck={false}
+                      style={inputStyle}
+                      onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
+                      onBlur={(e) => e.target.style.borderColor = WB(0.1)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                    <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '10px' }}>
+                      Enter the CAPTCHA below
+                    </label>
+                    {captchaImage && (
+                      <div style={{
+                        padding: '12px',
+                        borderRadius: '12px',
+                        background: WB(0.05),
+                        border: `1px solid ${WB(0.1)}`,
+                        marginBottom: '12px',
+                      }}>
+                        <img
+                          src={captchaImage}
+                          alt="CAPTCHA"
+                          style={{
+                            maxWidth: '100%',
+                            height: 'auto',
+                            borderRadius: '8px',
+                            imageRendering: 'pixelated',
+                          }}
+                        />
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      value={captchaAnswer}
+                      onChange={(e) => setCaptchaAnswer(e.target.value)}
+                      placeholder="Type the CAPTCHA text"
+                      spellCheck={false}
+                      autoFocus
+                      style={inputStyle}
+                      onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
+                      onBlur={(e) => e.target.style.borderColor = WB(0.1)}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                          const res = await fetch(`${API_BASE}/sp/curl-refresh-captcha`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: captchaSessionId }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
+                          }
+                        } catch {}
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(139, 92, 246, 0.8)',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        marginTop: '8px',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      Get a new CAPTCHA
+                    </button>
+                  </div>
+                </>
+              )}
 
               <AnimatePresence>
-                {error && (
+                {webLoginError && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -380,18 +547,42 @@ export default function LoginPage() {
                       marginBottom: '16px',
                     }}
                   >
-                    {error}
+                    {webLoginError}
                   </motion.div>
                 )}
               </AnimatePresence>
 
+              {captchaStep === 'captcha' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaptchaStep('credentials');
+                    setCaptchaImage('');
+                    setCaptchaAnswer('');
+                    setCaptchaSessionId('');
+                    setWebLoginError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: W(0.4),
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    marginBottom: '12px',
+                    padding: '0',
+                  }}
+                >
+                  ← Back to login
+                </button>
+              )}
+
               <motion.button
                 type="submit"
-                disabled={loading || activeAnimation !== null}
+                disabled={webLoginLoading || activeAnimation !== null}
                 whileTap={{ scale: 0.95 }}
-                className={`arrow-btn arrow-btn--primary${loading ? ' arrow-btn--disabled' : ''}`}
+                className={`arrow-btn arrow-btn--primary${webLoginLoading ? ' arrow-btn--disabled' : ''}`}
                 style={{
-                  cursor: loading ? 'not-allowed' : 'pointer',
+                  cursor: webLoginLoading ? 'not-allowed' : 'pointer',
                 }}
               >
                 <div className="arrow-btn__slider" />
@@ -401,8 +592,25 @@ export default function LoginPage() {
                 <svg className="arrow-btn__svg--arr2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                   <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 </svg>
-                <span className="arrow-btn__text">{loading ? 'Connecting...' : 'Connect'}</span>
+                <span className="arrow-btn__text">
+                  {webLoginLoading
+                    ? (captchaStep === 'credentials' ? 'Loading CAPTCHA...' : 'Logging in...')
+                    : (captchaStep === 'credentials' ? 'Continue' : 'Log in')
+                  }
+                </span>
               </motion.button>
+
+              <p style={{
+                color: W(0.3),
+                fontSize: '0.7rem',
+                marginTop: '12px',
+                lineHeight: 1.4,
+                textAlign: 'center',
+              }}>
+                {captchaStep === 'credentials'
+                  ? 'Same login as the SRM Student Portal. No credentials stored.'
+                  : 'Solve the CAPTCHA to complete login. You\'ll get full access to all features.'}
+              </p>
             </form>
           )}
         </motion.div>

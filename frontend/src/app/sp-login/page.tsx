@@ -279,7 +279,7 @@ export default function SpLoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. ra2311003010"
+                  placeholder="e.g. xy2423"
                   autoCapitalize="none"
                   autoComplete="username"
                   style={inputStyle}

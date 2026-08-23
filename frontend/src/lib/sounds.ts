@@ -30,9 +30,9 @@ function audioFor(id: SoundId): HTMLAudioElement | null {
 export function getSoundPref(): SoundId {
   try {
     const v = localStorage.getItem(KEY) as SoundId | null;
-    return v && SOUND_OPTIONS.some((o) => o.id === v) ? v : 'mechanical';
+    return v && SOUND_OPTIONS.some((o) => o.id === v) ? v : 'off';
   } catch {
-    return 'mechanical';
+    return 'off';
   }
 }
 

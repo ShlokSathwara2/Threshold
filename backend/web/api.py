@@ -1,3 +1,9 @@
+import sys
+import asyncio
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,12 +23,24 @@ origins = [
 ]
 print(f"[CORS] Allowed origins: {origins}")
 
+local_defaults = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "https://localhost", "capacitor://localhost"]
+allowed_origins = list(set(origins + local_defaults))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins + ["https://localhost", "capacitor://localhost"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    import sys
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        print("[SERVER] Enforced WindowsProactorEventLoopPolicy for Playwright support")
+

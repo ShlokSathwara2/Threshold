@@ -119,7 +119,7 @@ export default function AboutPage() {
         <p style={{ margin: 0, fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
           Every SRM student has asked the same two questions: <em>how many classes can I skip today</em>,
           and <em>exactly how many do I need to attend to stay above 75%</em>. The portal answers with
-          raw numbers — you're left doing the math in your head, and one wrong weekend can cost you a
+          raw numbers — you&apos;re left doing the math in your head, and one wrong weekend can cost you a
           detention notice.
         </p>
         <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
@@ -222,7 +222,10 @@ export default function AboutPage() {
         </h2>
         <p style={{ margin: 0, fontSize: '0.78rem', color: W(0.5), lineHeight: 1.65 }}>
           Threshold keeps your attendance, marks, exam plans and habits on this device —
-          private, offline-first, and built for students who want the numbers, not the noise.
+          private, offline-first, and built for SRM students who want the numbers, not the noise.
+          All settings (notifications, tap sounds, app lock) are off by default — you choose
+          what to enable. If you spot a bug or have a feature request, feel free to reach out
+          on Instagram or LinkedIn above.
         </p>
         <p style={{ margin: '10px 0 0', fontSize: '0.68rem', color: W(0.3), fontWeight: 600 }}>
           NEXT.JS · CAPACITOR · SRM STUDENT PORTAL

@@ -144,13 +144,13 @@ export interface NotifPrefs {
 }
 
 export const DEFAULT_NOTIF: NotifPrefs = {
-  enabled: true,
-  attendanceRisk: true,
-  examDates: true,
-  holidays: true,
-  classAlerts: true,
-  bunkAlerts: true,
-  weeklyReport: true,
+  enabled: false,
+  attendanceRisk: false,
+  examDates: false,
+  holidays: false,
+  classAlerts: false,
+  bunkAlerts: false,
+  weeklyReport: false,
 };
 
 const THEME_KEY = 'threshold_theme';

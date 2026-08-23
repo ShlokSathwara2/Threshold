@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const [flash, setFlash] = useState('');
   const [lockOn, setLockOn] = useState(false);
   const [bioAvailable, setBioAvailable] = useState<boolean | null>(null);
-  const [sound, setSound] = useState<SoundId>('mechanical');
+  const [sound, setSound] = useState<SoundId>('off');
   const [busy, setBusy] = useState<'export' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -595,10 +595,17 @@ export default function SettingsPage() {
           About
         </h2>
         <p style={{ fontSize: '0.78rem', color: W(0.45), margin: 0, lineHeight: 1.6 }}>
-          THRESHOLD — your semester copilot. Attendance with recovery plans, a bunk
-          planner, cloud-synced exam tracking, smart notifications, a biometric app
-          lock and instant refresh — all from the Student Portal &amp; Academia,
-          interpreted into decisions. Your password never touches our servers.
+          Threshold — your semester copilot. Attendance tracking with recovery plans, a bunk
+          planner, exam countdown alerts, marks &amp; CGPA tools, smart notifications,
+          biometric app lock, backup &amp; restore — all from the SRM Student Portal,
+          interpreted into decisions. Built by a student, for students. Your password
+          never touches our servers.
+        </p>
+        <p style={{ fontSize: '0.68rem', color: W(0.3), margin: '10px 0 0', lineHeight: 1.5 }}>
+          Found a bug or have feedback? Reach out on{' '}
+          <a href="https://www.instagram.com/_shlok_sathwara_/" target="_blank" rel="noreferrer" style={{ color: '#e1306c', fontWeight: 700, textDecoration: 'none' }}>Instagram</a>{' '}
+          or{' '}
+          <a href="https://www.linkedin.com/in/shlok-sathwara-4b91ab319/" target="_blank" rel="noreferrer" style={{ color: '#0a66c2', fontWeight: 700, textDecoration: 'none' }}>LinkedIn</a>.
         </p>
       </motion.section>
     </div>

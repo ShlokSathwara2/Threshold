@@ -31,7 +31,7 @@ import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
 import { recordAttendanceSnapshot } from '@/lib/habits';
-import { toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
+import { toDate, toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
 import { syncWidget } from '@/lib/widget-sync';
 
 function greeting(): string {
@@ -95,6 +95,13 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<ExamEntry[]>([]);
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [showFeatureBrief, setShowFeatureBrief] = useState(() => {
+    try {
+      return localStorage.getItem('threshold_feature_brief_dismissed') !== '1';
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     setLastSyncAt(lastSyncTime());
@@ -306,9 +313,14 @@ export default function DashboardPage() {
   // ── Dynamic briefs: what matters most RIGHT NOW, ranked by severity ──
   const slotByCode = (code: string) =>
     todaysSlots.find((s) => s.courseCode === code && slotWindow(s).end > nowMin);
+  const todayMs = todayD.getTime();
   const nextHoliday = (calendar?.calendar ?? [])
     .flatMap((m) => m.days)
-    .find((d) => d.date >= toDateStr(todayD) && (d.isHoliday === true || /holiday/i.test(d.event || '')));
+    .find((d) => {
+      if (!(d.isHoliday === true || /holiday/i.test(d.event || ''))) return false;
+      const dt = toDate(d.date);
+      return dt && dt.getTime() >= todayMs;
+    });
   const tomorrowDO = (calendar?.calendar ?? [])
     .flatMap((m) => m.days)
     .find((d) => {
@@ -334,6 +346,30 @@ export default function DashboardPage() {
       body: `You're at ${overall.overallPercentage.toFixed(1)}% overall. Attend ${ovMustAttend} more class${ovMustAttend === 1 ? '' : 'es'} to secure 75%.`,
       route: '/dashboard/attendance',
     });
+  }
+  if (!todayDO) {
+    const dayOfWeek = todayD.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const todayEntry = (calendar?.calendar ?? [])
+      .flatMap((m) => m.days)
+      .find((d) => d.date === toDateStr(todayD));
+    if (todayEntry?.isHoliday) {
+      briefs.push({
+        icon: '🎉',
+        tone: 'good',
+        title: 'Holiday today — no classes!',
+        body: 'Enjoy your day off. Check the calendar for upcoming events.',
+        route: '/dashboard/calendar',
+      });
+    } else if (isWeekend) {
+      briefs.push({
+        icon: '🌴',
+        tone: 'good',
+        title: 'Weekend — no classes today',
+        body: 'Rest up! Your next class is coming up.',
+        route: '/dashboard/timetable',
+      });
+    }
   }
   for (const s of atRiskToday) {
     const slot = slotByCode(s.courseCode);
@@ -597,6 +633,42 @@ export default function DashboardPage() {
           </div>
       </motion.div>
 
+      {!isAcademiaLoggedIn() && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          onClick={() => {
+            const el = document.getElementById('academia-login');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            borderRadius: '14px',
+            border: '1px solid rgba(168,85,247,0.35)',
+            background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.10))',
+            color: '#c084fc',
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(168,85,247,0.2)',
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          <span style={{ fontSize: '1rem' }}>🎓</span>
+          Log into Academia for Timetable
+          <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>↓</span>
+        </motion.button>
+      )}
+
       {/* ── Offline banner ── */}
       {(offline || stale) && (
         <motion.div
@@ -629,6 +701,77 @@ export default function DashboardPage() {
               <>You&apos;re offline — connect to the internet to load your data.</>
             )}
           </p>
+        </motion.div>
+      )}
+
+      {/* ── Feature briefing card ── */}
+      {showFeatureBrief && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            padding: '16px 18px',
+            borderRadius: '18px',
+            marginBottom: '16px',
+            background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.14), rgba(59,130,246,0.08))',
+            border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: theme.text }}>
+                Discover more in Settings
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: '0.7rem', color: W(0.5), lineHeight: 1.5 }}>
+                Tap <strong>Settings</strong> in the sidebar to enable notifications, tap sounds,
+                biometric app lock and data backup — all off by default, you choose what to turn on.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch {}
+                setShowFeatureBrief(false);
+              }}
+              style={{
+                flexShrink: 0,
+                background: 'none',
+                border: 'none',
+                color: W(0.4),
+                fontSize: '1rem',
+                cursor: 'pointer',
+                padding: '4px',
+                lineHeight: 1,
+              }}
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch {}
+              setShowFeatureBrief(false);
+              router.push('/dashboard/settings');
+            }}
+            style={{
+              marginTop: '12px',
+              width: '100%',
+              padding: '10px',
+              borderRadius: '12px',
+              border: 'none',
+              background: 'rgba(var(--threshold-accent-rgb),0.2)',
+              color: theme.isLight ? theme.accent : '#c4b5fd',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            Open Settings →
+          </button>
         </motion.div>
       )}
 
@@ -1248,7 +1391,7 @@ export default function DashboardPage() {
         )}
 
         {!isAcademiaLoggedIn() && (
-          <div style={{ padding: '16px' }}>
+          <div id="academia-login" style={{ padding: '16px' }}>
             <AcademiaLoginCard onSuccess={handleAcademiaLogin} />
           </div>
         )}

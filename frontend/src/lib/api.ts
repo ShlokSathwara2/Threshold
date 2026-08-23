@@ -707,3 +707,67 @@ export async function saveSpExams(user: string, exams: CloudExam[]): Promise<voi
     body: JSON.stringify({ exams }),
   });
 }
+
+// ── Campus Web API (Web fallback) ─────────────────────────────────
+// When running in a browser (not the native APK), we use Campus Web's
+// backend to bypass the WAF and avoid CAPTCHA entirely.
+
+const CAMPUS_WEB_API = 'https://campusapi.fly.dev';
+
+export interface CampusWebStudent {
+  courseid: string;
+  officeid: number;
+  officename: string;
+  program: string;
+  registerno: string;
+  semesterid: string;
+  studentid: number;
+  studentname: string;
+}
+
+export interface CampusWebLoginResponse {
+  net_id: string;
+  status: string;
+  student: CampusWebStudent;
+}
+
+export interface CampusWebAttendanceItem {
+  subjectcode: string;
+  subjectdesc: string;
+  present: string;
+  absent: string;
+  total: string;
+  presentpercentage: string;
+}
+
+export interface CampusWebAttendanceResponse {
+  attendance: CampusWebAttendanceItem[];
+  net_id: string;
+  status: string;
+}
+
+export async function campusWebLogin(netId: string, password: string): Promise<CampusWebLoginResponse> {
+  const res = await fetch(`${CAMPUS_WEB_API}/api/student-portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ net_id: netId, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || 'Login failed');
+  }
+  return res.json();
+}
+
+export async function campusWebAttendance(netId: string): Promise<CampusWebAttendanceResponse> {
+  const res = await fetch(`${CAMPUS_WEB_API}/api/student-portal/attendance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ net_id: netId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || 'Failed to fetch attendance');
+  }
+  return res.json();
+}

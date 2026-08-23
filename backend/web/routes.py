@@ -234,7 +234,7 @@ async def sp_login_init(body: dict):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"success": False, "status": 500, "message": str(e)}
+        return {"success": False, "status": 500, "message": f"Browser login error ({type(e).__name__}: {e})"}
 
 
 @router.post("/sp/login-verify")
@@ -245,9 +245,61 @@ async def sp_login_verify(body: dict):
     captcha = body.get("captcha", "")
     if not all([session_id, username, password, captcha]):
         return {"success": False, "status": 400, "message": "All fields required (session_id, username, password, captcha)"}
+
     try:
         result = await browser_login.finish_login(session_id, username, password, captcha)
         return result.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": f"Login error ({type(e).__name__}: {e})"}
+
+
+@router.post("/sp/curl-login-init")
+def sp_curl_login_init(body: dict):
+    """Start curl-based login: fetch CAPTCHA image via curl (bypasses WAF TLS fingerprint)."""
+    from scraper.student_portal.curl_login import start_login
+    username = body.get("username", "")
+    if not username:
+        return {"success": False, "status": 400, "message": "username required"}
+    try:
+        return start_login(username)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
+
+
+@router.post("/sp/curl-login-verify")
+def sp_curl_login_verify(body: dict):
+    """Finish curl-based login: submit CAPTCHA answer via curl."""
+    from scraper.student_portal.curl_login import finish_login
+    session_id = body.get("session_id", "")
+    username = body.get("username", "")
+    password = body.get("password", "")
+    captcha = body.get("captcha", "")
+    if not all([session_id, username, password, captcha]):
+        return {"success": False, "status": 400, "message": "All fields required (session_id, username, password, captcha)"}
+    try:
+        result = finish_login(session_id, username, password, captcha)
+        return result.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "status": 500, "message": str(e)}
+
+
+@router.post("/sp/curl-refresh-captcha")
+async def sp_curl_refresh_captcha(body: dict):
+    """Refresh CAPTCHA for an existing session (when CAPTCHA was wrong)."""
+    session_id = body.get("session_id", "")
+    if not session_id:
+        return {"success": False, "status": 400, "message": "session_id required"}
+    try:
+        if session_id in browser_login._sessions:
+            return await browser_login.refresh_captcha(session_id)
+        from scraper.student_portal.curl_login import refresh_captcha as curl_refresh
+        return curl_refresh(session_id)
     except Exception as e:
         import traceback
         traceback.print_exc()

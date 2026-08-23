@@ -14,6 +14,7 @@ import { SubjectRegistryProvider } from '@/lib/subject-registry';
 import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
 import { checkForUpdate, notifyUpdate, type UpdateInfo } from '@/lib/update-check';
 import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
+import WelcomeModal from '@/components/dashboard/WelcomeModal';
 import Lenis from 'lenis';
 
 // "ra2411003010247@srmist.edu.in" → "Ra2411003010247"
@@ -73,6 +74,14 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: 'Helper',
+    expandable: true,
+    items: [
+      { label: 'Resources', path: '/dashboard/helper/resources', icon: '◈' },
+      { label: 'Study Plus', path: '/dashboard/helper/study-plus', icon: '⚒' },
+    ],
+  },
+  {
     label: 'App',
     items: [
       { label: 'Settings', path: '/dashboard/settings', icon: '⚙' },
@@ -98,6 +107,8 @@ const pageTitles: Record<string, string> = {
   '/dashboard/exam/provisional-results': 'Provisional Results',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/insights': 'Insights',
+  '/dashboard/helper/resources': 'Resources',
+  '/dashboard/helper/study-plus': 'Study Plus',
 };
 
 function NoiseOverlay() {
@@ -126,6 +137,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [examOpen, setExamOpen] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const navScrollRef = useRef<HTMLDivElement | null>(null);
@@ -173,7 +185,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       const el = navScrollRef.current;
       if (!el) return;
       const active = el.querySelector<HTMLElement>('[data-active="true"]');
-      const target = active ?? (examOpen ? el.querySelector<HTMLElement>('[data-exam-toggle="true"]') : null);
+      const target = active ?? (examOpen ? el.querySelector<HTMLElement>('[data-exam-toggle="true"]') : helperOpen ? el.querySelector<HTMLElement>('[data-helper-toggle="true"]') : null);
       if (!target) return;
       const top = target.offsetTop;
       const bottom = top + target.offsetHeight;
@@ -182,10 +194,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       }
     }, 420);
     return () => window.clearTimeout(t);
-  }, [sidebarOpen, examOpen, pathname]);
+    }, [sidebarOpen, examOpen, helperOpen, pathname]);
 
   useEffect(() => {
     if (pathname.startsWith('/dashboard/exam/')) setExamOpen(true);
+    if (pathname.startsWith('/dashboard/helper/')) setHelperOpen(true);
   }, [pathname]);
 
   useEffect(() => {
@@ -499,21 +512,25 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
-            paddingBottom: '24px',
+            paddingBottom: '120px',
           }}
         >
         {navGroups.map((group) => {
           const groupActive = group.items.some(
             (i) => pathname === i.path || pathname.startsWith(i.path + '/')
           );
-          const isOpen = !group.expandable || examOpen;
+          const isOpen = !group.expandable || (group.label === 'Examination' ? examOpen : helperOpen);
           return (
             <motion.div key={group.label} variants={navItemAnim}>
               {group.expandable ? (
                 <motion.button
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setExamOpen(!examOpen)}
+                  onClick={() => {
+                    if (group.label === 'Examination') setExamOpen(!examOpen);
+                    else if (group.label === 'Helper') setHelperOpen(!helperOpen);
+                  }}
                   data-exam-toggle="true"
+                  data-helper-toggle={group.label === 'Helper' ? 'true' : undefined}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -667,6 +684,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* App-level lock gate (biometric / PIN) */}
       <AppLockGate />
+
+      {/* First-time welcome modal */}
+      <WelcomeModal />
 
       {/* New version available — global popup on every dashboard page */}
       <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />

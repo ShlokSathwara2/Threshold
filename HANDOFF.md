@@ -56,12 +56,50 @@ $adb="$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 
 ## Current Status (what a fresh agent inherits)
 - **The captcha/login battle is RESOLVED differently than planned:** the app now uses the phone's real Chrome via `@capgo/capacitor-inappbrowser` with desktop UA + cookie capture (`InAppBrowser.getCookies` → `storeSession()`). Do NOT re-open the WAF investigation; it was solved by the WebView login flow that is live and working.
+- **Web login via curl (IN PROGRESS — NOT WORKING YET):** backend `curl_login.py` + frontend CAPTCHA flow exist but login POST always returns "Invalid credentials". See ## Web Login Status below.
 - **Current feature state (all installed & verified on device):** swipe-to-start welcome, dashboard (bunk planner, habit insights, universal search, today-at-a-glance, sync-status caption), exams page with **cloud sync** (backend `GET/PUT /sp/exams` keyed by `X-User`, store at `backend/data/user_exams.json`), **delta sync** (`X-Delta-Hash` on `/sp/attendance|marks|internal-marks|calendar|profile` → `{"delta":"unchanged"}` short-circuit; client stores raw under `threshold_delta_raw__*`), **deep links** (`threshold://attendance|subject/{code}|timetable|marks|exams` — manifest intent-filter + `appUrlOpen` in dashboard layout), **App lock** (local Kotlin plugin `BiometricLockPlugin` — androidx.biometric fingerprint/face/PIN via DEVICE_CREDENTIAL; settings toggle `threshold_applock`; `AppLockGate` overlay in dashboard layout; re-locks on background), **local notifications** (`@capacitor/local-notifications@8.3.0` — morning brief 8 AM: at-risk <75% + exams ≤3 days; exam-day/tomorrow reminders 9 AM; gated by `notif` prefs; rescheduled from dashboard effect), hamburger sidebar name fix (avatar initial + prettified name) + staggered nav animations, settings Trust & security section, welcome features updated.
 - **PENDING — backend deploy:** new endpoints exist only locally (`localhost:8000`). The device app points to Render (`https://threshold-1-ly01.onrender.com` per `.env.production`) — needs the backend committed + pushed + deployed for exam cloud sync / delta sync to activate. Until then both fail safe (404 → sync returns null, local data kept).
 - **KNOWN PATCH (re-apply after `npm install`):** `node_modules\@capacitor\local-notifications\android\build.gradle` — removed `kotlin { jvmToolchain(21) }` (no JDK 21 on this machine), set `compileOptions` to `VERSION_17`, added `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`. Without it `gradlew assembleDebug` fails with "Cannot find a Java installation matching languageVersion=21".
 - `adb` device is `R5CYA12VL5K`; harmless console line `Uncaught TypeError: triggerEvent` at startup is pre-existing plugin-init noise (no crash; frames render fine).
 - Working SP cookie (may expire): `JSESSIONID=93E5386750745A6204742F10DCF79147.worker3; TS9dec798a027=08de21a07dab2000e06e1af891dd67d9e7b24b554549f4408e41ed2bf231fb57c294005dc5b2241508a7de64f71130000c1691e8b64d7cc7e1abb82c085c8df8ae8eb765c22a7f6f5a749da2b52e2c555b9a0936b52c03b1ebd6293cb9df4c57`
 - **Parked (user):** new logo file `Gemini_Generated_Image_vu5vngvu5vngvu5v.png` (1415×736) at repo root — user wants it cropped as app logo later (asked, then said "leave it for now").
+
+## Web Login Status (IN PROGRESS — NOT WORKING)
+**Goal:** Allow web users (browser, not APK) to log in with NetID + password + CAPTCHA, bypassing the WAF that blocks Python requests/httpx.
+
+**What was built:**
+1. `backend/scraper/student_portal/curl_login.py` — uses `curl.exe` (libcurl, different JA3 TLS fingerprint than Python) to bypass the WAF
+   - `start_login(username)` → fetches login page + CAPTCHA image via curl.exe subprocess, returns base64 CAPTCHA
+   - `finish_login(session_id, username, password, captcha)` → POSTs login form via curl.exe
+   - Sessions stored in-memory dict `_sessions` with 300s TTL
+2. `backend/web/routes.py` — new endpoints:
+   - `POST /sp/curl-login-init` — calls `start_login()`, returns `{session_id, captcha_image_base64}`
+   - `POST /sp/curl-login-verify` — calls `finish_login()`, returns `{success, cookies}`
+   - `POST /sp/curl-refresh-captcha` — refreshes CAPTCHA for existing session
+3. `frontend/src/app/login/page.tsx` — web-only CAPTCHA flow (inside `else` branch of `isNative` check)
+4. `frontend/src/lib/api.ts` — added `campusWebLogin`, `campusWebAttendance` helpers + Campus Web interfaces
+
+**Key findings that worked:**
+- `curl.exe` (libcurl) bypasses the WAF — CAPTCHA fetch returns 200 OK (1000-1200 bytes PNG)
+- Python `subprocess.run()` with `-s` (silent) flag breaks JSESSIONID cookie saving — **must NOT use `-s`** in curl commands
+- `X-Domain-Proof` header triggers WAF 403 — must NOT be sent
+- The login page HTML contains `captchaText` in `SECURE_CONFIG` but this is for client-side SVG rendering, NOT the answer to the server-side CAPTCHA image
+
+**What's broken (the blocker):**
+- Login POST always returns "Invalid credentials" — even when using the `captchaText` from the page HTML (which should be correct)
+- Tested: correct password `kolhS#24` (confirmed by user), various CAPTCHA texts, empty CAPTCHA — ALL return "Invalid credentials"
+- The error is generic — "Invalid credentials" means wrong password OR wrong CAPTCHA, server doesn't distinguish
+- **Likely root cause:** The `captchaText` embedded in `SECURE_CONFIG` is NOT what the server validates against. The `SCaptchaServlet` generates a separate CAPTCHA, and the server validates against THAT. The CAPTCHA images I've been reading may be misread, OR there's an additional hidden field / validation we're missing.
+- **Additional hidden fields found in guardlogin.js:** On form submit, JS adds `domainFieldName` (e.g. `dtoken_xxx`) = `btoa(reversedHost)` and `captchaFieldName` (e.g. `cptoken_xxx`) = `btoa(timeElapsed)`. These ARE being sent.
+- **Other missing pieces possibly:** `telemetryPayload` hidden field (from `secure2.js`), honeypot field `ph_0bbb620f` (being sent empty)
+- **The `.env.local` fix:** Changed from `https://threshold-1-ly01.onrender.com` to `http://localhost:8000` but frontend may still show "failed to fetch" — the dev server may need a full restart (kill all node processes, wait, restart)
+
+**What to try next:**
+1. First fix the "failed to fetch" — ensure frontend dev server is running and `.env.local` points to `http://localhost:8000`
+2. Use Chrome DevTools Protocol (port forwarding already set up: `tcp:9223` → `localabstract:chrome_devtools_remote`) to intercept a REAL browser login POST to `LoginServlet` — capture the exact form fields and values the browser sends
+3. Compare with what `curl_login.py` sends — find the missing field or encoding difference
+4. The password `kolhS#24` contains `#` — verify URL encoding is correct (`%23` via `urllib.parse.quote`)
+5. Consider using Chrome DevTools Protocol to automate login through Chrome itself (runs all JS, handles all hidden fields natively)
 
 ## Guardrails
 - **Do NOT modify** `backend\scraper\student_portal\auth.py` or `browser_login.py` (automated login is documented as broken; the app uses the WebView login instead)
