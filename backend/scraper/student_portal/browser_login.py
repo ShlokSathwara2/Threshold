@@ -481,27 +481,33 @@ async def _refresh_captcha_impl(session_id: str) -> dict:
 
 
 async def _extract_error(page: Page, resp_lower: str) -> str:
-    """Extract a human-readable error message from the login page."""
-    if "invalid captcha" in resp_lower or "captcha" in resp_lower and ("mismatch" in resp_lower or "incorrect" in resp_lower or "invalid" in resp_lower):
-        return "Incorrect CAPTCHA. Please try again."
-    if "invalid credentials" in resp_lower:
-        return "Invalid NetID or password."
-    if "too many" in resp_lower:
-        return "Too many login attempts. Please try again later."
-    if "locked" in resp_lower:
-        return "Account locked. Please try again later."
-
-    # Try to read the alert element text
+    """Extract human-readable error text strictly from visible alert elements on the page."""
     try:
-        alert_el = page.locator(".alert, [role='alert'], .alert-icon-content").first
-        if await alert_el.count() > 0:
-            text = (await alert_el.inner_text()).strip()
-            if text:
-                return text
+        alert_els = page.locator(
+            ".alert, [role='alert'], .alert-icon-content, #errorMsg, "
+            ".error-message, .text-danger, [class*='alert']"
+        )
+        count = await alert_els.count()
+        for i in range(count):
+            el = alert_els.nth(i)
+            if await el.is_visible():
+                txt = (await el.inner_text()).strip()
+                if txt:
+                    clean_txt = txt.replace("Alert", "").strip()
+                    if clean_txt:
+                        return clean_txt
     except Exception:
         pass
 
-    return "Login failed — unknown error."
+    # Fallback to specific exact phrases
+    if "invalid credentials" in resp_lower:
+        return "Invalid NetID or password."
+    if "invalid captcha" in resp_lower or "captcha mismatch" in resp_lower or "incorrect captcha" in resp_lower:
+        return "Incorrect CAPTCHA. Please try again."
+    if "too many" in resp_lower:
+        return "Too many login attempts. Please try again later."
+
+    return "Login failed. Please try again."
 
 
 async def _extract_error_elements(page: Page) -> list[str]:
