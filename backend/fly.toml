@@ -13,6 +13,6 @@ primary_region = "bom" # Mumbai, India (closest to SRM servers)
   min_machines_running = 1
 
 [[vm]]
-  memory = "1024mb"
+  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
