@@ -71,17 +71,20 @@ _STEALTH_JS = """
 // Hide navigator.webdriver (secure2.js checks this)
 Object.defineProperty(navigator, 'webdriver', { get: () => false });
 
+// Spoof Windows platform & userAgent on Linux cloud containers (Render / Fly.io / Docker)
+Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+Object.defineProperty(navigator, 'userAgent', {
+    get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+});
+Object.defineProperty(navigator, 'appVersion', {
+    get: () => '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+});
+Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.' });
+
 // Realistic navigator properties
 Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
 Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
 Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-
-// Hide the "HeadlessChrome" token from the UA if present
-if (navigator.userAgent.includes('HeadlessChrome')) {
-    Object.defineProperty(navigator, 'userAgent', {
-        get: () => navigator.userAgent.replace('HeadlessChrome', 'Chrome')
-    });
-}
 
 // Chrome runtime stub (some bot detectors check for window.chrome)
 if (!window.chrome) {
@@ -90,13 +93,15 @@ if (!window.chrome) {
 
 // Permissions API stub
 const originalQuery = window.navigator.permissions.query;
-window.navigator.permissions.query = (parameters) => (
-    parameters.name === 'notifications' ?
-        Promise.resolve({ state: Notification.permission }) :
-        originalQuery(parameters)
-);
+if (window.navigator.permissions) {
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+}
 
-// WebGL vendor/renderer (headless often returns "Google SwiftShader")
+// WebGL vendor/renderer (headless often returns "Google SwiftShader" or "Mesa")
 const getParameter = WebGLRenderingContext.prototype.getParameter;
 WebGLRenderingContext.prototype.getParameter = function(parameter) {
     if (parameter === 37445) return 'Intel Inc.';
@@ -166,6 +171,9 @@ async def _start_login_impl(username: str) -> dict:
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
             "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-software-rasterizer",
+            "--no-zygote",
         ],
     )
     context = await browser.new_context(
