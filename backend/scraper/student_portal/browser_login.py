@@ -354,8 +354,20 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
         if not field_values['username'] or not field_values['password']:
             print("[SP-LOGIN-VERIFY] WARNING: Fields are empty before submit!")
 
+        # Simulate human interaction (moves mouse & fires events so guardlogin.js interactCount > 0)
+        await page.mouse.move(150, 200)
+        await page.mouse.move(350, 400)
+        await page.mouse.move(500, 300)
+        await page.evaluate("""() => {
+            for (let i = 0; i < 25; i++) {
+                document.dispatchEvent(new Event('mousemove', { bubbles: true }));
+                document.dispatchEvent(new Event('keydown', { bubbles: true }));
+                document.dispatchEvent(new Event('touchstart', { bubbles: true }));
+            }
+        }""")
+
         # Small delay to simulate human pause before submit
-        await page.wait_for_timeout(500)
+        await page.wait_for_timeout(1000)
 
         # Click submit — JS will append all hidden fields (domainFieldName,
         # captchaFieldName, telemetryPayload) via the submit event listeners
