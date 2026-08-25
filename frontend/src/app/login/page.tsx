@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -135,13 +135,14 @@ export default function LoginPage() {
   }, [nativeAnimating, nativeLoginLoading, handleNativeLogin]);
 
   const [captchaLoading, setCaptchaLoading] = useState(false);
+  const captchaInitialized = useRef(false);
 
   const initCaptchaSession = useCallback(async () => {
     setCaptchaLoading(true);
     setWebLoginError('');
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/login-init`, {
+      const res = await fetch(`${API_BASE}/sp/curl-login-init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: 'student' }),
@@ -154,20 +155,19 @@ export default function LoginPage() {
         setWebLoginError(data.message || 'Failed to load CAPTCHA');
       }
     } catch {
-      setWebLoginError('Failed to connect to backend server');
+      setWebLoginError('Failed to connect to server');
     } finally {
       setCaptchaLoading(false);
     }
   }, []);
 
-  const initializedRef = useState(() => ({ current: false }))[0];
-
+  // Load CAPTCHA once on mount (web only)
   useEffect(() => {
-    if (!isNativePlatform() && !initializedRef.current) {
-      initializedRef.current = true;
+    if (!isNativePlatform() && !captchaInitialized.current) {
+      captchaInitialized.current = true;
       initCaptchaSession();
     }
-  }, [initCaptchaSession, initializedRef]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleWebLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,15 +182,14 @@ export default function LoginPage() {
       return;
     }
     if (!captchaSessionId) {
-      setWebLoginError('Session not ready. Refreshing CAPTCHA...');
-      initCaptchaSession();
+      setWebLoginError('CAPTCHA not loaded. Click Refresh.');
       return;
     }
 
     setWebLoginLoading(true);
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/login-verify`, {
+      const res = await fetch(`${API_BASE}/sp/curl-login-verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,10 +203,27 @@ export default function LoginPage() {
       if (!data.success) {
         setWebLoginError(data.message || 'Login failed. Please try again.');
         setCaptchaAnswer('');
-        initCaptchaSession();
+        // Fetch a fresh CAPTCHA for retry
+        try {
+          const refreshRes = await fetch(`${API_BASE}/sp/curl-refresh-captcha`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: captchaSessionId }),
+          });
+          const refreshData = await refreshRes.json();
+          if (refreshData.success && refreshData.captcha_image_base64) {
+            setCaptchaImage(`data:image/png;base64,${refreshData.captcha_image_base64}`);
+          } else {
+            // Session expired, get a completely new one
+            await initCaptchaSession();
+          }
+        } catch {
+          await initCaptchaSession();
+        }
         return;
       }
 
+      // Login succeeded — store cookies and navigate
       const cookieStr = data.cookies || '';
       if (cookieStr) {
         await storeAndNavigate(cookieStr);
