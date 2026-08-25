@@ -320,26 +320,51 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
             if await field_el.count() > 0:
                 await field_el.fill("")
 
-        # Type username
+        # Fill username — use fill() (more reliable than type() across versions)
         username_input = page.locator("input[name='username']").first
         await username_input.click()
-        await username_input.type(netid, delay=60)
+        await username_input.fill(netid)
+        # Also set via JS as a fallback
+        await page.evaluate(f"document.querySelector(\"input[name='username']\").value = '{netid}'")
+        await username_input.dispatch_event("input")
+        await username_input.dispatch_event("change")
         await username_input.dispatch_event("blur")
-        print(f"[SP-LOGIN-VERIFY] Typed username: {netid}")
+        print(f"[SP-LOGIN-VERIFY] Filled username: {netid}")
 
-        # Type password
+        # Fill password
         password_input = page.locator("input[name='password']").first
         await password_input.click()
-        await password_input.type(password, delay=60)
+        await password_input.fill(password)
+        # JS fallback
+        await page.evaluate("(pw) => document.querySelector(\"input[name='password']\").value = pw", password)
+        await password_input.dispatch_event("input")
+        await password_input.dispatch_event("change")
         await password_input.dispatch_event("blur")
-        print("[SP-LOGIN-VERIFY] Typed password")
+        print("[SP-LOGIN-VERIFY] Filled password")
 
-        # Type CAPTCHA
+        # Fill CAPTCHA
         captcha_input = page.locator("input[name='captcha']").first
         await captcha_input.click()
-        await captcha_input.type(captcha_answer, delay=80)
+        await captcha_input.fill(captcha_answer)
+        # JS fallback
+        await page.evaluate(f"document.querySelector(\"input[name='captcha']\").value = '{captcha_answer}'")
+        await captcha_input.dispatch_event("input")
+        await captcha_input.dispatch_event("change")
         await captcha_input.dispatch_event("blur")
-        print(f"[SP-LOGIN-VERIFY] Typed captcha: {captcha_answer}")
+        print(f"[SP-LOGIN-VERIFY] Filled captcha: {captcha_answer}")
+
+        # Verify fields were filled before submitting
+        field_values = await page.evaluate("""() => ({
+            username: document.querySelector("input[name='username']")?.value || '',
+            password: document.querySelector("input[name='password']")?.value || '',
+            captcha: document.querySelector("input[name='captcha']")?.value || '',
+        })""")
+        print(f"[SP-LOGIN-VERIFY] Pre-submit field check: username='{field_values['username']}', "
+              f"password={'***' if field_values['password'] else 'EMPTY'}, "
+              f"captcha='{field_values['captcha']}'")
+
+        if not field_values['username'] or not field_values['password']:
+            print("[SP-LOGIN-VERIFY] WARNING: Fields are empty before submit!")
 
         # Small delay to simulate human pause before submit
         await page.wait_for_timeout(500)

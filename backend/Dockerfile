@@ -1,5 +1,5 @@
 # Production Dockerfile for Threshold Backend with Playwright Support
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.52.0-noble
 
 WORKDIR /app
 
