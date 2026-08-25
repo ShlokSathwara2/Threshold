@@ -142,7 +142,7 @@ export default function LoginPage() {
     setWebLoginError('');
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/curl-login-init`, {
+      const res = await fetch(`${API_BASE}/sp/login-init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: 'student' }),
@@ -189,7 +189,7 @@ export default function LoginPage() {
     setWebLoginLoading(true);
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/curl-login-verify`, {
+      const res = await fetch(`${API_BASE}/sp/login-verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -205,7 +205,7 @@ export default function LoginPage() {
         setCaptchaAnswer('');
         // Fetch a fresh CAPTCHA for retry
         try {
-          const refreshRes = await fetch(`${API_BASE}/sp/curl-refresh-captcha`, {
+          const refreshRes = await fetch(`${API_BASE}/sp/refresh-captcha`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: captchaSessionId }),

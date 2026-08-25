@@ -375,14 +375,12 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
         print("[SP-LOGIN-VERIFY] Clicking submit...")
 
         try:
-            await submit_btn.click()
-            # Fast check: wait up to 3s for URL to change to dashboard, or 1.5s for error page
-            try:
-                await page.wait_for_url(lambda u: "template" in u.lower() or "hrdsystem" in u.lower(), timeout=3000)
-            except Exception:
-                await page.wait_for_timeout(1500)
+            print("[SP-LOGIN-VERIFY] Clicking submit button...")
+            async with page.expect_navigation(timeout=12000, wait_until="domcontentloaded"):
+                await submit_btn.click()
         except Exception as nav_err:
-            print(f"[SP-LOGIN-VERIFY] Submit click event: {nav_err}")
+            print(f"[SP-LOGIN-VERIFY] Navigation event note: {nav_err}")
+            await page.wait_for_timeout(2000)
 
         final_url = page.url
         print(f"[SP-LOGIN-VERIFY] Final URL: {final_url}")
