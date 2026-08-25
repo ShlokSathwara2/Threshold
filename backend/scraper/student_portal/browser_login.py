@@ -376,11 +376,17 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
 
         try:
             print("[SP-LOGIN-VERIFY] Clicking submit button...")
-            async with page.expect_navigation(timeout=12000, wait_until="domcontentloaded"):
-                await submit_btn.click()
+            await submit_btn.click()
+            # Wait up to 10s for SRM server to process login & redirect to HRDSystem dashboard
+            try:
+                await page.wait_for_url(lambda u: "hrdsystem" in u.lower() or "template" in u.lower(), timeout=10000)
+                print(f"[SP-LOGIN-VERIFY] Redirect detected! New URL: {page.url}")
+            except Exception:
+                # If no redirect happened, wait 2.5s for error alert DOM to populate
+                await page.wait_for_timeout(2500)
         except Exception as nav_err:
-            print(f"[SP-LOGIN-VERIFY] Navigation event note: {nav_err}")
-            await page.wait_for_timeout(2000)
+            print(f"[SP-LOGIN-VERIFY] Submit click error: {nav_err}")
+            await page.wait_for_timeout(2500)
 
         final_url = page.url
         print(f"[SP-LOGIN-VERIFY] Final URL: {final_url}")
