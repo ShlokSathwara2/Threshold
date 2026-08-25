@@ -160,11 +160,14 @@ export default function LoginPage() {
     }
   }, []);
 
+  const initializedRef = useState(() => ({ current: false }))[0];
+
   useEffect(() => {
-    if (!isNative) {
+    if (!isNativePlatform() && !initializedRef.current) {
+      initializedRef.current = true;
       initCaptchaSession();
     }
-  }, [isNative, initCaptchaSession]);
+  }, [initCaptchaSession, initializedRef]);
 
   const handleWebLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
