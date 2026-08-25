@@ -320,35 +320,26 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
             if await field_el.count() > 0:
                 await field_el.fill("")
 
-        # Fill username via exact ID selector #username
+        # Type username character by character (fires keydown/keyup for secure2.js telemetry)
         username_input = page.locator("#username").first
         await username_input.click()
-        await username_input.fill(netid)
-        await page.evaluate(f"(val) => {{ const el = document.querySelector('#username'); if (el) {{ el.removeAttribute('maxlength'); el.value = val; }} }}", netid)
-        await username_input.dispatch_event("input")
-        await username_input.dispatch_event("change")
+        await username_input.type(netid, delay=60)
         await username_input.dispatch_event("blur")
-        print(f"[SP-LOGIN-VERIFY] Filled username: {netid}")
+        print(f"[SP-LOGIN-VERIFY] Typed username: {netid}")
 
-        # Fill password via exact ID selector #password
+        # Type password character by character (fires keydown/keyup for secure2.js telemetry)
         password_input = page.locator("#password").first
         await password_input.click()
-        await password_input.fill(password)
-        await page.evaluate(f"(val) => {{ const el = document.querySelector('#password'); if (el) el.value = val; }}", password)
-        await password_input.dispatch_event("input")
-        await password_input.dispatch_event("change")
+        await password_input.type(password, delay=60)
         await password_input.dispatch_event("blur")
-        print("[SP-LOGIN-VERIFY] Filled password")
+        print("[SP-LOGIN-VERIFY] Typed password")
 
-        # Fill CAPTCHA via exact ID selector #captcha
+        # Type CAPTCHA character by character (fires keydown/keyup for secure2.js telemetry)
         captcha_input = page.locator("#captcha").first
         await captcha_input.click()
-        await captcha_input.fill(captcha_answer)
-        await page.evaluate(f"(val) => {{ const el = document.querySelector('#captcha'); if (el) el.value = val; }}", captcha_answer)
-        await captcha_input.dispatch_event("input")
-        await captcha_input.dispatch_event("change")
+        await captcha_input.type(captcha_answer, delay=80)
         await captcha_input.dispatch_event("blur")
-        print(f"[SP-LOGIN-VERIFY] Filled captcha: {captcha_answer}")
+        print(f"[SP-LOGIN-VERIFY] Typed captcha: {captcha_answer}")
 
         # Verify fields were filled before submitting
         field_values = await page.evaluate("""() => ({
