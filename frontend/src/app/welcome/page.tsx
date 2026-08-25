@@ -80,10 +80,36 @@ export default function WelcomePage() {
   const WB = (a: number) => overlayBg(theme, a);
   const [starting, setStarting] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [deferredInstall, setDeferredInstall] = useState<any>(null);
+  const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
     setIsNative(isNativePlatform());
   }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredInstall(e);
+      setCanInstall(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { setCanInstall(false); setDeferredInstall(null); };
+    window.addEventListener('appinstalled', handler);
+    return () => window.removeEventListener('appinstalled', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    const { outcome } = await deferredInstall.userChoice;
+    setDeferredInstall(null);
+    setCanInstall(false);
+  };
 
   const handleGetStarted = () => {
     if (starting) return;
@@ -302,7 +328,7 @@ export default function WelcomePage() {
           </motion.div>
         </section>
 
-        {/* Download options — web only */}
+        {/* Install / Download — web only */}
         {!isNative && (
           <section style={{ padding: '0 16px 32px', width: '100%' }}>
             <motion.div
@@ -328,91 +354,95 @@ export default function WelcomePage() {
               }}>
                 Get Threshold
               </p>
-              <a
-                href="https://github.com/ShlokSathwara2/Threshold_APK/raw/main/Threshold.apk"
-                download="Threshold.apk"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  padding: '16px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(139,92,246,0.06))',
-                  border: '1px solid rgba(139,92,246,0.35)',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                <div style={{
-                  width: '44px',
-                  height: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '12px',
-                  background: 'rgba(139,92,246,0.2)',
-                  flexShrink: 0,
-                }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#c4b5fd', margin: 0 }}>
-                    Download APK
-                  </p>
-                  <p style={{ fontSize: '0.7rem', color: W(0.4), margin: '3px 0 0', lineHeight: 1.4 }}>
-                    Android app — install directly on your phone
-                  </p>
-                </div>
-                <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#a78bfa' }}>↗</span>
-              </a>
-              <a
-                href="https://threshold-jet.vercel.app"
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                  padding: '16px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))',
-                  border: '1px solid rgba(59,130,246,0.3)',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                <div style={{
-                  width: '44px',
-                  height: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '12px',
-                  background: 'rgba(59,130,246,0.15)',
-                  flexShrink: 0,
-                }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#93c5fd', margin: 0 }}>
-                    Open Website
-                  </p>
-                  <p style={{ fontSize: '0.7rem', color: W(0.4), margin: '3px 0 0', lineHeight: 1.4 }}>
-                    Use Threshold directly in your browser
-                  </p>
-                </div>
-                <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#60a5fa' }}>↗</span>
-              </a>
+              {canInstall && (
+                <button
+                  onClick={handleInstall}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    padding: '16px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(139,92,246,0.06))',
+                    border: '1px solid rgba(139,92,246,0.35)',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    width: '100%',
+                    textAlign: 'left',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '12px',
+                    background: 'rgba(139,92,246,0.2)',
+                    flexShrink: 0,
+                  }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12l7 7 7-7" />
+                      <rect x="3" y="19" width="18" height="2" rx="1" fill="#a78bfa" opacity="0.4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#c4b5fd', margin: 0 }}>
+                      Install App
+                    </p>
+                    <p style={{ fontSize: '0.7rem', color: W(0.4), margin: '3px 0 0', lineHeight: 1.4 }}>
+                      Add Threshold to your home screen
+                    </p>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#a78bfa' }}>↗</span>
+                </button>
+              )}
+              {!canInstall && (
+                <a
+                  href="https://github.com/ShlokSathwara2/Threshold_APK/raw/main/Threshold.apk"
+                  download="Threshold.apk"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    padding: '16px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(139,92,246,0.06))',
+                    border: '1px solid rgba(139,92,246,0.35)',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '12px',
+                    background: 'rgba(139,92,246,0.2)',
+                    flexShrink: 0,
+                  }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#c4b5fd', margin: 0 }}>
+                      Download APK
+                    </p>
+                    <p style={{ fontSize: '0.7rem', color: W(0.4), margin: '3px 0 0', lineHeight: 1.4 }}>
+                      Android app — install directly on your phone
+                    </p>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#a78bfa' }}>↗</span>
+                </a>
+              )}
             </motion.div>
           </section>
         )}

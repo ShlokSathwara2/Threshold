@@ -1,0 +1,18 @@
+{
+  "name": "Threshold — SRM Companion",
+  "short_name": "Threshold",
+  "description": "Your SRM companion. Attendance, marks, and CGPA — interpreted, not just displayed.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090f",
+  "theme_color": "#09090f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

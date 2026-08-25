@@ -15,6 +15,8 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Threshold — SRM Companion",
   description: "Your SRM companion. Attendance, marks, and CGPA — interpreted, not just displayed.",
+  manifest: "/manifest.json",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({
@@ -28,6 +30,13 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+          }
+        `}} />
       </head>
       <body style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}><CursorProvider><ClickSound />{children}</CursorProvider></body>
     </html>
