@@ -185,23 +185,23 @@ export default function LoginPage() {
         });
         const data = await res.json();
         if (!data.success) {
-          // If CAPTCHA was wrong, refresh it
-          if (data.message?.toLowerCase().includes('captcha')) {
-            setWebLoginError(data.message);
-            setCaptchaAnswer('');
-            // Refresh CAPTCHA
+          setWebLoginError(data.message || 'Login failed. Please try again.');
+          setCaptchaAnswer('');
+          // Refresh CAPTCHA image for retry
+          try {
             const refreshRes = await fetch(`${API_BASE}/sp/refresh-captcha`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ session_id: captchaSessionId }),
             });
             const refreshData = await refreshRes.json();
-            if (refreshData.success) {
+            if (refreshData.success && refreshData.captcha_image_base64) {
               setCaptchaImage(`data:image/png;base64,${refreshData.captcha_image_base64}`);
             }
-            return;
+          } catch {
+            /* ignore refresh error */
           }
-          throw new Error(data.message || 'Login failed');
+          return;
         }
         // Store cookies and redirect
         const cookieStr = data.cookies || '';
