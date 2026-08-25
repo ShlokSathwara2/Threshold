@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { useEffect } from 'react';
 
 interface BrandWordProps {
   text?: string;
@@ -9,7 +10,7 @@ interface BrandWordProps {
   glow?: boolean;
 }
 
-const HUES = ['#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6'];
+const GRADIENT_COLORS = ['#a855f7', '#ec4899', '#f43f5e', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7'];
 
 export default function BrandWord({
   text = 'THRESHOLD',
@@ -17,52 +18,44 @@ export default function BrandWord({
   fontWeight = 900,
   glow = true,
 }: BrandWordProps) {
-  const letters = text.split('');
+  const bgPosition = useMotionValue(0);
+  const backgroundSize = 300;
+
+  useEffect(() => {
+    const controls = animate(bgPosition, backgroundSize, {
+      duration: 4,
+      repeat: Infinity,
+      repeatType: 'loop',
+      ease: 'linear',
+    });
+    return () => controls.stop();
+  }, [bgPosition, backgroundSize]);
+
+  const bgX = useTransform(bgPosition, (v) => `${v}%`);
+
   return (
     <motion.span
       initial={{ opacity: 0, y: -6, filter: 'blur(8px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
       style={{
-        display: 'inline-flex',
+        display: 'inline-block',
         fontSize,
         fontWeight,
         letterSpacing: '1px',
         lineHeight: 1.1,
         userSelect: 'none',
         whiteSpace: 'nowrap',
+        background: `linear-gradient(90deg, ${GRADIENT_COLORS.join(', ')})`,
+        backgroundSize: `${backgroundSize}% auto`,
+        backgroundPositionX: bgX,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+        filter: glow ? 'drop-shadow(0 0 20px rgba(139,92,246,0.35))' : 'none',
       }}
     >
-      {letters.map((ch, i) => (
-        <motion.span
-          key={i}
-          animate={{
-            color: [
-              HUES[i % HUES.length],
-              HUES[(i + 2) % HUES.length],
-              HUES[(i + 4) % HUES.length],
-              HUES[i % HUES.length],
-            ],
-            filter: glow
-              ? [
-                  `drop-shadow(0 0 8px ${HUES[i % HUES.length]}88)`,
-                  `drop-shadow(0 0 16px ${HUES[(i + 2) % HUES.length]}aa)`,
-                  `drop-shadow(0 0 8px ${HUES[(i + 4) % HUES.length]}88)`,
-                  `drop-shadow(0 0 8px ${HUES[i % HUES.length]}88)`,
-                ]
-              : 'none',
-            y: [0, -2, 0],
-          }}
-          transition={{
-            duration: 3.2,
-            repeat: Infinity,
-            ease: 'easeInOut',
-            delay: i * 0.14,
-          }}
-        >
-          {ch}
-        </motion.span>
-      ))}
+      {text}
     </motion.span>
   );
 }

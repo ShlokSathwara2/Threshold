@@ -149,7 +149,27 @@ async function apiFetch<T>(
   if (ns && body && typeof body === 'object' && 'delta' in body) {
     if (body.delta === 'unchanged') {
       const raw = getLs(deltaKeys(ns).raw);
-      if (raw) return JSON.parse(raw) as T;
+      if (raw) {
+        try {
+          return JSON.parse(raw) as T;
+        } catch {
+          // Corrupt cache — fall through to re-fetch
+        }
+      }
+      // Raw cache missing or corrupt — re-fetch without delta hash
+      delete headers['X-Delta-Hash'];
+      const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      if (!retry.ok) {
+        const retryBody = await retry.json().catch(() => ({}));
+        throw new Error(retryBody.error || retryBody.message || `Request failed (${retry.status})`);
+      }
+      const retryBody = await retry.json();
+      if (ns && retryBody && typeof retryBody === 'object' && retryBody.delta !== 'unchanged') {
+        setLs(deltaKeys(ns).hash, String(retryBody.hash ?? ''));
+        setLs(deltaKeys(ns).raw, JSON.stringify(retryBody));
+        recordSync(path);
+      }
+      return retryBody as T;
     } else {
       setLs(deltaKeys(ns).hash, String(body.hash ?? ''));
       setLs(deltaKeys(ns).raw, JSON.stringify(body));

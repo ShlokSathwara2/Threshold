@@ -327,7 +327,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: `1px solid ${theme.border}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label="Menu"
@@ -342,6 +342,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               marginLeft: '-8px',
               display: 'flex',
               alignItems: 'center',
+              flexShrink: 0,
             }}
           >
             {sidebarOpen ? '✕' : '☰'}
@@ -349,25 +350,15 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <h1 style={{
             fontSize: '1.05rem',
             fontWeight: 700,
-            color: theme.text,
+            color: pathname === '/dashboard' || pathname === '/dashboard/' ? 'transparent' : theme.text,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
+            minWidth: 0,
+            flex: 1,
           }}>
-            {pathname === '/dashboard' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <img
-                  src="/logo.png"
-                  alt="Threshold"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    objectFit: 'cover',
-                  }}
-                />
-                <BrandWord text="THRESHOLD" fontSize="1.2rem" />
-              </div>
+            {(pathname === '/dashboard' || pathname === '/dashboard/') ? (
+              <BrandWord text="THRESHOLD" fontSize="1.2rem" />
             ) : (
               pageTitles[pathname] || 'Threshold'
             )}

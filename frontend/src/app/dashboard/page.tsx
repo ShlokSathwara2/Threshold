@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import {
   isSpLoggedIn,
   isAcademiaLoggedIn,
@@ -26,11 +26,12 @@ import GradesSummary from '@/components/grades/GradesSummary';
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import HappyUpdates from '@/components/dashboard/HappyUpdates';
+import AttendanceChanges from '@/components/dashboard/AttendanceChanges';
 import Announcements from '@/components/dashboard/Announcements';
 import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
-import { recordAttendanceSnapshot } from '@/lib/habits';
+import { recordAttendanceSnapshot, loadSnapshot, detectAttendanceChanges, type AttendanceChange } from '@/lib/habits';
 import { toDate, toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
 import { syncWidget } from '@/lib/widget-sync';
 
@@ -95,6 +96,7 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<ExamEntry[]>([]);
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [attendanceChanges, setAttendanceChanges] = useState<AttendanceChange[]>([]);
   const [showFeatureBrief, setShowFeatureBrief] = useState(() => {
     try {
       return localStorage.getItem('threshold_feature_brief_dismissed') !== '1';
@@ -102,6 +104,12 @@ export default function DashboardPage() {
       return true;
     }
   });
+
+  // Scroll parallax
+  const { scrollY } = useScroll();
+  const orbsY = useTransform(scrollY, [0, 400], [0, -80]);
+  const heroY = useTransform(scrollY, [0, 300], [0, -15]);
+  const statsY = useTransform(scrollY, [0, 500], [0, -8]);
 
   useEffect(() => {
     setLastSyncAt(lastSyncTime());
@@ -134,6 +142,9 @@ export default function DashboardPage() {
   // Log skip attributions once per day (powers habit insights).
   useEffect(() => {
     if (subjects.length === 0) return;
+    const prev = loadSnapshot();
+    const changes = detectAttendanceChanges(subjects, prev);
+    setAttendanceChanges(changes);
     recordAttendanceSnapshot(subjects, toDateStr(new Date()), todayDO);
   }, [subjects, todayDO]);
 
@@ -446,7 +457,7 @@ export default function DashboardPage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', position: 'relative' }}>
       {/* Ambient gradient orbs */}
-      <div style={{
+      <motion.div style={{
         position: 'fixed',
         top: 0,
         left: 0,
@@ -455,6 +466,7 @@ export default function DashboardPage() {
         overflow: 'hidden',
         pointerEvents: 'none',
         zIndex: 0,
+        y: orbsY,
       }}>
         <motion.div
           animate={{ x: [0, 40, -20, 0], y: [0, 25, 10, 0] }}
@@ -495,18 +507,19 @@ export default function DashboardPage() {
             background: 'radial-gradient(circle, rgba(217,70,239,0.16), transparent 70%)',
           }}
         />
-      </div>
+      </motion.div>
 
       {/* ── Hero ── */}
       <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         style={{
           position: 'relative',
           zIndex: 1,
           borderRadius: '20px',
           padding: '20px 20px 18px',
           marginBottom: '16px',
+          y: heroY,
           background: 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.16), rgba(59,130,246,0.10) 50%, rgba(217,70,239,0.10))',
           border: '1px solid rgba(var(--threshold-accent-rgb),0.25)',
           boxShadow: theme.isLight
@@ -889,14 +902,21 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* Attendance changes */}
+      <AttendanceChanges
+        changes={attendanceChanges}
+        onTap={(code) => router.push(`/dashboard/attendance?code=${code}`)}
+      />
+
       {/* ── Quick Stats Grid ── */}
-      <div style={{
+      <motion.div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
         gap: '12px',
         marginBottom: '24px',
         position: 'relative',
         zIndex: 1,
+        y: statsY,
       }}>
         {/* Attendance */}
         <motion.div
@@ -1036,7 +1056,7 @@ export default function DashboardPage() {
             Safe (≥75%)
           </p>
         </motion.div>
-      </div>
+      </motion.div>
 
       {/* ── Internal Marks (above Alerts) ── */}
       <div style={{ position: 'relative', zIndex: 1 }}>

@@ -375,6 +375,43 @@ input:focus, button:focus-visible {
     background-position: 200% 50%;
   }
 }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes gradient-border-spin {
+  to { --border-angle: 360deg; }
+}
+
+.thr-gradient-border {
+  position: relative;
+}
+.thr-gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--border-angle, 0deg), #8b5cf6, #ec4899, #f59e0b, #22c55e, #3b82f6, #8b5cf6);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: gradient-border-spin 4s linear infinite;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+.thr-gradient-border:hover::before {
+  opacity: 1;
+}
 .arrow-btn--primary.arrow-btn--animating {
   box-shadow: 0 0 0 6px #8b5cf6;
   border-radius: 12px;

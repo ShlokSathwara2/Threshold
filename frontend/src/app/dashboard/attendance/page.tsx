@@ -27,6 +27,7 @@ import {
   type LeaveProjection,
   type OverallReachPlan,
 } from '@/lib/day-order';
+import AttendanceSkeleton from '@/components/attendance/AttendanceSkeleton';
 
 export default function AttendancePage() {
   const router = useRouter();
@@ -44,8 +45,8 @@ export default function AttendancePage() {
       const [tt, cal] = await Promise.all([fetchTimetable(), fetchCalendar()]);
       setScheduleByCourse(buildDayOrderSchedule(tt.schedule || []));
       setDayOrderLookup(buildDayOrderLookup(cal.calendar || []));
-    } catch {
-      /* features degrade gracefully below */
+    } catch (e) {
+      console.warn('Meta fetch (timetable/calendar) failed:', e);
     } finally {
       setMetaReady(true);
     }
@@ -242,31 +243,7 @@ export default function AttendancePage() {
   const hasMeta = metaReady && scheduleByCourse.size > 0 && dayOrderLookup.size > 0;
 
   if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60dvh',
-        gap: '16px',
-      }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          style={{
-            width: '32px',
-            height: '32px',
-            border: '3px solid rgba(139, 92, 246, 0.2)',
-            borderTopColor: 'var(--threshold-accent)',
-            borderRadius: '50%',
-          }}
-        />
-        <p style={{ color: W(0.4), fontSize: '0.85rem' }}>
-          Fetching attendance data…
-        </p>
-      </div>
-    );
+    return <AttendanceSkeleton />;
   }
 
   if (error) {

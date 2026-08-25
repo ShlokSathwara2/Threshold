@@ -94,7 +94,9 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.05 }}
+      whileHover={{ y: -2 }}
       onClick={() => setExpanded(!expanded)}
+      className={projected ? 'thr-gradient-border' : undefined}
       style={{
         padding: '16px',
         borderRadius: '14px',

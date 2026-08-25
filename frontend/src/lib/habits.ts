@@ -20,7 +20,14 @@ const LOG_KEY = () => scopedKey('threshold_skip_log');
 
 interface Snapshot {
   date: string;
-  byCode: Record<string, { absent: number }>;
+  byCode: Record<string, { present: number; absent: number }>;
+}
+
+export interface AttendanceChange {
+  courseCode: string;
+  courseTitle: string;
+  type: 'absent' | 'present';
+  delta: number;
 }
 
 // Adopt legacy unscoped data only on a single-user device.
@@ -56,6 +63,45 @@ export function loadAttributions(): SkipAttribution[] {
   }
 }
 
+export function loadSnapshot(): Snapshot | null {
+  try {
+    const raw = localStorage.getItem(SNAP_KEY());
+    if (!raw) return null;
+    return JSON.parse(raw) as Snapshot;
+  } catch {
+    return null;
+  }
+}
+
+export function detectAttendanceChanges(
+  subjects: SubjectAttendance[],
+  prevSnapshot: Snapshot | null
+): AttendanceChange[] {
+  if (!prevSnapshot) return [];
+  const changes: AttendanceChange[] = [];
+  for (const s of subjects) {
+    const prev = prevSnapshot.byCode[s.courseCode];
+    if (!prev) continue;
+    const absentDelta = s.absent - prev.absent;
+    if (absentDelta > 0) {
+      changes.push({
+        courseCode: s.courseCode,
+        courseTitle: s.courseTitle,
+        type: 'absent',
+        delta: absentDelta,
+      });
+    } else if (absentDelta < 0) {
+      changes.push({
+        courseCode: s.courseCode,
+        courseTitle: s.courseTitle,
+        type: 'present',
+        delta: -absentDelta,
+      });
+    }
+  }
+  return changes;
+}
+
 // Diffs the current attendance against the last snapshot (once per day).
 // When a subject's absences grew, that skip is attributed to the logged day
 // order — this is how per-day skipping patterns get built factually.
@@ -66,7 +112,9 @@ export function recordAttendanceSnapshot(
 ): SkipAttribution[] {
   const now: Snapshot = {
     date: todayStr,
-    byCode: Object.fromEntries(subjects.map((s) => [s.courseCode, { absent: s.absent }])),
+    byCode: Object.fromEntries(
+      subjects.map((s) => [s.courseCode, { present: s.present, absent: s.absent }])
+    ),
   };
   try {
     const raw = localStorage.getItem(SNAP_KEY());

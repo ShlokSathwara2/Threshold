@@ -218,22 +218,30 @@ export default function LeavePlanner({
               {/* Selected dates */}
               {selected.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {selected
-                    .slice()
-                    .sort((a, b) => (a < b ? -1 : 1))
-                    .map((ds) => (
-                      <span key={ds} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '5px 8px 5px 10px',
-                        borderRadius: '999px',
-                        background: 'rgba(var(--threshold-accent-rgb),0.12)',
-                        border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: 'var(--threshold-accent-text)',
-                      }}>
+                  <AnimatePresence>
+                    {selected
+                      .slice()
+                      .sort((a, b) => (a < b ? -1 : 1))
+                      .map((ds) => (
+                        <motion.span
+                          key={ds}
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '5px 8px 5px 10px',
+                            borderRadius: '999px',
+                            background: 'rgba(var(--threshold-accent-rgb),0.12)',
+                            border: '1px solid rgba(var(--threshold-accent-rgb),0.3)',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            color: 'var(--threshold-accent-text)',
+                          }}
+                        >
                         {displayDate(ds)}
                         <button
                           onClick={() => remove(ds)}
@@ -251,8 +259,9 @@ export default function LeavePlanner({
                         >
                           ×
                         </button>
-                      </span>
+                      </motion.span>
                     ))}
+                  </AnimatePresence>
                 </div>
               )}
 
