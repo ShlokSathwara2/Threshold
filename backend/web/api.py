@@ -23,12 +23,13 @@ origins = [
 ]
 print(f"[CORS] Allowed origins: {origins}")
 
-local_defaults = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "https://localhost", "capacitor://localhost"]
+local_defaults = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "https://localhost", "capacitor://localhost", "https://threshold-pi-seven.vercel.app", "https://threshold-jet.vercel.app"]
 allowed_origins = list(set(origins + local_defaults))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app|http://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
