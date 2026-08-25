@@ -32,8 +32,10 @@ _UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-# curl.exe path — prefer System32, fall back to PATH
-_CURL = "curl.exe"
+import shutil
+
+# Detect curl executable dynamically (curl on Linux/Docker, curl.exe on Windows)
+_CURL = shutil.which("curl.exe") or shutil.which("curl") or "curl"
 
 
 def _build_synthetic_telemetry() -> str:
