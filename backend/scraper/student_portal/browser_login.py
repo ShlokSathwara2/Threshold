@@ -315,39 +315,36 @@ async def _finish_login_impl(session_id: str, username: str, password: str, capt
 
     try:
         # Clear any previous input values (in case of retry)
-        for field_name in ["username", "password", "captcha"]:
-            field_el = page.locator(f"input[name='{field_name}']").first
+        for selector in ["#username", "#password", "#captcha"]:
+            field_el = page.locator(selector).first
             if await field_el.count() > 0:
                 await field_el.fill("")
 
-        # Fill username — use fill() (more reliable than type() across versions)
-        username_input = page.locator("input[name='username']").first
+        # Fill username via exact ID selector #username
+        username_input = page.locator("#username").first
         await username_input.click()
         await username_input.fill(netid)
-        # Also set via JS as a fallback
-        await page.evaluate(f"document.querySelector(\"input[name='username']\").value = '{netid}'")
+        await page.evaluate(f"(val) => {{ const el = document.querySelector('#username'); if (el) {{ el.removeAttribute('maxlength'); el.value = val; }} }}", netid)
         await username_input.dispatch_event("input")
         await username_input.dispatch_event("change")
         await username_input.dispatch_event("blur")
         print(f"[SP-LOGIN-VERIFY] Filled username: {netid}")
 
-        # Fill password
-        password_input = page.locator("input[name='password']").first
+        # Fill password via exact ID selector #password
+        password_input = page.locator("#password").first
         await password_input.click()
         await password_input.fill(password)
-        # JS fallback
-        await page.evaluate("(pw) => document.querySelector(\"input[name='password']\").value = pw", password)
+        await page.evaluate(f"(val) => {{ const el = document.querySelector('#password'); if (el) el.value = val; }}", password)
         await password_input.dispatch_event("input")
         await password_input.dispatch_event("change")
         await password_input.dispatch_event("blur")
         print("[SP-LOGIN-VERIFY] Filled password")
 
-        # Fill CAPTCHA
-        captcha_input = page.locator("input[name='captcha']").first
+        # Fill CAPTCHA via exact ID selector #captcha
+        captcha_input = page.locator("#captcha").first
         await captcha_input.click()
         await captcha_input.fill(captcha_answer)
-        # JS fallback
-        await page.evaluate(f"document.querySelector(\"input[name='captcha']\").value = '{captcha_answer}'")
+        await page.evaluate(f"(val) => {{ const el = document.querySelector('#captcha'); if (el) el.value = val; }}", captcha_answer)
         await captcha_input.dispatch_event("input")
         await captcha_input.dispatch_event("change")
         await captcha_input.dispatch_event("blur")
