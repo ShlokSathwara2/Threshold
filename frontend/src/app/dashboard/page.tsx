@@ -212,26 +212,26 @@ export default function DashboardPage() {
         const marksResp = adaptCampusWebMarks(user);
         const im: InternalMark[] | null = marksResp.marks.length
           ? marksResp.marks.flatMap((m) => {
-              const items: InternalMark[] = [];
-              if (m.testPerformance?.length) {
-                for (const tp of m.testPerformance) {
-                  items.push({
-                    code: m.courseCode,
-                    description: tp.test || m.courseName,
-                    scored: String(tp.marks?.scored ?? ''),
-                    maxMark: String(tp.marks?.total ?? ''),
-                  });
-                }
-              } else if (m.overall?.scored) {
+            const items: InternalMark[] = [];
+            if (m.testPerformance?.length) {
+              for (const tp of m.testPerformance) {
                 items.push({
                   code: m.courseCode,
-                  description: m.courseName,
-                  scored: m.overall.scored,
-                  maxMark: m.overall.total,
+                  description: tp.test || m.courseName,
+                  scored: String(tp.marks?.scored ?? ''),
+                  maxMark: String(tp.marks?.total ?? ''),
                 });
               }
-              return items;
-            })
+            } else if (m.overall?.scored) {
+              items.push({
+                code: m.courseCode,
+                description: m.courseName,
+                scored: m.overall.scored,
+                maxMark: m.overall.total,
+              });
+            }
+            return items;
+          })
           : null;
         setInternalMarks(im);
         if (im) setCached<InternalMark[]>('internalMarks', im);
@@ -330,8 +330,8 @@ export default function DashboardPage() {
   // dashboard's today timetable (count, timeline, current/next class).
   const todaysSlots = todayClasses
     ? todayClasses
-        .filter((s) => todayDO && s.day === todayDO && !optedOut.has(slotKey(s)))
-        .sort((a, b) => a.hour - b.hour)
+      .filter((s) => todayDO && s.day === todayDO && !optedOut.has(slotKey(s)))
+      .sort((a, b) => a.hour - b.hour)
     : [];
 
   useEffect(() => {
@@ -356,8 +356,8 @@ export default function DashboardPage() {
 
   const overallColor = overall.overallPercentage >= 85 ? '#22c55e'
     : overall.overallPercentage >= 75 ? '#eab308'
-    : overall.overallPercentage >= 60 ? '#f97316'
-    : '#ef4444';
+      : overall.overallPercentage >= 60 ? '#f97316'
+        : '#ef4444';
 
   const atRisk = subjects.filter((s) => s.isBelowThreshold);
 
@@ -714,7 +714,7 @@ export default function DashboardPage() {
               </span>
             </div>
           )}
-          </div>
+        </div>
       </motion.div>
 
       {/* Web-only: features not available notice */}
@@ -872,7 +872,7 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={() => {
-                try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch {}
+                try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch { }
                 setShowFeatureBrief(false);
               }}
               style={{
@@ -892,7 +892,7 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => {
-              try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch {}
+              try { localStorage.setItem('threshold_feature_brief_dismissed', '1'); } catch { }
               setShowFeatureBrief(false);
               router.push('/dashboard/settings');
             }}
@@ -1005,9 +1005,9 @@ export default function DashboardPage() {
                     fontWeight: 800,
                     color:
                       b.tone === 'danger' ? '#f87171'
-                      : b.tone === 'warn' ? '#fbbf24'
-                      : b.tone === 'good' ? '#4ade80'
-                      : 'var(--threshold-text)',
+                        : b.tone === 'warn' ? '#fbbf24'
+                          : b.tone === 'good' ? '#4ade80'
+                            : 'var(--threshold-text)',
                   }}>
                     {b.title}
                   </span>

@@ -851,9 +851,13 @@ export async function fetchCampusWebPlanner(): Promise<unknown> {
 
 export async function fetchCampusWebStudentPortalAttendance(netId: string): Promise<AttendanceResponse> {
   const cleanNetId = netId.split('@')[0].trim();
+  const session = getSession();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (session?.cookies) headers['X-CSRF-Token'] = session.cookies;
+  if (session?.user) headers['X-Net-ID'] = session.user;
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/student-portal/attendance')}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ net_id: cleanNetId }),
   });
   const data = await res.json().catch(() => ({}));

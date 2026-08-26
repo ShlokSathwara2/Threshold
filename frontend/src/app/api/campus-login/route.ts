@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-static';
+
+export async function GET() {
+  return NextResponse.json({ message: 'Campus Web Login Proxy' });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
