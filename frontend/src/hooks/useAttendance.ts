@@ -5,6 +5,9 @@ import {
   fetchSpAttendance,
   fetchCourses,
   fetchUser,
+  isCampusWebSession,
+  fetchCampusWebUser,
+  adaptCampusWebAttendance,
   type Attendance,
   type AttendanceResponse,
   type Course,
@@ -88,27 +91,17 @@ export function useAttendance(): UseAttendanceResult {
     if (!hasDataRef.current) setLoading(true);
     setError(null);
     try {
-      const [attRes, courseRes, userRes] = await Promise.allSettled([
-        fetchSpAttendance(),
-        Promise.race([
-          fetchCourses(),
-          new Promise<never>((_, reject) =>
-            window.setTimeout(() => reject(new Error('timeout')), 4000)
-          ),
-        ]),
-        Promise.race([
-          fetchUser(),
-          new Promise<never>((_, reject) =>
-            window.setTimeout(() => reject(new Error('timeout')), 4000)
-          ),
-        ]),
-      ]);
+      let res: AttendanceResponse;
 
-      if (attRes.status === 'rejected') {
-        throw attRes.reason instanceof Error ? attRes.reason : new Error('Failed to fetch attendance');
+      if (isCampusWebSession()) {
+        // Campus Web: user endpoint includes attendance + marks data
+        const user = await fetchCampusWebUser();
+        res = adaptCampusWebAttendance(user);
+      } else {
+        const attRes = await fetchSpAttendance();
+        res = attRes;
       }
 
-      const res: AttendanceResponse = attRes.value;
       if (res.error) {
         setError(res.error);
         return;
@@ -120,27 +113,45 @@ export function useAttendance(): UseAttendanceResult {
 
       // Enrich with academia timetable data (category, credits, slot, room, type),
       // preferring the student's own batch for batch-split lab slots.
-      if (courseRes.status === 'fulfilled') {
-        const batchText = userRes.status === 'fulfilled' ? userRes.value.batch ?? '' : '';
-        const batch = /^\d+$/.test(batchText) ? parseInt(batchText, 10) : null;
-        const byCode = pickCourseForBatch(courseRes.value.courses || [], batch);
-        calculated = calculated.map((s) => {
-          const c = byCode.get(s.courseCode);
-          if (!c) return s;
-          return {
-            ...s,
-            category: s.category || c.category || '',
-            slot: c.slot || s.slot,
-            credit: c.credit,
-            room: c.room,
-            slotType: c.slotType,
-            courseType: c.type,
-            courseCategory: c.courseCategory,
-            academicYear: c.academicYear,
-            facultyName: c.facultyName || s.facultyName,
-            facultyId: c.facultyId,
-          };
-        });
+      // Skip for Campus Web sessions — no academia cookie available.
+      if (!isCampusWebSession()) {
+        const [courseRes, userRes] = await Promise.allSettled([
+          Promise.race([
+            fetchCourses(),
+            new Promise<never>((_, reject) =>
+              window.setTimeout(() => reject(new Error('timeout')), 4000)
+            ),
+          ]),
+          Promise.race([
+            fetchUser(),
+            new Promise<never>((_, reject) =>
+              window.setTimeout(() => reject(new Error('timeout')), 4000)
+            ),
+          ]),
+        ]);
+
+        if (courseRes.status === 'fulfilled') {
+          const batchText = userRes.status === 'fulfilled' ? userRes.value.batch ?? '' : '';
+          const batch = /^\d+$/.test(batchText) ? parseInt(batchText, 10) : null;
+          const byCode = pickCourseForBatch(courseRes.value.courses || [], batch);
+          calculated = calculated.map((s) => {
+            const c = byCode.get(s.courseCode);
+            if (!c) return s;
+            return {
+              ...s,
+              category: s.category || c.category || '',
+              slot: c.slot || s.slot,
+              credit: c.credit,
+              room: c.room,
+              slotType: c.slotType,
+              courseType: c.type,
+              courseCategory: c.courseCategory,
+              academicYear: c.academicYear,
+              facultyName: c.facultyName || s.facultyName,
+              facultyId: c.facultyId,
+            };
+          });
+        }
       }
 
       hasDataRef.current = calculated.length > 0;

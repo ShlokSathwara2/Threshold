@@ -6,6 +6,7 @@ export interface Session {
   cookies: string;
   user: string;
   timestamp: number;
+  source?: 'sp' | 'campus_web';
 }
 
 // Academia session is kept in memory ONLY — never persisted to localStorage.
@@ -97,6 +98,10 @@ export function upgradeSessionUser(regNumber: string): boolean {
 
 export function isLoggedIn(): boolean {
   return getSession() !== null;
+}
+
+export function isCampusWebSession(): boolean {
+  return getSession()?.source === 'campus_web';
 }
 
 export function isSpLoggedIn(): boolean {
@@ -728,66 +733,161 @@ export async function saveSpExams(user: string, exams: CloudExam[]): Promise<voi
   });
 }
 
-// ── Campus Web API (Web fallback) ─────────────────────────────────
+// ── Campus Web API (Web login) ────────────────────────────────────
 // When running in a browser (not the native APK), we use Campus Web's
 // backend to bypass the WAF and avoid CAPTCHA entirely.
+// Login: POST https://campusapi.fly.dev/api/auth/login/
+// Token is returned in the `cookies` field of the response.
 
 const CAMPUS_WEB_API = 'https://campusapi.fly.dev';
 
-export interface CampusWebStudent {
-  courseid: string;
-  officeid: number;
-  officename: string;
-  program: string;
-  registerno: string;
-  semesterid: string;
-  studentid: number;
-  studentname: string;
-}
-
 export interface CampusWebLoginResponse {
-  net_id: string;
-  status: string;
-  student: CampusWebStudent;
+  cookies?: string;
+  status?: string;
+  Status?: string;
+  message?: string;
+  captcha_required?: boolean;
+  captcha_digest?: string;
+  image_url?: string;
+  passResponse?: { status_code?: number };
 }
 
-export interface CampusWebAttendanceItem {
-  subjectcode: string;
-  subjectdesc: string;
-  present: string;
-  absent: string;
-  total: string;
-  presentpercentage: string;
-}
-
-export interface CampusWebAttendanceResponse {
-  attendance: CampusWebAttendanceItem[];
-  net_id: string;
-  status: string;
-}
-
-export async function campusWebLogin(netId: string, password: string): Promise<CampusWebLoginResponse> {
-  const res = await fetch(`${CAMPUS_WEB_API}/api/student-portal/login`, {
+export async function campusWebLogin(netId: string, password: string, captchaContent?: string, captchaDigest?: string): Promise<CampusWebLoginResponse> {
+  const body: Record<string, string> = {
+    username: netId.includes('@') ? netId : `${netId}@srmist.edu.in`,
+    password,
+  };
+  if (captchaContent && captchaDigest) {
+    body.captcha_content = captchaContent;
+    body.captcha_digest = captchaDigest;
+  }
+  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ net_id: netId, password }),
+    body: JSON.stringify(body),
+    mode: 'cors',
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || 'Login failed');
+  const data = await res.json().catch(() => ({}));
+  if (data.captcha_required) {
+    return { captcha_required: true, captcha_digest: data.captcha_digest, image_url: data.image_url };
   }
+  if (!res.ok) {
+    throw new Error(data.message || data.Message || 'Login failed');
+  }
+  const token = data.cookies || data.Cookies || data.COOKIE || data.cookie || data['X-CSRF-Token'];
+  if (!token) throw new Error('Login succeeded but session token was missing');
+  return { cookies: token, status: data.status || data.Status };
+}
+
+// Campus Web session helpers
+export function saveCampusSession(token: string, netId: string) {
+  localStorage.setItem('threshold_session', JSON.stringify({
+    cookies: token,
+    user: netId,
+    timestamp: Date.now(),
+    source: 'campus_web',
+  }));
+}
+
+// ── Campus Web data fetching ─────────────────────────────────────
+
+interface CampusWebUserResponse {
+  name?: string;
+  courses?: Array<{
+    subject_name?: string;
+    subject_type?: string;
+    hoursConducted?: string;
+    hoursPresent?: string;
+    attendancePercent?: string;
+    room_code?: string;
+    subject_code?: string;
+  }>;
+  testPerformances?: Array<{
+    totalMarkGot?: number;
+    totalMarks?: number;
+    subject_name?: string;
+    subject_code?: string;
+  }>;
+  comboBatch?: string[];
+}
+
+export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
+  const session = getSession();
+  if (!session?.cookies) throw new Error('Not logged in');
+  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
+  if (session.user) headers['X-Net-ID'] = session.user;
+  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/user/`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Failed to fetch user (${res.status})`);
   return res.json();
 }
 
-export async function campusWebAttendance(netId: string): Promise<CampusWebAttendanceResponse> {
-  const res = await fetch(`${CAMPUS_WEB_API}/api/student-portal/attendance`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ net_id: netId }),
+export async function fetchCampusWebTimetable(comboBatch: string): Promise<unknown> {
+  const session = getSession();
+  if (!session?.cookies) throw new Error('Not logged in');
+  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
+  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/timetable/${comboBatch}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || 'Failed to fetch attendance');
-  }
+  if (!res.ok) throw new Error(`Failed to fetch timetable (${res.status})`);
   return res.json();
+}
+
+export async function fetchCampusWebPlanner(): Promise<unknown> {
+  const session = getSession();
+  if (!session?.cookies) throw new Error('Not logged in');
+  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
+  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/planner`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Failed to fetch planner (${res.status})`);
+  return res.json();
+}
+
+// ── Campus Web adapters: normalize Campus Web data → our app types ──
+
+export function adaptCampusWebAttendance(user: CampusWebUserResponse): AttendanceResponse {
+  const attendance: Attendance[] = (user.courses || [])
+    .filter((c) => Number(c.hoursConducted) > 0)
+    .map((c) => ({
+      courseCode: c.subject_code || '',
+      courseTitle: c.subject_name || '',
+      category: c.subject_type || '',
+      facultyName: '',
+      slot: '',
+      hoursConducted: Number(c.hoursConducted) || 0,
+      hoursAbsent: (Number(c.hoursConducted) || 0) - (Number(c.hoursPresent) || 0),
+      attendancePercentage: Number(c.attendancePercent) || 0,
+    }));
+  return { regNumber: '', attendance, status: 200 };
+}
+
+export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse {
+  const marks: Mark[] = (user.testPerformances || []).map((tp) => ({
+    courseName: tp.subject_name || '',
+    courseCode: tp.subject_code || '',
+    courseType: '',
+    overall: {
+      scored: String(tp.totalMarkGot ?? ''),
+      total: String(tp.totalMarks ?? ''),
+    },
+    testPerformance: [],
+  }));
+  return { regNumber: '', marks, status: 200 };
+}
+
+export function adaptCampusWebProfile(user: CampusWebUserResponse, netId: string): SpProfileResponse {
+  return {
+    profile: {
+      name: user.name || netId,
+      reg_number: netId,
+    },
+  };
 }

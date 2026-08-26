@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import {
   isSpLoggedIn,
+  isCampusWebSession,
   isAcademiaLoggedIn,
   fetchCalendar,
   fetchTimetable,
   fetchSpProfile,
   fetchSpInternalMarks,
+  fetchCampusWebUser,
   type CalendarResponse,
   type TimetableResponse,
   type TimetableSlot,
@@ -197,6 +199,20 @@ export default function DashboardPage() {
   // Fetches everything in parallel (profile + calendar + internal marks,
   // then academia timetable if logged in) and refreshes the local cache.
   const fetchAll = useCallback(async () => {
+    if (isCampusWebSession()) {
+      // Campus Web: user endpoint provides name + attendance; no calendar/internal marks
+      try {
+        const user = await fetchCampusWebUser();
+        if (user.name) {
+          const p: SpProfile = { name: user.name };
+          setProfile(p);
+          setCached<SpProfile>('profile', { ...p, photo: undefined });
+        }
+      } catch { /* keep defaults */ }
+      applyToday(null);
+      return;
+    }
+
     const [pRes, calRes, imRes] = await Promise.allSettled([
       fetchSpProfile(),
       fetchCalendar(),
@@ -645,6 +661,62 @@ export default function DashboardPage() {
           )}
           </div>
       </motion.div>
+
+      {/* Web-only: features not available notice */}
+      {isCampusWebSession() && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            marginBottom: '16px',
+            padding: '14px 16px',
+            borderRadius: '16px',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))',
+            border: '1px solid rgba(245,158,11,0.3)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '1px' }}>⚠</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fbbf24', margin: 0 }}>
+                Some features are only in the APK
+              </p>
+              <p style={{ fontSize: '0.72rem', color: W(0.5), margin: '5px 0 0', lineHeight: 1.5 }}>
+                Hall Ticket, Exam Timetable, Provisional Results, Course Status, Announcements &amp; Personal Details require the Android app.
+              </p>
+              <a
+                href="https://github.com/ShlokSathwara2/Threshold_APK/raw/main/Threshold.apk"
+                download="Threshold.apk"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginTop: '10px',
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(245,158,11,0.18)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  color: '#fbbf24',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download APK
+              </a>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {!isAcademiaLoggedIn() && (
         <motion.button

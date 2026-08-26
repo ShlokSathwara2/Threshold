@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { App } from '@capacitor/app';
-import { isSpLoggedIn, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser, clearAcademiaCookies } from '@/lib/api';
+import { isSpLoggedIn, isCampusWebSession, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser, clearAcademiaCookies } from '@/lib/api';
 import { clearAllScopedData } from '@/lib/user-scope';
 import PullRefresh from '@/components/ui/PullRefresh';
 import AppLockGate from '@/components/ui/AppLockGate';
@@ -208,12 +208,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     }
     const session = getSession();
     if (session?.user) setUser(session.user);
+
+    // Campus Web sessions: skip SP profile fetch (we don't have SP cookies)
+    if (isCampusWebSession()) return;
+
     fetchSpProfile()
       .then((res) => {
         if (res.profile?.name) setUser(res.profile.name as string);
-        // Offline logins may have been keyed to the shared placeholder —
-        // once the profile reveals the reg number, re-key the session so
-        // every local store is per-login.
         if (res.profile?.reg_number) upgradeSessionUser(res.profile.reg_number);
       })
       .catch(() => {
@@ -226,7 +227,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   // user can tap through to re-sign-in (no forced logout / redirect).
   const [sessionExpired, setSessionExpired] = useState(false);
   useEffect(() => {
-    if (!isSpLoggedIn()) return;
+    if (!isSpLoggedIn() || isCampusWebSession()) return;
     let destroyed = false;
     let expired = false;
     const checkSession = async () => {
@@ -482,7 +483,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}>
-              {user.includes('@') ? user : 'Signed in • Student Portal'}
+              {user.includes('@') ? user : isCampusWebSession() ? 'Signed in' : 'Signed in • Student Portal'}
             </p>
           </div>
         </motion.div>

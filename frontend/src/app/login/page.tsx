@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
-import { saveSession, campusWebLogin, campusWebAttendance } from '@/lib/api';
+import { saveSession, campusWebLogin, saveCampusSession, isCampusWebSession } from '@/lib/api';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -37,10 +37,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [webLoginLoading, setWebLoginLoading] = useState(false);
   const [webLoginError, setWebLoginError] = useState('');
-  const [captchaSessionId, setCaptchaSessionId] = useState('');
-  const [captchaImage, setCaptchaImage] = useState('');
-  const [captchaAnswer, setCaptchaAnswer] = useState('');
-  const [captchaStep, setCaptchaStep] = useState<'credentials' | 'captcha'>('credentials');
 
   useEffect(() => {
     setIsNative(isNativePlatform());
@@ -134,41 +130,6 @@ export default function LoginPage() {
     }, 650);
   }, [nativeAnimating, nativeLoginLoading, handleNativeLogin]);
 
-  const [captchaLoading, setCaptchaLoading] = useState(false);
-  const captchaInitialized = useRef(false);
-
-  const initCaptchaSession = useCallback(async () => {
-    setCaptchaLoading(true);
-    setWebLoginError('');
-    try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/login-init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'student' }),
-      });
-      const data = await res.json();
-      if (data.success && data.session_id) {
-        setCaptchaSessionId(data.session_id);
-        setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
-      } else {
-        setWebLoginError(data.message || 'Failed to load CAPTCHA');
-      }
-    } catch {
-      setWebLoginError('Failed to connect to server');
-    } finally {
-      setCaptchaLoading(false);
-    }
-  }, []);
-
-  // Load CAPTCHA once on mount (web only)
-  useEffect(() => {
-    if (!isNativePlatform() && !captchaInitialized.current) {
-      captchaInitialized.current = true;
-      initCaptchaSession();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleWebLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setWebLoginError('');
@@ -177,65 +138,29 @@ export default function LoginPage() {
       setWebLoginError('Please enter your Net ID and password');
       return;
     }
-    if (!captchaAnswer.trim()) {
-      setWebLoginError('Please enter the CAPTCHA text');
-      return;
-    }
-    if (!captchaSessionId) {
-      setWebLoginError('CAPTCHA not loaded. Click Refresh.');
-      return;
-    }
 
     setWebLoginLoading(true);
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_BASE}/sp/login-verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: captchaSessionId,
-          username: netId.trim(),
-          password: password.trim(),
-          captcha: captchaAnswer.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setWebLoginError(data.message || 'Login failed. Please try again.');
-        setCaptchaAnswer('');
-        // Fetch a fresh CAPTCHA for retry
-        try {
-          const refreshRes = await fetch(`${API_BASE}/sp/refresh-captcha`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: captchaSessionId }),
-          });
-          const refreshData = await refreshRes.json();
-          if (refreshData.success && refreshData.captcha_image_base64) {
-            setCaptchaImage(`data:image/png;base64,${refreshData.captcha_image_base64}`);
-          } else {
-            // Session expired, get a completely new one
-            await initCaptchaSession();
-          }
-        } catch {
-          await initCaptchaSession();
-        }
+      const result = await campusWebLogin(netId.trim(), password.trim());
+
+      if (result.captcha_required) {
+        setWebLoginError('CAPTCHA required — please try again');
         return;
       }
 
-      // Login succeeded — store cookies and navigate
-      const cookieStr = data.cookies || '';
-      if (cookieStr) {
-        await storeAndNavigate(cookieStr);
-      } else {
-        throw new Error('No session cookies received');
+      const token = result.cookies;
+      if (!token) {
+        throw new Error('No session token received');
       }
+
+      saveCampusSession(token, netId.trim().split('@')[0].toLowerCase());
+      router.push('/dashboard');
     } catch (err) {
       setWebLoginError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setWebLoginLoading(false);
     }
-  }, [netId, password, captchaAnswer, captchaSessionId, storeAndNavigate, initCaptchaSession]);
+  }, [netId, password, router]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,7 +335,7 @@ export default function LoginPage() {
               </motion.button>
             </div>
           ) : (
-            /* ── Web: All-in-One NetID + Password + CAPTCHA Login ── */
+            /* ── Web: Campus Web NetID + Password Login ── */
             <form onSubmit={handleWebLogin}>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
@@ -428,7 +353,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div style={{ marginBottom: '14px' }}>
+              <div style={{ marginBottom: '18px' }}>
                 <label style={{ display: 'block', color: W(0.55), fontSize: '0.8rem', marginBottom: '6px' }}>
                   Password
                 </label>
@@ -437,76 +362,6 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Your SRM password"
-                  spellCheck={false}
-                  style={inputStyle}
-                  onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
-                  onBlur={(e) => e.target.style.borderColor = WB(0.1)}
-                />
-              </div>
-
-              <div style={{ marginBottom: '18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ color: W(0.55), fontSize: '0.8rem' }}>
-                    CAPTCHA
-                  </label>
-                  <button
-                    type="button"
-                    onClick={initCaptchaSession}
-                    disabled={captchaLoading}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'rgba(139, 92, 246, 0.8)',
-                      fontSize: '0.75rem',
-                      cursor: captchaLoading ? 'not-allowed' : 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    {captchaLoading ? 'Loading...' : 'Refresh 🔄'}
-                  </button>
-                </div>
-
-                {captchaImage ? (
-                  <div style={{
-                    padding: '10px',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    border: `1px solid ${WB(0.1)}`,
-                    marginBottom: '10px',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                    <img
-                      src={captchaImage}
-                      alt="CAPTCHA"
-                      style={{
-                        maxHeight: '44px',
-                        width: 'auto',
-                        borderRadius: '6px',
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{
-                    padding: '14px',
-                    borderRadius: '12px',
-                    background: WB(0.05),
-                    border: `1px solid ${WB(0.1)}`,
-                    marginBottom: '10px',
-                    textAlign: 'center',
-                    color: W(0.4),
-                    fontSize: '0.8rem',
-                  }}>
-                    {captchaLoading ? 'Fetching...' : 'Click Refresh'}
-                  </div>
-                )}
-
-                <input
-                  type="text"
-                  value={captchaAnswer}
-                  onChange={(e) => setCaptchaAnswer(e.target.value)}
-                  placeholder="Enter CAPTCHA text"
                   spellCheck={false}
                   style={inputStyle}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
@@ -537,11 +392,11 @@ export default function LoginPage() {
 
               <motion.button
                 type="submit"
-                disabled={webLoginLoading || captchaLoading || !captchaSessionId || activeAnimation !== null}
+                disabled={webLoginLoading || activeAnimation !== null}
                 whileTap={{ scale: 0.95 }}
                 className={`arrow-btn arrow-btn--primary${webLoginLoading ? ' arrow-btn--disabled' : ''}`}
                 style={{
-                  cursor: webLoginLoading || captchaLoading || !captchaSessionId ? 'not-allowed' : 'pointer',
+                  cursor: webLoginLoading ? 'not-allowed' : 'pointer',
                   width: '100%',
                 }}
               >
@@ -564,9 +419,7 @@ export default function LoginPage() {
                 lineHeight: 1.4,
                 textAlign: 'center',
               }}>
-                {captchaStep === 'credentials'
-                  ? 'Same login as the SRM Student Portal. No credentials stored.'
-                  : 'Solve the CAPTCHA to complete login. You\'ll get full access to all features.'}
+                Same login as the SRM Student Portal. No credentials stored.
               </p>
             </form>
           )}
