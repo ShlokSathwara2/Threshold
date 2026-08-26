@@ -44,7 +44,20 @@ export async function POST(req: Request) {
     }
 
     // Extract CSRF token from headers or data
-    const csrfToken = response.headers.get('x-csrf-token') || data.token || data.cookies || data['X-CSRF-Token'] || cleanNetId;
+    const csrfToken =
+      response.headers.get('x-csrf-token') ||
+      response.headers.get('set-cookie') ||
+      data.token ||
+      data.cookies ||
+      data['X-CSRF-Token'] ||
+      data.cookie;
+
+    if (!csrfToken) {
+      return NextResponse.json(
+        { success: false, message: data.message || 'Login failed — valid session token not received. Check your credentials.' },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

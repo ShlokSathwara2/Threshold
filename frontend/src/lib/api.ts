@@ -817,7 +817,14 @@ export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
     headers,
     cache: 'no-store',
   });
-  if (!res.ok) throw new Error(`Failed to fetch user (${res.status})`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 400 || res.status === 401) {
+      console.warn('Campus Web user session expired or invalid:', data.message || res.statusText);
+      return { name: session.user || 'Student', courses: [], testPerformances: [] };
+    }
+    throw new Error(data.message || `Failed to fetch user (${res.status})`);
+  }
   return res.json();
 }
 
