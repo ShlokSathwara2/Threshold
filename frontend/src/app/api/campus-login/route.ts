@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { net_id, password } = body;
 
     if (!net_id || !password) {
-      return NextResponse.json({ success: false, message: 'net_id and password required' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Net ID and password are required' }, { status: 400 });
     }
 
     const cleanNetId = String(net_id).split('@')[0].trim();
@@ -22,12 +22,18 @@ export async function POST(req: Request) {
       body: JSON.stringify({ net_id: cleanNetId, password }),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const resText = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(resText);
+    } catch {
+      data = { message: resText };
+    }
 
-    if (!response.ok && response.status !== 200) {
+    if (!response.ok || data.status === 'fail' || data.status === 'error') {
       return NextResponse.json(
-        { success: false, message: data.message || 'Campus Web login failed' },
-        { status: response.status }
+        { success: false, message: data.message || data.Message || 'Login failed — check your Net ID and password' },
+        { status: response.status || 400 }
       );
     }
 
