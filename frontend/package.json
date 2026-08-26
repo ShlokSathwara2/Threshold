@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "build:mobile": "CAPACITOR_BUILD=true next build",
+    "build:mobile": "node scripts/build-mobile.js",
     "cap:sync": "npm run build:mobile && npx cap sync android",
     "cap:open": "npx cap open android",
     "cap:run": "npx cap run android"

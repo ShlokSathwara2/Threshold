@@ -789,22 +789,37 @@ export function saveCampusSession(token: string, netId: string) {
 
 interface CampusWebUserResponse {
   name?: string;
+  registrationNumber?: string;
+  semester?: string;
+  comboBatch?: string[];
   courses?: Array<{
-    subject_name?: string;
-    subject_type?: string;
+    courseCode?: string;
+    courseTitle?: string;
+    credit?: string;
+    category?: string;
+    courseType?: string;
+    facultyName?: string;
+    slot?: string;
+    roomNo?: string;
+    academicYear?: string;
     hoursConducted?: string;
+    hoursAbsent?: string;
     hoursPresent?: string;
     attendancePercent?: string;
-    room_code?: string;
+    subject_name?: string;
+    subject_type?: string;
     subject_code?: string;
   }>;
   testPerformances?: Array<{
+    courseCode?: string;
+    courseName?: string;
+    courseType?: string;
     totalMarkGot?: number;
     totalMarks?: number;
+    tests?: Record<string, unknown>;
     subject_name?: string;
     subject_code?: string;
   }>;
-  comboBatch?: string[];
 }
 
 export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
@@ -812,6 +827,7 @@ export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
   if (session.user) headers['X-Net-ID'] = session.user;
+  console.log('[fetchCampusWebUser] session:', { cookies: session.cookies?.substring(0, 20) + '...', user: session.user });
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/user/')}`, {
     method: 'GET',
     headers,
@@ -819,13 +835,15 @@ export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    console.warn('[fetchCampusWebUser] error:', res.status, data);
     if (res.status === 400 || res.status === 401) {
-      console.warn('Campus Web user session expired or invalid:', data.message || res.statusText);
       return { name: session.user || 'Student', courses: [], testPerformances: [] };
     }
     throw new Error(data.message || `Failed to fetch user (${res.status})`);
   }
-  return res.json();
+  const userData = await res.json();
+  console.log('[fetchCampusWebUser] success, keys:', Object.keys(userData), 'courses count:', userData.courses?.length, 'testPerformances count:', userData.testPerformances?.length);
+  return userData;
 }
 
 export async function fetchCampusWebTimetable(comboBatch: string): Promise<unknown> {
@@ -845,13 +863,17 @@ export async function fetchCampusWebPlanner(): Promise<unknown> {
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
+  if (session.user) headers['X-Net-ID'] = session.user;
+  console.log('[fetchCampusWebPlanner] fetching planner');
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/planner')}`, {
     method: 'GET',
     headers,
     cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Failed to fetch planner (${res.status})`);
-  return res.json();
+  const plannerData = await res.json();
+  console.log('[fetchCampusWebPlanner] response:', JSON.stringify(plannerData).substring(0, 500));
+  return plannerData;
 }
 
 // ── Campus Web adapters: normalize Campus Web data → our app types ──
@@ -862,12 +884,16 @@ export async function fetchCampusWebStudentPortalAttendance(netId: string): Prom
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (session?.cookies) headers['X-CSRF-Token'] = session.cookies;
   if (session?.user) headers['X-Net-ID'] = session.user;
+  console.log('[fetchCampusWebStudentPortalAttendance] netId:', cleanNetId, 'has CSRF:', !!session?.cookies);
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/student-portal/attendance')}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ net_id: cleanNetId }),
   });
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  console.log('[fetchCampusWebStudentPortalAttendance] status:', res.status, 'body:', rawText.substring(0, 500));
+  let data: any = {};
+  try { data = JSON.parse(rawText); } catch { data = { raw: rawText }; }
   const list = Array.isArray(data.attendance) ? data.attendance : (Array.isArray(data) ? data : []);
   if (res.ok && list.length > 0) {
     return {
@@ -890,18 +916,20 @@ export async function fetchCampusWebStudentPortalAttendance(netId: string): Prom
 
 export function adaptCampusWebAttendance(user: CampusWebUserResponse | any): AttendanceResponse {
   const courses: any[] = user?.courses || user?.data?.courses || (Array.isArray(user) ? user : []);
+  console.log('[adaptCampusWebAttendance] input keys:', Object.keys(user || {}), 'courses count:', courses.length);
+  if (courses.length > 0) console.log('[adaptCampusWebAttendance] first course:', JSON.stringify(courses[0]).substring(0, 300));
   const attendance: Attendance[] = courses
     .map((c: any) => {
       const conducted = Number(c.hoursConducted || c.conductedHours || c.total_hours || c.conducted || 0);
       const present = Number(c.hoursPresent || c.presentHours || c.attended_hours || c.present || 0);
       const pct = Number(c.attendancePercent || c.attendance_percentage || c.percentage || c.percent || (conducted > 0 ? (present / conducted) * 100 : 0));
-      const absent = conducted > 0 ? conducted - present : Number(c.hoursAbsent || c.absentHours || c.absent || 0);
+      const absent = Number(c.hoursAbsent || c.absentHours || c.absent) || (conducted > 0 ? conducted - present : 0);
       return {
-        courseCode: c.subject_code || c.course_code || c.code || '',
-        courseTitle: c.subject_name || c.course_name || c.title || '',
-        category: c.subject_type || c.category || c.type || '',
-        facultyName: c.faculty_name || c.faculty || '',
-        slot: c.slot || c.room_code || '',
+        courseCode: c.courseCode || c.subject_code || c.course_code || c.code || '',
+        courseTitle: c.courseTitle || c.subject_name || c.course_name || c.title || '',
+        category: c.category || c.subject_type || c.type || '',
+        facultyName: c.facultyName || c.faculty_name || c.faculty || '',
+        slot: c.slot || c.room_code || c.roomNo || '',
         hoursConducted: conducted,
         hoursAbsent: Math.max(0, absent),
         attendancePercentage: Math.round(pct * 100) / 100,
@@ -913,46 +941,66 @@ export function adaptCampusWebAttendance(user: CampusWebUserResponse | any): Att
 }
 
 export function adaptCampusWebPlanner(plannerData: any): CalendarResponse {
-  const items: any[] = Array.isArray(plannerData) ? plannerData : (plannerData?.planner || plannerData?.calendar || plannerData?.data || []);
-  const monthsMap = new Map<string, CalendarDay[]>();
+  console.log('[adaptCampusWebPlanner] input type:', typeof plannerData, 'keys:', plannerData ? Object.keys(plannerData).slice(0, 5) : []);
+  const calendar: CalendarMonth[] = [];
 
-  for (const item of items) {
-    const rawDate = item.date || item.Date || '';
-    if (!rawDate) continue;
-
-    const dateObj = new Date(rawDate);
-    if (isNaN(dateObj.getTime())) continue;
-
-    const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-    const dayNum = dateObj.getDate();
-
-    if (!monthsMap.has(monthKey)) {
-      monthsMap.set(monthKey, []);
-    }
-
-    const days = monthsMap.get(monthKey)!;
-    days.push({
-      date: String(dayNum).padStart(2, '0'),
-      day: String(dayNum),
-      dayOrder: item.dayOrder || item.day_order || item.dayOrderName || '',
-      event: item.event || item.eventName || item.description || '',
-      isHoliday: Boolean(item.is_holiday || item.isHoliday || item.holiday || String(item.event || '').toLowerCase().includes('holiday')),
-    });
+  if (!plannerData || typeof plannerData !== 'object') {
+    return { calendar: [], status: 200 };
   }
 
-  const calendar: CalendarMonth[] = Array.from(monthsMap.entries()).map(([monthName, days]) => ({
-    month: monthName,
-    days: days.sort((a, b) => Number(a.date) - Number(b.date)),
-  }));
+  // API shape: { "Aug '26": { Data: [...], Holiday: [...], HolidayCount: N }, ... }
+  // Each Data item: { Date: "1"|"15", Day: "Mon", Event: "...", Dayorder: "5"|"-" }
+  // Holiday: array of day numbers [1, 2, 8]
 
+  for (const [monthKey, monthVal] of Object.entries(plannerData)) {
+    const mv = monthVal as any;
+    if (!mv || !Array.isArray(mv.Data)) continue;
+
+    // Parse month key like "Aug '26" → month number and year
+    const monthMatch = monthKey.match(/(\w+)\s*'(\d{2})/);
+    if (!monthMatch) continue;
+
+    const monthStr = monthMatch[1];
+    const yearShort = parseInt(monthMatch[2], 10);
+    const year = yearShort >= 50 ? 1900 + yearShort : 2000 + yearShort;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIdx = monthNames.indexOf(monthStr);
+    if (monthIdx < 0) continue;
+
+    const holidayDays = new Set<number>(Array.isArray(mv.Holiday) ? mv.Holiday.map(Number) : []);
+    const mm = String(monthIdx + 1).padStart(2, '0');
+    const monthId = `${year}-${mm}`;
+
+    const days: CalendarDay[] = mv.Data.map((item: any) => {
+      const dayNum = parseInt(String(item.Date), 10);
+      if (isNaN(dayNum)) return null;
+      const dd = String(dayNum).padStart(2, '0');
+      const isHoliday = holidayDays.has(dayNum) || /holiday/i.test(item.Event || '');
+      const dayorder = item.Dayorder || item.DayOrder || item.dayorder || '';
+      return {
+        date: `${dd}-${mm}-${year}`,
+        day: String(dayNum).padStart(2, '0'),
+        dayOrder: dayorder === '-' ? '' : `Day ${dayorder}`,
+        event: item.Event || item.event || '',
+        isHoliday,
+      };
+    }).filter(Boolean) as CalendarDay[];
+
+    if (days.length > 0) {
+      calendar.push({ month: monthId, days });
+    }
+  }
+
+  console.log('[adaptCampusWebPlanner] calendar months:', calendar.length, 'total days:', calendar.reduce((s, m) => s + m.days.length, 0));
   return { calendar, status: 200 };
 }
 
 export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse {
+  console.log('[adaptCampusWebMarks] testPerformances count:', user.testPerformances?.length ?? 0, 'data:', JSON.stringify(user.testPerformances).substring(0, 500));
   const marks: Mark[] = (user.testPerformances || []).map((tp) => ({
-    courseName: tp.subject_name || '',
-    courseCode: tp.subject_code || '',
-    courseType: '',
+    courseName: (tp as any).courseName || tp.subject_name || '',
+    courseCode: (tp as any).courseCode || tp.subject_code || '',
+    courseType: (tp as any).courseType || '',
     overall: {
       scored: String(tp.totalMarkGot ?? ''),
       total: String(tp.totalMarks ?? ''),
@@ -966,7 +1014,9 @@ export function adaptCampusWebProfile(user: CampusWebUserResponse, netId: string
   return {
     profile: {
       name: user.name || netId,
-      reg_number: netId,
+      reg_number: user.registrationNumber || netId,
+      semester: user.semester ? parseInt(user.semester, 10) : undefined,
+      batch: Array.isArray(user.comboBatch) ? user.comboBatch.join(',') : (user.comboBatch as any) || undefined,
     },
   };
 }

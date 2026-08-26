@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
@@ -24,6 +24,7 @@ export async function GET(req: Request) {
     if (netId) headers['X-Net-ID'] = netId;
 
     const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;
+    console.log('[Proxy GET]', targetUrl, { csrfToken: csrfToken?.substring(0, 20) + '...', netId });
 
     const response = await fetch(targetUrl, {
       method: 'GET',
@@ -31,7 +32,10 @@ export async function GET(req: Request) {
       cache: 'no-store',
     });
 
-    const data = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    console.log('[Proxy GET] status:', response.status, 'body:', rawText.substring(0, 500));
+    let data: any = {};
+    try { data = JSON.parse(rawText); } catch { data = { raw: rawText }; }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -74,6 +78,7 @@ export async function POST(req: Request) {
     if (netId) headers['X-Net-ID'] = netId;
 
     const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;
+    console.log('[Proxy POST]', targetUrl, { csrfToken: csrfToken?.substring(0, 20) + '...', netId, body });
 
     const response = await fetch(targetUrl, {
       method: 'POST',
@@ -81,7 +86,10 @@ export async function POST(req: Request) {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    console.log('[Proxy POST] status:', response.status, 'body:', rawText.substring(0, 500));
+    let data: any = {};
+    try { data = JSON.parse(rawText); } catch { data = { raw: rawText }; }
 
     if (!response.ok) {
       return NextResponse.json(

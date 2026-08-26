@@ -97,17 +97,23 @@ export function useAttendance(): UseAttendanceResult {
       if (isCampusWebSession()) {
         const session = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('threshold_session') || '{}') : null;
         const netId = session?.user || '';
+        console.log('[useAttendance] campus web path, netId:', netId);
         try {
           const spAtt = await fetchCampusWebStudentPortalAttendance(netId);
+          console.log('[useAttendance] spAtt result:', spAtt.attendance?.length, 'items');
           if (spAtt.attendance && spAtt.attendance.length > 0) {
             res = spAtt;
           } else {
+            console.log('[useAttendance] spAtt empty, falling back to fetchCampusWebUser');
             const user = await fetchCampusWebUser();
             res = adaptCampusWebAttendance(user);
+            console.log('[useAttendance] fallback result:', res.attendance?.length, 'items');
           }
-        } catch {
+        } catch (e) {
+          console.warn('[useAttendance] spAtt failed, falling back:', e);
           const user = await fetchCampusWebUser();
           res = adaptCampusWebAttendance(user);
+          console.log('[useAttendance] fallback result:', res.attendance?.length, 'items');
         }
       } else {
         const attRes = await fetchSpAttendance();
