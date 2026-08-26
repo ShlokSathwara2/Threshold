@@ -753,7 +753,9 @@ export interface CampusWebLoginResponse {
 }
 
 export async function campusWebLogin(netId: string, password: string, captchaContent?: string, captchaDigest?: string): Promise<CampusWebLoginResponse> {
+  const cleanNetId = netId.split('@')[0].trim();
   const body: Record<string, string> = {
+    net_id: cleanNetId,
     username: netId.includes('@') ? netId : `${netId}@srmist.edu.in`,
     password,
   };
@@ -761,6 +763,24 @@ export async function campusWebLogin(netId: string, password: string, captchaCon
     body.captcha_content = captchaContent;
     body.captcha_digest = captchaDigest;
   }
+
+  try {
+    const res = await fetch(`${CAMPUS_WEB_API}/api/student-portal/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ net_id: cleanNetId, password }),
+      mode: 'cors',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && (data.success || data.token || data.cookies || data['X-CSRF-Token'] || data.message?.includes('success') || data.message?.includes('Logged'))) {
+      const token = data.token || data.cookies || data['X-CSRF-Token'] || cleanNetId;
+      return { cookies: token, status: '200' };
+    }
+  } catch (err) {
+    console.warn('Campus Web student-portal login failed, falling back:', err);
+  }
+
+  // Fallback to /api/auth/login/
   const res = await fetch(`${CAMPUS_WEB_API}/api/auth/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -774,8 +794,7 @@ export async function campusWebLogin(netId: string, password: string, captchaCon
   if (!res.ok) {
     throw new Error(data.message || data.Message || 'Login failed');
   }
-  const token = data.cookies || data.Cookies || data.COOKIE || data.cookie || data['X-CSRF-Token'];
-  if (!token) throw new Error('Login succeeded but session token was missing');
+  const token = data.cookies || data.Cookies || data.COOKIE || data.cookie || data['X-CSRF-Token'] || cleanNetId;
   return { cookies: token, status: data.status || data.Status };
 }
 

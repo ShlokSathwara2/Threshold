@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { spLoginInit, spLoginVerify, saveSession } from '@/lib/api';
+import { campusWebLogin, saveCampusSession, saveSession } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
@@ -69,79 +69,23 @@ export default function SpLoginPage() {
     setError('');
     setLoading(true);
     try {
-      const data = await spLoginInit(username.trim());
-      if (data.success && data.session_id && data.captcha_image_base64) {
-        setSessionId(data.session_id);
-        setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
-        setStep('captcha');
-        setTimeout(() => captchaRef.current?.focus(), 100);
-      } else {
-        setError(data.message || 'Failed to load CAPTCHA');
+      const res = await campusWebLogin(username.trim(), password.trim());
+      const token = res.cookies;
+      if (!token) {
+        throw new Error('Login failed — invalid credentials');
       }
-    } catch {
-      setError('Failed to connect to server');
+      saveCampusSession(token, username.trim().split('@')[0].toLowerCase());
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
-  }, [username, password]);
+  }, [username, password, router]);
 
-  const refreshCaptcha = useCallback(async () => {
-    try {
-      const data = await spLoginInit(username.trim());
-      if (data.success && data.session_id && data.captcha_image_base64) {
-        setSessionId(data.session_id);
-        setCaptchaImage(`data:image/png;base64,${data.captcha_image_base64}`);
-        setCaptcha('');
-      }
-    } catch { /* ignore */ }
-  }, [username]);
-
-  const handleCaptchaSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!captcha.trim()) {
-      setError('Please enter the CAPTCHA text');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    animDoneRef.current = false;
-    const randomAnim = animations[Math.floor(Math.random() * animations.length)];
-    setActiveAnimation(randomAnim);
-    // Fallback: if the animation component never fires onComplete, force it.
-    window.setTimeout(() => {
-      if (!animDoneRef.current) onCompleteRef.current();
-    }, 9000);
-  }, [captcha]);
-
-  const onAnimationComplete = useCallback(async () => {
-    if (animDoneRef.current) return;
-    animDoneRef.current = true;
-    setActiveAnimation(null);
-    setVerifying(true);
-    try {
-      const [data] = await Promise.all([
-        spLoginVerify(sessionId, username.trim(), password, captcha.trim()),
-        // Minimum 3s so the shimmer button, timer and progress bar are always visible
-        new Promise<void>((resolve) => window.setTimeout(resolve, 3000)),
-      ]);
-      if (data.success && data.cookies) {
-        await saveSession(data.cookies, username.trim());
-        router.push('/dashboard');
-      } else {
-        setError(data.message || 'Login failed — check your credentials and CAPTCHA');
-        setLoading(false);
-        setStep('captcha');
-        setCaptcha('');
-        refreshCaptcha();
-      }
-    } catch {
-      setError('Failed to connect to server');
-      setLoading(false);
-      setStep('captcha');
-    } finally {
-      setVerifying(false);
-    }
-  }, [sessionId, username, password, captcha, router, refreshCaptcha]);
+  const refreshCaptcha = useCallback(async () => {}, []);
+  const handleCaptchaSubmit = useCallback(async (e: React.FormEvent) => { e.preventDefault(); }, []);
+  const onAnimationComplete = useCallback(async () => {}, []);
 
   const onCompleteRef = useRef(onAnimationComplete);
   useEffect(() => {
