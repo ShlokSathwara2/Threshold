@@ -850,6 +850,7 @@ export async function fetchCampusWebTimetable(comboBatch: string): Promise<unkno
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
+  if (session.user) headers['X-Net-ID'] = session.user;
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent(`/api/auth/timetable/${comboBatch}`)}`, {
     method: 'GET',
     headers,
@@ -1019,4 +1020,53 @@ export function adaptCampusWebProfile(user: CampusWebUserResponse, netId: string
       batch: Array.isArray(user.comboBatch) ? user.comboBatch.join(',') : (user.comboBatch as any) || undefined,
     },
   };
+}
+
+export interface CampusWebTimetableResponse {
+  day_order?: string;
+  timetable?: Record<string, Record<string, { subject_name: string; subject_type: string; room_code: string }>>;
+}
+
+export function adaptCampusWebTimetable(data: CampusWebTimetableResponse, courses: CampusWebUserResponse['courses']): TimetableSlot[] {
+  if (!data?.timetable) return [];
+
+  const nameToCourse = new Map<string, { courseCode: string; slot: string; facultyName: string }>();
+  for (const c of courses || []) {
+    if (c.courseTitle && !nameToCourse.has(c.courseTitle)) {
+      nameToCourse.set(c.courseTitle, {
+        courseCode: c.courseCode || '',
+        slot: c.slot || '',
+        facultyName: c.facultyName || '',
+      });
+    }
+  }
+
+  const slots: TimetableSlot[] = [];
+  const dayKeys = Object.keys(data.timetable).sort();
+
+  for (const dayKey of dayKeys) {
+    const dayMatch = dayKey.match(/Day(\d)/i);
+    if (!dayMatch) continue;
+    const dayOrder = `DO-${dayMatch[1]}`;
+    const timeSlots = data.timetable[dayKey];
+
+    let hourIndex = 0;
+    for (const [timeRange, info] of Object.entries(timeSlots)) {
+      hourIndex++;
+      if (!info || info.subject_name === 'No class') continue;
+      const mapped = nameToCourse.get(info.subject_name);
+      slots.push({
+        day: dayOrder,
+        hour: hourIndex,
+        time: timeRange,
+        courseCode: mapped?.courseCode || '',
+        courseTitle: info.subject_name,
+        slot: mapped?.slot || '',
+        faculty: mapped?.facultyName || '',
+        room: info.room_code || '',
+      });
+    }
+  }
+
+  return slots;
 }

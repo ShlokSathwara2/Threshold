@@ -249,13 +249,14 @@ export default function DashboardPage() {
           setOffline(true);
         }
 
-        if (!isAcademiaLoggedIn()) {
-          setTodayClasses(null);
-          return;
-        }
         try {
-          const tt: TimetableResponse = await fetchTimetable();
-          setTodayClasses(tt.schedule?.length ? tt.schedule : null);
+          const comboBatch = Array.isArray(user.comboBatch)
+            ? user.comboBatch[0]
+            : String(user.comboBatch || '1');
+          const { fetchCampusWebTimetable, adaptCampusWebTimetable } = await import('@/lib/api');
+          const ttData: any = await fetchCampusWebTimetable(comboBatch);
+          const schedule = adaptCampusWebTimetable(ttData, user.courses);
+          setTodayClasses(schedule.length ? schedule : null);
         } catch {
           setTodayClasses(null);
         }
