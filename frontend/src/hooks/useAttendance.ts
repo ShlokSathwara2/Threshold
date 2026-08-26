@@ -7,6 +7,7 @@ import {
   fetchUser,
   isCampusWebSession,
   fetchCampusWebUser,
+  fetchCampusWebStudentPortalAttendance,
   adaptCampusWebAttendance,
   type Attendance,
   type AttendanceResponse,
@@ -94,9 +95,20 @@ export function useAttendance(): UseAttendanceResult {
       let res: AttendanceResponse;
 
       if (isCampusWebSession()) {
-        // Campus Web: user endpoint includes attendance + marks data
-        const user = await fetchCampusWebUser();
-        res = adaptCampusWebAttendance(user);
+        const session = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('threshold_session') || '{}') : null;
+        const netId = session?.user || '';
+        try {
+          const spAtt = await fetchCampusWebStudentPortalAttendance(netId);
+          if (spAtt.attendance && spAtt.attendance.length > 0) {
+            res = spAtt;
+          } else {
+            const user = await fetchCampusWebUser();
+            res = adaptCampusWebAttendance(user);
+          }
+        } catch {
+          const user = await fetchCampusWebUser();
+          res = adaptCampusWebAttendance(user);
+        }
       } else {
         const attRes = await fetchSpAttendance();
         res = attRes;

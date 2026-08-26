@@ -563,6 +563,14 @@ export interface CalendarResponse {
 }
 
 export async function fetchCalendar(): Promise<CalendarResponse> {
+  if (isCampusWebSession()) {
+    try {
+      const planner: any = await fetchCampusWebPlanner();
+      return adaptCampusWebPlanner(planner);
+    } catch {
+      return { calendar: [], status: 200 };
+    }
+  }
   return apiFetch('/sp/calendar');
 }
 
@@ -841,20 +849,92 @@ export async function fetchCampusWebPlanner(): Promise<unknown> {
 
 // ── Campus Web adapters: normalize Campus Web data → our app types ──
 
-export function adaptCampusWebAttendance(user: CampusWebUserResponse): AttendanceResponse {
-  const attendance: Attendance[] = (user.courses || [])
-    .filter((c) => Number(c.hoursConducted) > 0)
-    .map((c) => ({
-      courseCode: c.subject_code || '',
-      courseTitle: c.subject_name || '',
-      category: c.subject_type || '',
-      facultyName: '',
-      slot: '',
-      hoursConducted: Number(c.hoursConducted) || 0,
-      hoursAbsent: (Number(c.hoursConducted) || 0) - (Number(c.hoursPresent) || 0),
-      attendancePercentage: Number(c.attendancePercent) || 0,
-    }));
+export async function fetchCampusWebStudentPortalAttendance(netId: string): Promise<AttendanceResponse> {
+  const cleanNetId = netId.split('@')[0].trim();
+  const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/student-portal/attendance')}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ net_id: cleanNetId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  const list = Array.isArray(data.attendance) ? data.attendance : (Array.isArray(data) ? data : []);
+  if (res.ok && list.length > 0) {
+    return {
+      regNumber: cleanNetId,
+      attendance: list.map((a: any) => ({
+        courseCode: a.courseCode || a.course_code || a.code || '',
+        courseTitle: a.courseTitle || a.course_name || a.title || '',
+        category: a.category || a.type || '',
+        facultyName: a.facultyName || a.faculty || '',
+        slot: a.slot || '',
+        hoursConducted: Number(a.hoursConducted || a.conducted || a.total_hours) || 0,
+        hoursAbsent: Number(a.hoursAbsent || a.absent) || 0,
+        attendancePercentage: Number(a.attendancePercentage || a.percentage || a.percent) || 0,
+      })),
+      status: 200,
+    };
+  }
+  return { regNumber: cleanNetId, attendance: [], status: 200 };
+}
+
+export function adaptCampusWebAttendance(user: CampusWebUserResponse | any): AttendanceResponse {
+  const courses: any[] = user?.courses || user?.data?.courses || (Array.isArray(user) ? user : []);
+  const attendance: Attendance[] = courses
+    .map((c: any) => {
+      const conducted = Number(c.hoursConducted || c.conductedHours || c.total_hours || c.conducted || 0);
+      const present = Number(c.hoursPresent || c.presentHours || c.attended_hours || c.present || 0);
+      const pct = Number(c.attendancePercent || c.attendance_percentage || c.percentage || c.percent || (conducted > 0 ? (present / conducted) * 100 : 0));
+      const absent = conducted > 0 ? conducted - present : Number(c.hoursAbsent || c.absentHours || c.absent || 0);
+      return {
+        courseCode: c.subject_code || c.course_code || c.code || '',
+        courseTitle: c.subject_name || c.course_name || c.title || '',
+        category: c.subject_type || c.category || c.type || '',
+        facultyName: c.faculty_name || c.faculty || '',
+        slot: c.slot || c.room_code || '',
+        hoursConducted: conducted,
+        hoursAbsent: Math.max(0, absent),
+        attendancePercentage: Math.round(pct * 100) / 100,
+      };
+    })
+    .filter((a) => a.courseCode || a.courseTitle || a.hoursConducted > 0);
+
   return { regNumber: '', attendance, status: 200 };
+}
+
+export function adaptCampusWebPlanner(plannerData: any): CalendarResponse {
+  const items: any[] = Array.isArray(plannerData) ? plannerData : (plannerData?.planner || plannerData?.calendar || plannerData?.data || []);
+  const monthsMap = new Map<string, CalendarDay[]>();
+
+  for (const item of items) {
+    const rawDate = item.date || item.Date || '';
+    if (!rawDate) continue;
+
+    const dateObj = new Date(rawDate);
+    if (isNaN(dateObj.getTime())) continue;
+
+    const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+    const dayNum = dateObj.getDate();
+
+    if (!monthsMap.has(monthKey)) {
+      monthsMap.set(monthKey, []);
+    }
+
+    const days = monthsMap.get(monthKey)!;
+    days.push({
+      date: String(dayNum).padStart(2, '0'),
+      day: String(dayNum),
+      dayOrder: item.dayOrder || item.day_order || item.dayOrderName || '',
+      event: item.event || item.eventName || item.description || '',
+      isHoliday: Boolean(item.is_holiday || item.isHoliday || item.holiday || String(item.event || '').toLowerCase().includes('holiday')),
+    });
+  }
+
+  const calendar: CalendarMonth[] = Array.from(monthsMap.entries()).map(([monthName, days]) => ({
+    month: monthName,
+    days: days.sort((a, b) => Number(a.date) - Number(b.date)),
+  }));
+
+  return { calendar, status: 200 };
 }
 
 export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse {
