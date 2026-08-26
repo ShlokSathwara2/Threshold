@@ -16,24 +16,43 @@ export async function POST(req: Request) {
     }
 
     const cleanNetId = String(net_id).split('@')[0].trim();
+    const username = net_id.includes('@') ? net_id : `${cleanNetId}@srmist.edu.in`;
 
-    const response = await fetch('https://campusapi.fly.dev/api/student-portal/login', {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Origin': 'https://campusweb.in',
+      'Referer': 'https://campusweb.in/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    };
+
+    // Try /api/auth/login/ first
+    let response = await fetch('https://campusapi.fly.dev/api/auth/login/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'https://campusweb.in',
-        'Referer': 'https://campusweb.in/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-      body: JSON.stringify({ net_id: cleanNetId, password }),
+      headers,
+      body: JSON.stringify({ username, password }),
     });
 
-    const resText = await response.text();
+    let resText = await response.text();
     let data: any = {};
     try {
       data = JSON.parse(resText);
     } catch {
       data = { message: resText };
+    }
+
+    // Fallback to /api/student-portal/login if needed
+    if (!response.ok && data.message?.includes('Invalid request body')) {
+      response = await fetch('https://campusapi.fly.dev/api/student-portal/login', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ net_id: cleanNetId, password }),
+      });
+      resText = await response.text();
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        data = { message: resText };
+      }
     }
 
     if (!response.ok || data.status === 'fail' || data.status === 'error') {
@@ -45,16 +64,18 @@ export async function POST(req: Request) {
 
     // Extract CSRF token from headers or data
     const csrfToken =
-      response.headers.get('x-csrf-token') ||
-      response.headers.get('set-cookie') ||
-      data.token ||
       data.cookies ||
+      data.token ||
+      data.Cookies ||
+      data.COOKIE ||
+      data.cookie ||
       data['X-CSRF-Token'] ||
-      data.cookie;
+      response.headers.get('x-csrf-token') ||
+      response.headers.get('set-cookie');
 
     if (!csrfToken) {
       return NextResponse.json(
-        { success: false, message: data.message || 'Login failed — valid session token not received. Check your credentials.' },
+        { success: false, message: data.message || 'Login failed — session token not received. Check your credentials.' },
         { status: 401 }
       );
     }
