@@ -345,6 +345,7 @@ export default function AttendancePage() {
         onApply={(dates) => setLeaveDates(dates)}
         onReset={() => setLeaveDates(null)}
         active={leaveDates !== null}
+        hasMeta={hasMeta}
         leaveDays={projection?.leaveDays ?? 0}
         leaveFrom={projection?.leaveFrom ?? null}
         leaveTo={projection?.leaveTo ?? null}

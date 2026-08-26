@@ -9,6 +9,7 @@ interface Props {
   onApply: (dates: string[]) => void;
   onReset: () => void;
   active: boolean;
+  hasMeta: boolean;
   leaveDays: number;
   leaveFrom?: string | null;
   leaveTo?: string | null;
@@ -64,6 +65,7 @@ export default function LeavePlanner({
   onApply,
   onReset,
   active,
+  hasMeta,
   leaveDays,
   leaveFrom,
   leaveTo,
@@ -142,10 +144,10 @@ export default function LeavePlanner({
       {/* Single entry button */}
       <button
         onClick={() => {
-          if (active) return;
+          if (active || !hasMeta) return;
           setOpen(!open);
         }}
-        disabled={active}
+        disabled={active || !hasMeta}
         style={{
           width: '100%',
           display: 'flex',
@@ -163,14 +165,26 @@ export default function LeavePlanner({
           fontWeight: 700,
           cursor: 'pointer',
           transition: 'all 0.2s',
-          opacity: active ? 0.5 : 1,
+          opacity: active ? 0.5 : hasMeta ? 1 : 0.5,
         }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M8 2v4M16 2v4M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
         </svg>
-        {active ? 'Leave projection active' : 'Leave planner'}
+        {active ? 'Leave projection active' : hasMeta ? 'Leave planner' : 'Leave planner (needs timetable)'}
       </button>
+
+      {!hasMeta && !active && (
+        <p style={{
+          margin: '6px 0 0',
+          fontSize: '0.7rem',
+          color: '#fbbf24',
+          lineHeight: 1.5,
+          textAlign: 'center',
+        }}>
+          Log into Academia from the dashboard to load your timetable — needed for accurate class counts.
+        </p>
+      )}
 
       {/* Panel */}
       <AnimatePresence>
