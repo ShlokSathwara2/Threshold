@@ -804,7 +804,7 @@ export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
   if (session.user) headers['X-Net-ID'] = session.user;
-  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/user/`, {
+  const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/user/')}`, {
     method: 'GET',
     headers,
     cache: 'no-store',
@@ -817,7 +817,7 @@ export async function fetchCampusWebTimetable(comboBatch: string): Promise<unkno
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
-  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/timetable/${comboBatch}`, {
+  const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent(`/api/auth/timetable/${comboBatch}`)}`, {
     method: 'GET',
     headers,
     cache: 'no-store',
@@ -830,7 +830,7 @@ export async function fetchCampusWebPlanner(): Promise<unknown> {
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
-  const res = await fetch(`${CAMPUS_WEB_API}/api/auth/planner`, {
+  const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/planner')}`, {
     method: 'GET',
     headers,
     cache: 'no-store',
