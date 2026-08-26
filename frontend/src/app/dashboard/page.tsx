@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -166,7 +166,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!isSpLoggedIn()) {
+    if (!isSpLoggedIn() && !isCampusWebSession()) {
       router.push('/sp-login');
     }
   }, [router]);
@@ -181,7 +181,6 @@ export default function DashboardPage() {
       return;
     }
     if (cal?.calendar?.length) {
-      // Planner is too stale to resolve; don't trust cal.today either.
       setTodayDO(null);
       setCalError(cal.error ? (cal.message || 'Calendar unavailable') : null);
       return;
@@ -193,26 +192,83 @@ export default function DashboardPage() {
       return;
     }
     setTodayDO(null);
-    setCalError(cal?.error ? (cal.message || 'Calendar unavailable') : null);
+    setCalError(null);
   };
 
-  // Fetches everything in parallel (profile + calendar + internal marks,
-  // then academia timetable if logged in) and refreshes the local cache.
   const fetchAll = useCallback(async () => {
     if (isCampusWebSession()) {
-      // Campus Web: user endpoint provides name + attendance; no calendar/internal marks
       try {
         const user = await fetchCampusWebUser();
-        if (user.name) {
-          const p: SpProfile = { name: user.name };
-          setProfile(p);
-          setCached<SpProfile>('profile', { ...p, photo: undefined });
+        const { adaptCampusWebProfile, adaptCampusWebMarks, adaptCampusWebPlanner } = await import('@/lib/api');
+        const session = JSON.parse(localStorage.getItem('threshold_session') || '{}');
+        const netId = session?.user || '';
+
+        const profileResp = adaptCampusWebProfile(user, netId);
+        if (profileResp.profile) {
+          setProfile(profileResp.profile);
+          setCached<SpProfile>('profile', { ...profileResp.profile, photo: undefined });
         }
-      } catch { /* keep defaults */ }
-      applyToday(null);
+
+        const marksResp = adaptCampusWebMarks(user);
+        const im: InternalMark[] | null = marksResp.marks.length
+          ? marksResp.marks.flatMap((m) => {
+              const items: InternalMark[] = [];
+              if (m.testPerformance?.length) {
+                for (const tp of m.testPerformance) {
+                  items.push({
+                    code: m.courseCode,
+                    description: tp.test || m.courseName,
+                    scored: String(tp.marks?.scored ?? ''),
+                    maxMark: String(tp.marks?.total ?? ''),
+                  });
+                }
+              } else if (m.overall?.scored) {
+                items.push({
+                  code: m.courseCode,
+                  description: m.courseName,
+                  scored: m.overall.scored,
+                  maxMark: m.overall.total,
+                });
+              }
+              return items;
+            })
+          : null;
+        setInternalMarks(im);
+        if (im) setCached<InternalMark[]>('internalMarks', im);
+
+        try {
+          const planner: any = await import('@/lib/api').then((m) => m.fetchCampusWebPlanner());
+          const cal = adaptCampusWebPlanner(planner);
+          setCalendar(cal);
+          setCached<CalendarResponse>('calendar', cal);
+          applyToday(cal);
+          setStaleAsOf(null);
+          setOffline(false);
+        } catch {
+          applyToday(null);
+          setOffline(true);
+        }
+
+        if (!isAcademiaLoggedIn()) {
+          setTodayClasses(null);
+          return;
+        }
+        try {
+          const tt: TimetableResponse = await fetchTimetable();
+          setTodayClasses(tt.schedule?.length ? tt.schedule : null);
+        } catch {
+          setTodayClasses(null);
+        }
+      } catch {
+        setProfile(null);
+        setInternalMarks(null);
+        applyToday(null);
+        setOffline(true);
+      }
       return;
     }
 
+    // SP path
     const [pRes, calRes, imRes] = await Promise.allSettled([
       fetchSpProfile(),
       fetchCalendar(),
@@ -222,7 +278,6 @@ export default function DashboardPage() {
     if (pRes.status === 'fulfilled' && pRes.value.profile) {
       const p = pRes.value.profile;
       setProfile(p);
-      // Don't cache the (potentially large) photo — it loads on demand.
       setCached<SpProfile>('profile', { ...p, photo: undefined });
     }
     if (calRes.status === 'fulfilled') {
