@@ -345,7 +345,7 @@ export default function LoginPage() {
                   type="text"
                   value={netId}
                   onChange={(e) => setNetId(e.target.value)}
-                  placeholder="e.g. ss1516"
+                  placeholder="e.g. xy0000"
                   spellCheck={false}
                   style={inputStyle}
                   onFocus={(e) => e.target.style.borderColor = 'rgba(139, 92, 246, 0.5)'}
