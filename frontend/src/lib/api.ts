@@ -535,6 +535,18 @@ export interface TimetableResponse {
 }
 
 export async function fetchTimetable(): Promise<TimetableResponse> {
+  if (isCampusWebSession()) {
+    try {
+      const user: CampusWebUserResponse = await fetchCampusWebUser();
+      const comboBatch = user.comboBatch?.[user.comboBatch.length - 1] || '';
+      if (!comboBatch) return { regNumber: '', batch: '', schedule: [], status: 200, error: 'No combo batch found for your account' };
+      const raw: CampusWebTimetableResponse = await fetchCampusWebTimetable(comboBatch) as CampusWebTimetableResponse;
+      const schedule = adaptCampusWebTimetable(raw, user.courses);
+      return { regNumber: user.registrationNumber || '', batch: comboBatch, schedule, status: 200 };
+    } catch (e) {
+      return { regNumber: '', batch: '', schedule: [], status: 200, error: e instanceof Error ? e.message : 'Failed to load timetable from Campus Web' };
+    }
+  }
   return apiFetch('/timetable');
 }
 

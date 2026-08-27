@@ -151,7 +151,7 @@ export default function DashboardPage() {
   }, [subjects, todayDO]);
 
   const loadTimetable = async () => {
-    if (!isAcademiaLoggedIn()) return;
+    if (!isAcademiaLoggedIn() && !isCampusWebSession()) return;
     try {
       const tt: TimetableResponse = await fetchTimetable();
       setTodayClasses(tt.schedule?.length ? tt.schedule : null);
@@ -1482,7 +1482,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {isAcademiaLoggedIn() && todayDO && (currentClass || nextClass) && (
+        {(isAcademiaLoggedIn() || isCampusWebSession()) && todayDO && (currentClass || nextClass) && (
           <div style={{
             margin: '14px 16px',
             padding: '15px 16px',
@@ -1538,13 +1538,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!isAcademiaLoggedIn() && (
+        {!isAcademiaLoggedIn() && !isCampusWebSession() && (
           <div id="academia-login" style={{ padding: '16px' }}>
             <AcademiaLoginCard onSuccess={handleAcademiaLogin} />
           </div>
         )}
 
-        {isAcademiaLoggedIn() && !todayDO && (
+        {(isAcademiaLoggedIn() || isCampusWebSession()) && !todayDO && (
           <p style={{
             padding: '16px',
             margin: 0,

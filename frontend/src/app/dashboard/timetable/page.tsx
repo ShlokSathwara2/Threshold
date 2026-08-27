@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   isLoggedIn,
   isAcademiaLoggedIn,
+  isCampusWebSession,
   getAcademiaUsername,
   setAcademiaCookies,
   academiaLogin,
@@ -89,6 +90,7 @@ export default function TimetablePage() {
   const { subjects } = useAttendance();
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [academiaReady] = useState(() => isAcademiaLoggedIn());
+  const [campusWebActive] = useState(() => isCampusWebSession());
   const [schedule, setSchedule] = useState<TimetableSlot[]>([]);
   const [batch, setBatch] = useState('');
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -131,14 +133,23 @@ export default function TimetablePage() {
     return next && daysUntil(next.next, todayD) <= 7 ? next : null;
   }, [exams]);
 
-  // Show a cached timetable only for the currently logged-in academia user
+  // Show a cached timetable for the currently logged-in user (academia or campus web)
   useEffect(() => {
-    if (!isAcademiaLoggedIn()) return;
-    const cached = loadCache(getAcademiaUsername());
-    if (cached) {
-      setSchedule(cached.schedule);
-      setBatch(cached.batch);
-      setSavedAt(cached.savedAt);
+    if (isAcademiaLoggedIn()) {
+      const cached = loadCache(getAcademiaUsername());
+      if (cached) {
+        setSchedule(cached.schedule);
+        setBatch(cached.batch);
+        setSavedAt(cached.savedAt);
+      }
+    } else if (isCampusWebSession()) {
+      const session = JSON.parse(localStorage.getItem('threshold_session') || '{}');
+      const cached = loadCache(session?.user);
+      if (cached) {
+        setSchedule(cached.schedule);
+        setBatch(cached.batch);
+        setSavedAt(cached.savedAt);
+      }
     }
   }, []);
 
@@ -153,14 +164,15 @@ export default function TimetablePage() {
       setBatch(res.batch || '');
       const now = Date.now();
       setSavedAt(now);
-      saveCache(getAcademiaUsername(), { batch: res.batch || '', savedAt: now, schedule: next });
+      const cacheUser = isAcademiaLoggedIn() ? getAcademiaUsername() : (() => {
+        try { return JSON.parse(localStorage.getItem('threshold_session') || '{}')?.user || 'anon'; } catch { return 'anon'; }
+      })();
+      saveCache(cacheUser, { batch: res.batch || '', savedAt: now, schedule: next });
       if (next.length === 0) {
         setError('Timetable is empty for your batch — the portal may not have published it yet.');
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load timetable';
-      // Keep the academia cookie — a transient error (deploy, timeout) shouldn't
-      // wipe the saved session. Show the error; the user can re-login if it persists.
       setError(msg);
     } finally {
       setLoading(false);
@@ -168,12 +180,12 @@ export default function TimetablePage() {
   }, []);
 
   useEffect(() => {
-    if (academiaReady) {
+    if (academiaReady || campusWebActive) {
       fetchLive();
     }
-  }, [academiaReady, fetchLive]);
+  }, [academiaReady, campusWebActive, fetchLive]);
   usePullToRefresh(() => {
-    if (isAcademiaLoggedIn()) return fetchLive();
+    if (isAcademiaLoggedIn() || isCampusWebSession()) return fetchLive();
     return Promise.resolve();
   });
 
@@ -217,7 +229,7 @@ export default function TimetablePage() {
     }
   }, [username, password, captcha, captchaText, fetchLive]);
 
-  const needsLogin = !isAcademiaLoggedIn();
+  const needsLogin = !isAcademiaLoggedIn() && !isCampusWebSession();
 
   // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
