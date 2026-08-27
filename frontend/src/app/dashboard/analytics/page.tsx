@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   isSpLoggedIn,
+  isCampusWebSession,
   fetchSpGrades,
   fetchSpInternalMarks,
   type GradesResponse,
@@ -44,6 +45,9 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
+      if (isCampusWebSession()) {
+        throw new Error('Analytics requires the Android app. SRM portal does not allow the website to access grades and internal marks data.');
+      }
       const [gRes, iRes] = await Promise.allSettled([
         fetchSpGrades(),
         fetchSpInternalMarks(),

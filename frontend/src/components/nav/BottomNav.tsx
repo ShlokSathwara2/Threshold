@@ -1,7 +1,10 @@
 ﻿"use client";
 
 import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useTheme, hexToRgba } from '@/lib/theme';
+import { isCampusWebSession } from '@/lib/api';
+import FeatureLockModal from '@/components/dashboard/FeatureLockModal';
 
 interface NavItem {
   key: string;
@@ -74,6 +77,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { theme } = useTheme();
+  const [lockModal, setLockModal] = useState<{ show: boolean; feature?: string }>({ show: false });
 
   const activeIndex = Math.max(
     0,
@@ -81,6 +85,8 @@ export default function BottomNav() {
   );
 
   return (
+    <>
+    <FeatureLockModal show={lockModal.show} feature={lockModal.feature} onClose={() => setLockModal({ show: false })} />
     <div
       style={{
         position: 'fixed',
@@ -113,6 +119,10 @@ export default function BottomNav() {
             <button
               key={item.key}
               onClick={() => {
+                if (item.key === 'profile' && isCampusWebSession()) {
+                  setLockModal({ show: true, feature: 'Profile' });
+                  return;
+                }
                 if (pathname !== item.path) router.push(item.path);
               }}
               aria-label={item.label}
@@ -125,6 +135,7 @@ export default function BottomNav() {
                 background: 'none',
                 cursor: 'pointer',
                 padding: 0,
+                position: 'relative',
               }}
             >
               {/* Inset capsule — breathing room on every side means it can
@@ -154,8 +165,18 @@ export default function BottomNav() {
                   filter: active ? `drop-shadow(0 0 7px ${hexToRgba(theme.accent, 0.8)})` : undefined,
                   transition: 'color 0.2s, filter 0.2s',
                   display: 'flex',
+                  position: 'relative',
                 }}>
                   {item.icon}
+                  {item.key === 'profile' && isCampusWebSession() && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-6px',
+                      fontSize: '0.5rem',
+                      lineHeight: 1,
+                    }}>🔒</span>
+                  )}
                 </div>
                 <span style={{
                   fontSize: '0.52rem',
@@ -174,5 +195,6 @@ export default function BottomNav() {
         })}
       </div>
     </div>
+    </>
   );
 }

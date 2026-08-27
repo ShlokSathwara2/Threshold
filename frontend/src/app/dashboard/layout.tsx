@@ -15,6 +15,7 @@ import { ThemeProvider, useTheme, overlay, overlayBg } from '@/lib/theme';
 import { checkForUpdate, notifyUpdate, type UpdateInfo } from '@/lib/update-check';
 import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
 import WelcomeModal from '@/components/dashboard/WelcomeModal';
+import FeatureLockModal from '@/components/dashboard/FeatureLockModal';
 import Lenis from 'lenis';
 
 // "ra2411003010247@srmist.edu.in" → "Ra2411003010247"
@@ -40,7 +41,7 @@ const navItemAnim = {
   show: { opacity: 1, x: 0, transition: { duration: 0.28, ease: 'easeOut' as const } },
 };
 
-type NavItem = { label: string; path: string; icon: string };
+type NavItem = { label: string; path: string; icon: string; locked?: boolean };
 type NavGroup = {
   label: string;
   items: NavItem[];
@@ -51,25 +52,25 @@ const navGroups: NavGroup[] = [
   {
     label: 'Academics',
     items: [
-      { label: 'Marks', path: '/dashboard/marks', icon: '◆' },
+      { label: 'Marks', path: '/dashboard/marks', icon: '◆', locked: true },
       { label: 'CGPA Calc', path: '/dashboard/cgpa', icon: '▣' },
       { label: 'Internal Marks', path: '/dashboard/internal-marks', icon: '✸' },
-      { label: 'Course Status', path: '/dashboard/course-status', icon: '✓' },
+      { label: 'Course Status', path: '/dashboard/course-status', icon: '✓', locked: true },
     ],
   },
   {
     label: 'Examination',
     expandable: true,
     items: [
-      { label: 'Hall Ticket', path: '/dashboard/exam/hall-ticket', icon: '⚑' },
-      { label: 'Exam Timetable', path: '/dashboard/exam/timetable', icon: '▧' },
-      { label: 'Provisional Results', path: '/dashboard/exam/provisional-results', icon: '★' },
+      { label: 'Hall Ticket', path: '/dashboard/exam/hall-ticket', icon: '⚑', locked: true },
+      { label: 'Exam Timetable', path: '/dashboard/exam/timetable', icon: '▧', locked: true },
+      { label: 'Provisional Results', path: '/dashboard/exam/provisional-results', icon: '★', locked: true },
     ],
   },
   {
     label: 'Insights',
     items: [
-      { label: 'Analytics', path: '/dashboard/analytics', icon: '◉' },
+      { label: 'Analytics', path: '/dashboard/analytics', icon: '◉', locked: true },
       { label: 'Insights', path: '/dashboard/insights', icon: '🧭' },
     ],
   },
@@ -139,6 +140,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [examOpen, setExamOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [lockModal, setLockModal] = useState<{ show: boolean; feature?: string }>({ show: false });
   const mainRef = useRef<HTMLDivElement | null>(null);
   const navScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -147,6 +149,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   // users with an installed build get notified (popup + native notification)
   // as soon as a new release is published — once per version.
   useEffect(() => {
+    if (isCampusWebSession()) return;
     let disposed = false;
     const check = () => {
       if (disposed) return;
@@ -570,11 +573,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 >
                   {group.items.map((item) => {
                     const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
+                    const isLocked = item.locked && isCampusWebSession();
                     return (
                       <motion.button
                         key={item.path}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
+                          if (isLocked) {
+                            setLockModal({ show: true, feature: item.label });
+                            return;
+                          }
                           router.push(item.path);
                           setSidebarOpen(false);
                         }}
@@ -602,6 +610,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                           style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center', flexShrink: 0 }}
                         >{item.icon}</motion.span>
                         {item.label}
+                        {isLocked && (
+                          <span style={{ marginLeft: 'auto', fontSize: '0.7rem', opacity: 0.5 }}>🔒</span>
+                        )}
                       </motion.button>
                     );
                   })}
@@ -609,11 +620,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               ) : (
                 group.items.map((item) => {
                   const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
+                  const isLocked = item.locked && isCampusWebSession();
                   return (
                     <motion.button
                       key={item.path}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => {
+                        if (isLocked) {
+                          setLockModal({ show: true, feature: item.label });
+                          return;
+                        }
                         router.push(item.path);
                         setSidebarOpen(false);
                       }}
@@ -641,6 +657,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                         style={{ fontSize: '1rem', width: '20px', textAlign: 'center', flexShrink: 0 }}
                       >{item.icon}</motion.span>
                       {item.label}
+                      {isLocked && (
+                        <span style={{ marginLeft: 'auto', fontSize: '0.7rem', opacity: 0.5 }}>🔒</span>
+                      )}
                     </motion.button>
                   );
                 })
@@ -681,7 +700,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <WelcomeModal />
 
       {/* New version available — global popup on every dashboard page */}
-      <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />
+      {!isCampusWebSession() && <UpdatePrompt info={updateInfo} onClose={() => setUpdateInfo(null)} />}
+
+      {/* Feature lock modal for Campus Web */}
+      <FeatureLockModal show={lockModal.show} feature={lockModal.feature} onClose={() => setLockModal({ show: false })} />
 
       {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
       {sessionExpired && (

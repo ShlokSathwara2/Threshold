@@ -774,7 +774,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {!isAcademiaLoggedIn() && (
+      {!isAcademiaLoggedIn() && !isCampusWebSession() && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

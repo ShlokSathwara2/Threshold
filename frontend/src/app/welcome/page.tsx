@@ -401,8 +401,9 @@ export default function WelcomePage() {
               )}
               {!canInstall && (
                 <a
-                  href="https://github.com/ShlokSathwara2/Threshold_APK/raw/main/Threshold.apk"
-                  download="Threshold.apk"
+                  href="https://threshold-pi-seven.vercel.app"
+                  target="_blank"
+                  rel="noreferrer"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -427,17 +428,17 @@ export default function WelcomePage() {
                     flexShrink: 0,
                   }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="2" y1="12" x2="22" y2="12" />
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                     </svg>
                   </div>
                   <div>
                     <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#c4b5fd', margin: 0 }}>
-                      Download APK
+                      Download Website
                     </p>
                     <p style={{ fontSize: '0.7rem', color: W(0.4), margin: '3px 0 0', lineHeight: 1.4 }}>
-                      Android app — install directly on your phone
+                      Access Threshold on any device
                     </p>
                   </div>
                   <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#a78bfa' }}>↗</span>
