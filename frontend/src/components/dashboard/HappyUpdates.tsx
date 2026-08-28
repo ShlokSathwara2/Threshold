@@ -65,6 +65,7 @@ export default function HappyUpdates({
 
   return (
     <motion.div
+      className="thr-gradient-border"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.26 }}

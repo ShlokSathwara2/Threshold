@@ -652,6 +652,7 @@ export default function DashboardPage() {
 
       {/* ── Hero ── */}
       <motion.div
+        className="thr-gradient-border"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         style={{
@@ -843,7 +844,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {!isAcademiaLoggedIn() && !isCampusWebSession() && (
+      {!isAcademiaLoggedIn() && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -917,6 +918,7 @@ export default function DashboardPage() {
       {/* ── Feature briefing card ── */}
       {showFeatureBrief && (
         <motion.div
+          className="thr-gradient-border"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12 }}
@@ -1011,6 +1013,7 @@ export default function DashboardPage() {
       {/* ── Today's briefs: live, ranked by what matters most ── */}
       {shownBriefs.length > 0 && (
         <motion.div
+          className="thr-gradient-border"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
@@ -1263,6 +1266,7 @@ export default function DashboardPage() {
       {/* ── Exams strip ── */}
       {exams.length > 0 && (
         <motion.div
+          className="thr-gradient-border"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.28 }}
@@ -1316,6 +1320,7 @@ export default function DashboardPage() {
       {/* ── Alerts ── */}
       {(!loading || upcomingExams.length > 0) && (
         <motion.div
+          className="thr-gradient-border"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -1484,6 +1489,7 @@ export default function DashboardPage() {
 
       {/* ── Today's Classes ── */}
       <motion.div
+        className="thr-gradient-border"
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}

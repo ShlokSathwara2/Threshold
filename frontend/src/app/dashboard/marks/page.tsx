@@ -183,6 +183,7 @@ export default function MarksPage() {
 
       {/* CGPA Hero */}
       <motion.div
+        className="thr-gradient-border"
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         style={{

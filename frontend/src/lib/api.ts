@@ -1041,11 +1041,12 @@ export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse 
 }
 
 export function adaptCampusWebProfile(user: CampusWebUserResponse, netId: string): SpProfileResponse {
+  const sem = user.semester ? parseInt(user.semester, 10) : undefined;
   return {
     profile: {
       name: user.name || netId,
       reg_number: user.registrationNumber || netId,
-      semester: user.semester ? parseInt(user.semester, 10) : undefined,
+      semester: Number.isFinite(sem) ? sem : undefined,
       batch: Array.isArray(user.comboBatch) ? user.comboBatch.join(',') : (user.comboBatch as any) || undefined,
     },
   };

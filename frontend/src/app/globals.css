@@ -406,7 +406,7 @@ input:focus, button:focus-visible {
   mask-composite: exclude;
   animation: gradient-border-spin 4s linear infinite;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.5;
   transition: opacity 0.3s;
 }
 .thr-gradient-border:hover::before {

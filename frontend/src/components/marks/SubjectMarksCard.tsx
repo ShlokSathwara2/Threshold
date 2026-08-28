@@ -26,6 +26,7 @@ export default function SubjectMarksCard({ subject, index }: { subject: Mark; in
 
   return (
     <motion.div
+      className="thr-gradient-border"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}

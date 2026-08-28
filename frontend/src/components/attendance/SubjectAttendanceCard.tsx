@@ -96,7 +96,7 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
       transition={{ duration: 0.4, delay: index * 0.05 }}
       whileHover={{ y: -2 }}
       onClick={() => setExpanded(!expanded)}
-      className={projected ? 'thr-gradient-border' : undefined}
+      className="thr-gradient-border"
       style={{
         padding: '16px',
         borderRadius: '14px',
