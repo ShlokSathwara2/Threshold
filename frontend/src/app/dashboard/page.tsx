@@ -1607,7 +1607,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!isAcademiaLoggedIn() && !isCampusWebSession() && (
+      {!isAcademiaLoggedIn() && (
           <div id="academia-login" style={{ padding: '16px' }}>
             <AcademiaLoginCard onSuccess={handleAcademiaLogin} />
           </div>

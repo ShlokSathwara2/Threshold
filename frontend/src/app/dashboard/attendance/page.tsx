@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, isAcademiaLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
+import { isLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
 import LeavePlanner from '@/components/attendance/LeavePlanner';
 import ShareCard from '@/components/dashboard/ShareCard';
-import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
@@ -341,43 +340,6 @@ export default function AttendancePage() {
       {/* Overall Summary */}
       <AttendanceSummary stats={overall} />
 
-      {/* Academia login scroll button when timetable data is missing */}
-      {metaReady && scheduleByCourse.size === 0 && !isAcademiaLoggedIn() && (
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          onClick={() => {
-            const el = document.getElementById('academia-login');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }}
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '12px 16px',
-            marginBottom: '16px',
-            borderRadius: '14px',
-            border: '1px solid rgba(168,85,247,0.35)',
-            background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.10))',
-            color: '#c084fc',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(168,85,247,0.2)',
-            fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          <span style={{ fontSize: '1rem' }}>🎓</span>
-          Log into Academia for Timetable
-          <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>↓</span>
-        </motion.button>
-      )}
-
       {/* Leave planner */}
       <LeavePlanner
         onApply={(dates) => setLeaveDates(dates)}
@@ -515,13 +477,6 @@ export default function AttendancePage() {
           </div>
         ))}
       </div>
-
-      {/* Academia login card — anchor target for scroll button */}
-      {metaReady && scheduleByCourse.size === 0 && !isAcademiaLoggedIn() && (
-        <div id="academia-login" style={{ marginBottom: '16px' }}>
-          <AcademiaLoginCard onSuccess={() => fetchMeta()} />
-        </div>
-      )}
 
       {/* Refresh */}
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
