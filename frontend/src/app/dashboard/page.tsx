@@ -251,13 +251,25 @@ export default function DashboardPage() {
         }
 
         try {
-          const comboBatch = Array.isArray(user.comboBatch)
-            ? user.comboBatch[user.comboBatch.length - 1]
-            : String(user.comboBatch || '1');
-          const { fetchCampusWebTimetable, adaptCampusWebTimetable } = await import('@/lib/api');
-          const ttData: any = await fetchCampusWebTimetable(comboBatch);
-          const schedule = adaptCampusWebTimetable(ttData, user.courses);
-          if (schedule.length) setTodayClasses(schedule);
+          const { adaptCampusWebTimetable } = await import('@/lib/api');
+          const tt: TimetableResponse = await fetchTimetable();
+          if (tt.schedule?.length) {
+            setTodayClasses(tt.schedule);
+          } else if (isCampusWebSession()) {
+            // Campus Web failed — try direct with fallback batches
+            const comboBatch = Array.isArray(user.comboBatch)
+              ? user.comboBatch[user.comboBatch.length - 1]
+              : String(user.comboBatch || '1');
+            const { fetchCampusWebTimetable } = await import('@/lib/api');
+            const batchesToTry = comboBatch && comboBatch !== '-' ? [comboBatch, '1', '2', '3'] : ['1', '2', '3'];
+            for (const batch of batchesToTry) {
+              try {
+                const ttData: any = await fetchCampusWebTimetable(batch);
+                const schedule = adaptCampusWebTimetable(ttData, user.courses);
+                if (schedule.length) { setTodayClasses(schedule); break; }
+              } catch { /* try next */ }
+            }
+          }
         } catch {
           // Keep cached timetable — don't clear on failure
         }

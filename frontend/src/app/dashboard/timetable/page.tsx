@@ -229,7 +229,8 @@ export default function TimetablePage() {
     }
   }, [username, password, captcha, captchaText, fetchLive]);
 
-  const needsLogin = !isAcademiaLoggedIn() && !isCampusWebSession();
+  // Show Academia login when: no session at all, OR Campus Web session but timetable failed
+  const needsLogin = !isAcademiaLoggedIn() && (!isCampusWebSession() || (error && schedule.length === 0));
 
   // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
@@ -459,6 +460,20 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fca5a5', fontSize: '0.78rem', margin: 0 }}>{error}</p>
+        </div>
+      )}
+
+      {error && schedule.length === 0 && needsLogin && isCampusWebSession() && (
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          background: 'rgba(234, 179, 8, 0.06)',
+          border: '1px solid rgba(234, 179, 8, 0.15)',
+          marginBottom: '12px',
+        }}>
+          <p style={{ color: '#fcd34d', fontSize: '0.78rem', margin: 0 }}>
+            Your timetable isn&apos;t available through the portal — log in with your Academia credentials below to fetch it.
+          </p>
         </div>
       )}
 
