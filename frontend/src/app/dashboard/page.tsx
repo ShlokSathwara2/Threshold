@@ -7,6 +7,7 @@ import {
   isSpLoggedIn,
   isCampusWebSession,
   isAcademiaLoggedIn,
+  getAcademiaUsername,
   fetchCalendar,
   fetchTimetable,
   fetchSpProfile,
@@ -251,14 +252,14 @@ export default function DashboardPage() {
 
         try {
           const comboBatch = Array.isArray(user.comboBatch)
-            ? user.comboBatch[0]
+            ? user.comboBatch[user.comboBatch.length - 1]
             : String(user.comboBatch || '1');
           const { fetchCampusWebTimetable, adaptCampusWebTimetable } = await import('@/lib/api');
           const ttData: any = await fetchCampusWebTimetable(comboBatch);
           const schedule = adaptCampusWebTimetable(ttData, user.courses);
-          setTodayClasses(schedule.length ? schedule : null);
+          if (schedule.length) setTodayClasses(schedule);
         } catch {
-          setTodayClasses(null);
+          // Keep cached timetable — don't clear on failure
         }
       } catch {
         setProfile(null);
@@ -299,14 +300,13 @@ export default function DashboardPage() {
     }
 
     if (!isAcademiaLoggedIn()) {
-      setTodayClasses(null);
       return;
     }
     try {
       const tt: TimetableResponse = await fetchTimetable();
-      setTodayClasses(tt.schedule?.length ? tt.schedule : null);
+      if (tt.schedule?.length) setTodayClasses(tt.schedule);
     } catch {
-      setTodayClasses(null);
+      // Keep cached timetable — don't clear on failure
     }
   }, []);
 
@@ -322,6 +322,18 @@ export default function DashboardPage() {
     if (cachedIM) setInternalMarks(cachedIM.data);
     const cachedProfile = getCached<SpProfile>('profile');
     if (cachedProfile?.data) setProfile({ ...cachedProfile.data, photo: undefined });
+
+    // Load timetable from cache so the dashboard shows classes even if live fetch fails
+    try {
+      const cacheUser = isAcademiaLoggedIn()
+        ? getAcademiaUsername()
+        : JSON.parse(localStorage.getItem('threshold_session') || '{}')?.user || 'anon';
+      const raw = localStorage.getItem(`threshold_timetable_cache__${cacheUser}`);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached?.schedule?.length) setTodayClasses(cached.schedule);
+      }
+    } catch { /* ignore */ }
 
     fetchAll();
   }, [fetchAll]);
@@ -1557,7 +1569,7 @@ export default function DashboardPage() {
           </p>
         )}
 
-        {isAcademiaLoggedIn() && todayDO && (
+        {(isAcademiaLoggedIn() || isCampusWebSession()) && todayDO && (
           todaysSlots.length === 0 ? (
             <div style={{ padding: '18px 16px', textAlign: 'center' }}>
               <p style={{
