@@ -6,6 +6,7 @@ import {
   fetchAcademiaAttendance,
   fetchCourses,
   fetchUser,
+  fetchTimetable,
   isCampusWebSession,
   isAcademiaLoggedIn,
   fetchCampusWebUser,
@@ -173,6 +174,36 @@ export function useAttendance(): UseAttendanceResult {
               facultyId: c.facultyId,
             };
           });
+        } else {
+          // fetchCourses failed — fall back to timetable for slot/faculty/room
+          try {
+            const ttRes = await Promise.race([
+              fetchTimetable(),
+              new Promise<never>((_, reject) =>
+                window.setTimeout(() => reject(new Error('timeout')), 4000)
+              ),
+            ]);
+            if (ttRes.schedule?.length) {
+              const ttByCode = new Map<string, { slot: string; faculty: string; room: string }>();
+              for (const t of ttRes.schedule) {
+                if (!ttByCode.has(t.courseCode)) {
+                  ttByCode.set(t.courseCode, { slot: t.slot, faculty: t.faculty, room: t.room });
+                }
+              }
+              calculated = calculated.map((s) => {
+                const t = ttByCode.get(s.courseCode);
+                if (!t) return s;
+                return {
+                  ...s,
+                  slot: s.slot || t.slot,
+                  facultyName: s.facultyName || t.faculty,
+                  room: s.room || t.room,
+                };
+              });
+            }
+          } catch {
+            // timetable also failed — subjects remain with whatever they had
+          }
         }
       }
 
