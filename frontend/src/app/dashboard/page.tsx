@@ -364,11 +364,9 @@ export default function DashboardPage() {
             name: u.name || '',
             reg_number: u.regNumber || '',
             program: u.program || '',
-            department: u.department || '',
-            year: u.year ?? null,
-            semester: u.semester ?? null,
+            semester: u.semester ?? undefined,
             section: u.section || '',
-            photo: null,
+            photo: undefined,
           });
         }
       } catch {
