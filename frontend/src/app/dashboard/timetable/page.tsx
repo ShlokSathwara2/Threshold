@@ -6,10 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   isLoggedIn,
   isAcademiaLoggedIn,
-  isCampusWebSession,
   getAcademiaUsername,
-  setAcademiaCookies,
-  academiaLogin,
   fetchTimetable,
   fetchCalendar,
   type TimetableSlot,
@@ -17,6 +14,7 @@ import {
 } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import { useAttendance } from '@/hooks/useAttendance';
 import { computeDayRecommendations, slotKey } from '@/lib/bunk-planner';
 import { loadOptionalHours, toggleOptionalHour } from '@/lib/optional-hours';
@@ -55,14 +53,6 @@ function saveCache(username: string | null, cache: TimetableCache) {
   }
 }
 
-function clearCache(username: string | null) {
-  try {
-    localStorage.removeItem(cacheKey(username));
-  } catch {
-    /* ignore */
-  }
-}
-
 // Times arrive as 12-hour strings without AM/PM: hours ≤ 6 are afternoon
 // (e.g. "01:25 - 02:15" = 1:25 PM), 12 is midday, 7–11 are morning.
 function parseClock(t: string | undefined): number | null {
@@ -89,20 +79,11 @@ export default function TimetablePage() {
   const WB = (a: number) => overlayBg(theme, a);
   const { subjects } = useAttendance();
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
-  const [academiaReady] = useState(() => isAcademiaLoggedIn());
-  const [campusWebActive] = useState(() => isCampusWebSession());
   const [schedule, setSchedule] = useState<TimetableSlot[]>([]);
   const [batch, setBatch] = useState('');
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loggingIn, setLoggingIn] = useState(false);
-  const [captcha, setCaptcha] = useState<{ image: string; cdigest: string } | null>(null);
-  const [captchaText, setCaptchaText] = useState('');
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -142,14 +123,6 @@ export default function TimetablePage() {
         setBatch(cached.batch);
         setSavedAt(cached.savedAt);
       }
-    } else if (isCampusWebSession()) {
-      const session = JSON.parse(localStorage.getItem('threshold_session') || '{}');
-      const cached = loadCache(session?.user);
-      if (cached) {
-        setSchedule(cached.schedule);
-        setBatch(cached.batch);
-        setSavedAt(cached.savedAt);
-      }
     }
   }, []);
 
@@ -164,9 +137,7 @@ export default function TimetablePage() {
       setBatch(res.batch || '');
       const now = Date.now();
       setSavedAt(now);
-      const cacheUser = isAcademiaLoggedIn() ? getAcademiaUsername() : (() => {
-        try { return JSON.parse(localStorage.getItem('threshold_session') || '{}')?.user || 'anon'; } catch { return 'anon'; }
-      })();
+      const cacheUser = getAcademiaUsername() || 'anon';
       saveCache(cacheUser, { batch: res.batch || '', savedAt: now, schedule: next });
       if (next.length === 0) {
         setError('Timetable is empty for your batch — the portal may not have published it yet.');
@@ -180,57 +151,16 @@ export default function TimetablePage() {
   }, []);
 
   useEffect(() => {
-    if (academiaReady || campusWebActive) {
+    if (isAcademiaLoggedIn()) {
       fetchLive();
     }
-  }, [academiaReady, campusWebActive, fetchLive]);
+  }, [fetchLive]);
   usePullToRefresh(() => {
-    if (isAcademiaLoggedIn() || isCampusWebSession()) return fetchLive();
+    if (isAcademiaLoggedIn()) return fetchLive();
     return Promise.resolve();
   });
 
-  const handleLogin = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password) {
-      setLoginError('Enter your academia username and password');
-      return;
-    }
-    setLoggingIn(true);
-    setLoginError('');
-    try {
-      const res = await academiaLogin(
-        username.trim(),
-        password,
-        captcha?.cdigest,
-        captcha ? captchaText.trim() : undefined
-      );
-      if (!res.success) {
-        if (res.captcha) {
-          setCaptcha(res.captcha);
-          setCaptchaText('');
-          setLoginError(res.message || 'Enter the CAPTCHA to continue');
-        } else {
-          setLoginError(res.message || 'Login failed — check your credentials');
-        }
-        return;
-      }
-      if (!res.cookies) {
-        setLoginError('Login succeeded but no session was returned — try again');
-        return;
-      }
-      setAcademiaCookies(res.cookies, username.trim());
-      clearCache(username.trim());
-      setCaptcha(null);
-      await fetchLive();
-    } catch (err: unknown) {
-      setLoginError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setLoggingIn(false);
-    }
-  }, [username, password, captcha, captchaText, fetchLive]);
-
-  // Show Academia login when: no session at all, OR Campus Web session but timetable failed
-  const needsLogin = !isAcademiaLoggedIn() && (!isCampusWebSession() || (error && schedule.length === 0));
+  const needsLogin = !isAcademiaLoggedIn();
 
   // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
@@ -326,112 +256,9 @@ export default function TimetablePage() {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
-            style={{
-              padding: '20px',
-              borderRadius: '18px',
-              background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.04))',
-              border: '1px solid rgba(34, 197, 94, 0.25)',
-              marginBottom: '16px',
-            }}
+            style={{ marginBottom: '16px' }}
           >
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--threshold-text)', marginBottom: '4px' }}>
-              Academia login needed
-            </h2>
-            <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
-              The timetable lives in academia, not the SP portal — and academia uses its own login
-              (your SP credentials won&apos;t work here). It&apos;s per-user and not saved on this
-              device — you&apos;ll be asked to log in again each time you open the app.
-            </p>
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="NetID — ....@srmist.edu.in"
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="username"
-                inputMode="email"
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: '12px',
-                  border: `1px solid ${WB(0.1)}`,
-                  background: WB(0.04),
-                  color: 'var(--threshold-text)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password (academia portal)"
-                autoComplete="current-password"
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: '12px',
-                  border: `1px solid ${WB(0.1)}`,
-                  background: WB(0.04),
-                  color: 'var(--threshold-text)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
-              />
-              {captcha && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px',
-                  borderRadius: '12px',
-                  background: 'var(--threshold-surface)',
-                  border: '1px solid var(--threshold-border)',
-                }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={captcha.image}
-                    alt="captcha"
-                    style={{ height: '40px', borderRadius: '8px', flexShrink: 0 }}
-                  />
-                  <input
-                    value={captchaText}
-                    onChange={(e) => setCaptchaText(e.target.value)}
-                    placeholder="Captcha text"
-                    autoCapitalize="none"
-                    style={{
-                      flex: 1,
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      border: `1px solid ${WB(0.1)}`,
-                      background: WB(0.04),
-                      color: 'var(--threshold-text)',
-                      fontSize: '0.85rem',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-              )}
-              {loginError && (
-                <p style={{ color: '#fca5a5', fontSize: '0.78rem', margin: 0 }}>{loginError}</p>
-              )}
-              <button
-                type="submit"
-                disabled={loggingIn}
-                style={{
-                  padding: '12px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                  color: 'var(--threshold-text)',
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  cursor: loggingIn ? 'wait' : 'pointer',
-                  opacity: loggingIn ? 0.6 : 1,
-                }}
-              >
-                {loggingIn ? 'Logging in…' : captcha ? 'Verify & load timetable' : 'Log in & load timetable'}
-              </button>
-            </form>
+            <AcademiaLoginCard onSuccess={fetchLive} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -460,20 +287,6 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fca5a5', fontSize: '0.78rem', margin: 0 }}>{error}</p>
-        </div>
-      )}
-
-      {error && schedule.length === 0 && needsLogin && isCampusWebSession() && (
-        <div style={{
-          padding: '16px',
-          borderRadius: '12px',
-          background: 'rgba(234, 179, 8, 0.06)',
-          border: '1px solid rgba(234, 179, 8, 0.15)',
-          marginBottom: '12px',
-        }}>
-          <p style={{ color: '#fcd34d', fontSize: '0.78rem', margin: 0 }}>
-            Your timetable isn&apos;t available through the portal — log in with your Academia credentials below to fetch it.
-          </p>
         </div>
       )}
 

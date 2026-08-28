@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
+import { isLoggedIn, isAcademiaLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
 import LeavePlanner from '@/components/attendance/LeavePlanner';
 import ShareCard from '@/components/dashboard/ShareCard';
+import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
@@ -339,6 +340,13 @@ export default function AttendancePage() {
 
       {/* Overall Summary */}
       <AttendanceSummary stats={overall} />
+
+      {/* Academia login when timetable data is missing */}
+      {metaReady && scheduleByCourse.size === 0 && !isAcademiaLoggedIn() && (
+        <div style={{ marginBottom: '16px' }}>
+          <AcademiaLoginCard onSuccess={() => fetchMeta()} />
+        </div>
+      )}
 
       {/* Leave planner */}
       <LeavePlanner

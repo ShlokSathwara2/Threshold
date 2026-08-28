@@ -542,32 +542,7 @@ export async function fetchTimetable(): Promise<TimetableResponse> {
   if (isAcademiaLoggedIn()) {
     return apiFetch('/timetable');
   }
-  if (isCampusWebSession()) {
-    try {
-      const user: CampusWebUserResponse = await fetchCampusWebUser();
-      const lastChar = user.comboBatch?.[user.comboBatch.length - 1] || '';
-      const isValid = lastChar && lastChar !== '-' && /^\d+$/.test(lastChar);
-      const batchesToTry = isValid
-        ? [lastChar, ...['1', '2', '3', '4', '5'].filter((b) => b !== lastChar)]
-        : ['1', '2', '3', '4', '5'];
-
-      for (const batch of batchesToTry) {
-        try {
-          const raw: CampusWebTimetableResponse = await fetchCampusWebTimetable(batch) as CampusWebTimetableResponse;
-          const schedule = adaptCampusWebTimetable(raw, user.courses);
-          if (schedule.length > 0) {
-            return { regNumber: user.registrationNumber || '', batch, schedule, status: 200 };
-          }
-        } catch {
-          // try next batch
-        }
-      }
-      return { regNumber: '', batch: '', schedule: [], status: 200, error: 'Timetable not available through the portal — log in with your Academia credentials below.' };
-    } catch (e) {
-      return { regNumber: '', batch: '', schedule: [], status: 200, error: e instanceof Error ? e.message : 'Failed to load timetable from Campus Web' };
-    }
-  }
-  return apiFetch('/timetable');
+  return { regNumber: '', batch: '', schedule: [], status: 200, error: 'Login with your Academia credentials to load the timetable.' };
 }
 
 export interface CalendarDay {
