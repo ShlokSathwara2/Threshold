@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchSpAttendance,
+  fetchAcademiaAttendance,
   fetchCourses,
   fetchUser,
   isCampusWebSession,
+  isAcademiaLoggedIn,
   fetchCampusWebUser,
   fetchCampusWebStudentPortalAttendance,
   adaptCampusWebAttendance,
@@ -115,6 +117,8 @@ export function useAttendance(): UseAttendanceResult {
           res = adaptCampusWebAttendance(user);
           console.log('[useAttendance] fallback result:', res.attendance?.length, 'items');
         }
+      } else if (isAcademiaLoggedIn()) {
+        res = await fetchAcademiaAttendance();
       } else {
         const attRes = await fetchSpAttendance();
         res = attRes;

@@ -353,6 +353,10 @@ export async function fetchAttendance(): Promise<AttendanceResponse> {
   return apiFetch('/sp/attendance');
 }
 
+export async function fetchAcademiaAttendance(): Promise<AttendanceResponse> {
+  return apiFetch('/attendance');
+}
+
 export const fetchSpAttendance = fetchAttendance;
 
 export interface MarksDetail {

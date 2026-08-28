@@ -12,6 +12,9 @@ import {
   fetchTimetable,
   fetchSpProfile,
   fetchSpInternalMarks,
+  fetchAcademiaAttendance,
+  fetchAcademiaMarks,
+  fetchUser,
   fetchCampusWebUser,
   type CalendarResponse,
   type TimetableResponse,
@@ -283,42 +286,101 @@ export default function DashboardPage() {
     }
 
     // SP path
-    const [pRes, calRes, imRes] = await Promise.allSettled([
-      fetchSpProfile(),
-      fetchCalendar(),
-      fetchSpInternalMarks(),
-    ]);
+    if (!isAcademiaLoggedIn() && !isCampusWebSession()) {
+      const [pRes, calRes, imRes] = await Promise.allSettled([
+        fetchSpProfile(),
+        fetchCalendar(),
+        fetchSpInternalMarks(),
+      ]);
 
-    if (pRes.status === 'fulfilled' && pRes.value.profile) {
-      const p = pRes.value.profile;
-      setProfile(p);
-      setCached<SpProfile>('profile', { ...p, photo: undefined });
-    }
-    if (calRes.status === 'fulfilled') {
-      const cal: CalendarResponse = calRes.value;
-      setCalendar(cal);
-      setCached<CalendarResponse>('calendar', cal);
-      applyToday(cal);
-      setStaleAsOf(null);
-      setOffline(false);
-    } else {
-      applyToday(null);
-      setOffline(true);
-    }
-    if (imRes.status === 'fulfilled') {
-      const im = imRes.value.internal_marks?.length ? imRes.value.internal_marks : null;
-      setInternalMarks(im);
-      if (im) setCached<InternalMark[]>('internalMarks', im);
+      if (pRes.status === 'fulfilled' && pRes.value.profile) {
+        const p = pRes.value.profile;
+        setProfile(p);
+        setCached<SpProfile>('profile', { ...p, photo: undefined });
+      }
+      if (calRes.status === 'fulfilled') {
+        const cal: CalendarResponse = calRes.value;
+        setCalendar(cal);
+        setCached<CalendarResponse>('calendar', cal);
+        applyToday(cal);
+        setStaleAsOf(null);
+        setOffline(false);
+      } else {
+        applyToday(null);
+        setOffline(true);
+      }
+      if (imRes.status === 'fulfilled') {
+        const im = imRes.value.internal_marks?.length ? imRes.value.internal_marks : null;
+        setInternalMarks(im);
+        if (im) setCached<InternalMark[]>('internalMarks', im);
+      }
     }
 
-    if (!isAcademiaLoggedIn()) {
-      return;
-    }
-    try {
-      const tt: TimetableResponse = await fetchTimetable();
-      if (tt.schedule?.length) setTodayClasses(tt.schedule);
-    } catch {
-      // Keep cached timetable — don't clear on failure
+    // Academia path — fetch attendance, marks, timetable, calendar via academia cookie
+    if (isAcademiaLoggedIn()) {
+      try {
+        const [attRes, marksRes, userRes] = await Promise.allSettled([
+          fetchAcademiaAttendance(),
+          fetchAcademiaMarks(),
+          fetchUser(),
+        ]);
+
+        if (attRes.status === 'fulfilled' && attRes.value.attendance?.length) {
+          setCached('attendance', { raw: attRes.value.attendance });
+        }
+
+        if (marksRes.status === 'fulfilled') {
+          const marks = marksRes.value.marks || [];
+          const im: InternalMark[] = marks.flatMap((m) => {
+            const items: InternalMark[] = [];
+            if (m.testPerformance?.length) {
+              for (const tp of m.testPerformance) {
+                items.push({
+                  code: m.courseCode,
+                  description: tp.test || m.courseName,
+                  scored: String(tp.marks?.scored ?? ''),
+                  maxMark: String(tp.marks?.total ?? ''),
+                });
+              }
+            } else if (m.overall?.scored) {
+              items.push({
+                code: m.courseCode,
+                description: m.courseName,
+                scored: m.overall.scored,
+                maxMark: m.overall.total,
+              });
+            }
+            return items;
+          });
+          if (im.length > 0) {
+            setInternalMarks(im);
+            setCached<InternalMark[]>('internalMarks', im);
+          }
+        }
+
+        if (userRes.status === 'fulfilled') {
+          const u = userRes.value;
+          setProfile({
+            name: u.name || '',
+            reg_number: u.regNumber || '',
+            program: u.program || '',
+            department: u.department || '',
+            year: u.year ?? null,
+            semester: u.semester ?? null,
+            section: u.section || '',
+            photo: null,
+          });
+        }
+      } catch {
+        // Academic-only — keep cached data
+      }
+
+      try {
+        const tt: TimetableResponse = await fetchTimetable();
+        if (tt.schedule?.length) setTodayClasses(tt.schedule);
+      } catch {
+        // Keep cached timetable
+      }
     }
   }, []);
 
