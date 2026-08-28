@@ -247,7 +247,6 @@ export default function SettingsPage() {
             { key: 'classAlerts' as const, label: '"Attend this class" alerts', desc: 'Reminders 30 min before classes of subjects below 75%' },
             { key: 'bunkAlerts' as const, label: 'Bunk-window alerts', desc: 'Tell you when today\u2019s remaining class is safe to skip' },
             { key: 'weeklyReport' as const, label: 'Weekly report card', desc: 'Sunday summary of attendance, misses and next week' },
-            { key: 'holidays' as const, label: 'Holiday alerts', desc: 'Upcoming academic holidays' },
           ].map((c) => (
             <div
               key={c.key}
@@ -261,6 +260,7 @@ export default function SettingsPage() {
                 background: WB(0.02),
                 border: `1px solid ${WB(0.05)}`,
                 opacity: notif.enabled ? 1 : 0.45,
+                pointerEvents: notif.enabled ? 'auto' : 'none',
                 transition: 'opacity 0.2s',
               }}
             >
@@ -410,6 +410,7 @@ export default function SettingsPage() {
               if (res.ok) {
                 setLockOn(appLockEnabled());
                 setSound(getSoundPref());
+                setTimeout(() => window.location.reload(), 800);
               }
             }}
           />

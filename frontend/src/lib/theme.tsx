@@ -137,7 +137,6 @@ export interface NotifPrefs {
   enabled: boolean;
   attendanceRisk: boolean;
   examDates: boolean;
-  holidays: boolean;
   classAlerts: boolean;
   bunkAlerts: boolean;
   weeklyReport: boolean;
@@ -147,7 +146,6 @@ export const DEFAULT_NOTIF: NotifPrefs = {
   enabled: false,
   attendanceRisk: false,
   examDates: false,
-  holidays: false,
   classAlerts: false,
   bunkAlerts: false,
   weeklyReport: false,

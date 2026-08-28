@@ -80,11 +80,17 @@ export default function WelcomePage() {
   const WB = (a: number) => overlayBg(theme, a);
   const [starting, setStarting] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const [deferredInstall, setDeferredInstall] = useState<any>(null);
   const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
     setIsNative(isNativePlatform());
+    setIsStandalone(
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (navigator as any).standalone === true
+    );
   }, []);
 
   useEffect(() => {
@@ -328,8 +334,8 @@ export default function WelcomePage() {
           </motion.div>
         </section>
 
-        {/* Install / Download — web only */}
-        {!isNative && (
+        {/* Install / Download — web only, hidden when PWA already installed */}
+        {!isNative && !isStandalone && (
           <section style={{ padding: '0 16px 32px', width: '100%' }}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}

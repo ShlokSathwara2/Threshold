@@ -1,4 +1,5 @@
 import { registerPlugin } from '@capacitor/core';
+import { userHash } from './user-scope';
 
 interface FileBridgeApi {
   saveToDownloads(options: { filename: string; mime: string; data: string }): Promise<{ path: string }>;
@@ -60,7 +61,12 @@ export async function exportBackup(): Promise<string> {
     } catch {
       /* fall through */
     }
-    return 'Backup could not be saved — clipboard copy instead';
+    try {
+      await navigator.clipboard.writeText(json);
+      return 'Backup copied to clipboard — paste to save';
+    } catch {
+      return 'Backup could not be saved';
+    }
   }
 }
 
@@ -76,17 +82,20 @@ export function importBackup(text: string): ImportResult {
       return { ok: false, message: 'Not a Threshold backup file' };
     }
     const data = (parsed as { data: Record<string, string> }).data ?? {};
+    const currentHash = userHash();
     let count = 0;
     for (const [k, v] of Object.entries(data)) {
       if (typeof v !== 'string') continue;
+      // Re-scope: strip old user hash from key, apply current user's hash
+      const reKey = k.replace(/__[a-z0-9]+(__|$)/, `__${currentHash}$1`);
       try {
-        localStorage.setItem(k, v);
+        localStorage.setItem(reKey, v);
         count++;
       } catch {
         /* skip oversized keys */
       }
     }
-    return { ok: true, message: `Restored ${count} settings — reopen the app to apply` };
+    return { ok: true, message: `Restored ${count} settings — reopening to apply` };
   } catch {
     return { ok: false, message: 'File could not be read' };
   }

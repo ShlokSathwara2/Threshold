@@ -18,6 +18,8 @@ import WelcomeModal from '@/components/dashboard/WelcomeModal';
 import FeatureLockModal from '@/components/dashboard/FeatureLockModal';
 import Lenis from 'lenis';
 
+const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 hours
+
 // "ra2411003010247@srmist.edu.in" → "Ra2411003010247"
 // "SHLOK KUMAR" → "Shlok Kumar"
 function prettifyName(raw: string): string {
@@ -247,6 +249,37 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', onVisible);
     const timer = window.setInterval(checkSession, 3 * 60 * 1000);
     checkSession();
+    return () => {
+      destroyed = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, [router]);
+
+  // Campus Web session timeout: client-side timestamp check (no backend to probe).
+  // Shows the same session-expired popup after SESSION_TIMEOUT_MS.
+  useEffect(() => {
+    if (!isCampusWebSession()) return;
+    const session = getSession();
+    if (!session) return;
+    let destroyed = false;
+    let expired = false;
+
+    const checkTimestamp = () => {
+      if (expired || destroyed) return;
+      const elapsed = Date.now() - (session.timestamp || 0);
+      if (elapsed >= SESSION_TIMEOUT_MS) {
+        expired = true;
+        setSessionExpired(true);
+      }
+    };
+
+    const onVisible = () => {
+      if (!document.hidden) checkTimestamp();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(checkTimestamp, 60 * 1000); // check every minute
+    checkTimestamp();
     return () => {
       destroyed = true;
       document.removeEventListener('visibilitychange', onVisible);
