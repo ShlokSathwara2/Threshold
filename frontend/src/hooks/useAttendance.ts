@@ -134,10 +134,10 @@ export function useAttendance(): UseAttendanceResult {
       setRaw(data);
       let calculated = calculateAllSubjects(data);
 
-      // Enrich with academia timetable data (category, credits, slot, room, type),
+      // Enrich with academia course data (category, credits, slot, room, type),
       // preferring the student's own batch for batch-split lab slots.
-      // Skip for Campus Web sessions — no academia cookie available.
-      if (!isCampusWebSession()) {
+      // Only when academia cookies are available.
+      if (isAcademiaLoggedIn()) {
         const [courseRes, userRes] = await Promise.allSettled([
           Promise.race([
             fetchCourses(),
