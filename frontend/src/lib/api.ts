@@ -535,6 +535,9 @@ export interface TimetableResponse {
 }
 
 export async function fetchTimetable(): Promise<TimetableResponse> {
+  if (isAcademiaLoggedIn()) {
+    return apiFetch('/timetable');
+  }
   if (isCampusWebSession()) {
     try {
       const user: CampusWebUserResponse = await fetchCampusWebUser();
@@ -555,7 +558,7 @@ export async function fetchTimetable(): Promise<TimetableResponse> {
           // try next batch
         }
       }
-      return { regNumber: '', batch: '', schedule: [], status: 200, error: 'Timetable not available for your batch on Campus Web — log in with your Academia credentials below.' };
+      return { regNumber: '', batch: '', schedule: [], status: 200, error: 'Timetable not available through the portal — log in with your Academia credentials below.' };
     } catch (e) {
       return { regNumber: '', batch: '', schedule: [], status: 200, error: e instanceof Error ? e.message : 'Failed to load timetable from Campus Web' };
     }
