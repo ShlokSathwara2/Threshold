@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Preferences } from '@capacitor/preferences';
+import { isNativePlatform } from './capacitor';
 
 // Version manifest lives next to the APK on GitHub so every installed app
 // can check for new releases without any server involvement.
@@ -45,6 +46,8 @@ export function semverGt(a: string, b: string): boolean {
 // Returns update info when a newer version exists AND the user hasn't
 // dismissed this exact version before.
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  // Only check for updates on native APK — web/PWA users don't have an installed version
+  if (!isNativePlatform()) return null;
   try {
     const res = await fetch(VERSION_URL, { cache: 'no-store' });
     if (!res.ok) return null;

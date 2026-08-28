@@ -137,6 +137,7 @@ export function useAttendance(): UseAttendanceResult {
       // Enrich with academia course data (category, credits, slot, room, type),
       // preferring the student's own batch for batch-split lab slots.
       // Only when academia cookies are available.
+      console.log('[useAttendance] isAcademiaLoggedIn:', isAcademiaLoggedIn(), 'isCampusWeb:', isCampusWebSession());
       if (isAcademiaLoggedIn()) {
         const [courseRes, userRes] = await Promise.allSettled([
           Promise.race([
@@ -157,6 +158,7 @@ export function useAttendance(): UseAttendanceResult {
           const batchText = userRes.status === 'fulfilled' ? userRes.value.batch ?? '' : '';
           const batch = /^\d+$/.test(batchText) ? parseInt(batchText, 10) : null;
           const byCode = pickCourseForBatch(courseRes.value.courses || [], batch);
+          console.log('[useAttendance] courses enriched:', byCode.size, 'courses matched');
           calculated = calculated.map((s) => {
             const c = byCode.get(s.courseCode);
             if (!c) return s;
@@ -175,6 +177,7 @@ export function useAttendance(): UseAttendanceResult {
             };
           });
         } else {
+          console.warn('[useAttendance] fetchCourses failed:', courseRes.reason, '— trying timetable fallback');
           // fetchCourses failed — fall back to timetable for slot/faculty/room
           try {
             const ttRes = await Promise.race([

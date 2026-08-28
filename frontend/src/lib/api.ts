@@ -9,11 +9,24 @@ export interface Session {
   source?: 'sp' | 'campus_web';
 }
 
-// Academia session is kept in memory ONLY — never persisted to localStorage.
-// The timetable belongs to whoever logs in, so each user on a shared device
-// must enter their own academia credentials (asked on every app launch).
+// Academia session is kept in sessionStorage — persists across page refreshes
+// within the same tab but clears when the tab closes. Each user on a shared
+// device must enter their own academia credentials per browser session.
+const ACADEMIA_STORAGE_KEY = 'threshold_academia_session';
 let academiaCookie: string | null = null;
 let academiaUsername: string | null = null;
+
+// Restore from sessionStorage on module load (survives page refresh)
+if (typeof window !== 'undefined') {
+  try {
+    const stored = sessionStorage.getItem(ACADEMIA_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      academiaCookie = parsed.cookie || null;
+      academiaUsername = parsed.username || null;
+    }
+  } catch { /* corrupted — ignore */ }
+}
 
 export function getAcademiaCookies(): string | null {
   return academiaCookie;
@@ -26,11 +39,20 @@ export function getAcademiaUsername(): string | null {
 export function setAcademiaCookies(cookies: string, username?: string) {
   academiaCookie = cookies;
   if (username) academiaUsername = username;
+  // Persist to sessionStorage so enrichment survives page refresh
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.setItem(ACADEMIA_STORAGE_KEY, JSON.stringify({ cookie: cookies, username: academiaUsername }));
+    } catch { /* non-fatal */ }
+  }
 }
 
 export function clearAcademiaCookies() {
   academiaCookie = null;
   academiaUsername = null;
+  if (typeof window !== 'undefined') {
+    try { sessionStorage.removeItem(ACADEMIA_STORAGE_KEY); } catch { /* non-fatal */ }
+  }
 }
 
 export function isAcademiaLoggedIn(): boolean {
