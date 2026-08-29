@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://threshold-1-ly01.onrender.com';
 
 import { userHash, isPlaceholderUser, migrateLegacyIdentity } from './user-scope';
 

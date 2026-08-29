@@ -177,7 +177,7 @@ export default function LoginPage() {
   const onAnimationComplete = useCallback(async () => {
     setActiveAnimation(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/sp/set-cookies`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://threshold-1-ly01.onrender.com'}/sp/set-cookies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cookie: cookie.trim() }),
