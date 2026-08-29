@@ -118,8 +118,6 @@ export function useAttendance(): UseAttendanceResult {
           res = adaptCampusWebAttendance(user);
           console.log('[useAttendance] fallback result:', res.attendance?.length, 'items');
         }
-      } else if (isAcademiaLoggedIn()) {
-        res = await fetchAcademiaAttendance();
       } else {
         const attRes = await fetchSpAttendance();
         res = attRes;

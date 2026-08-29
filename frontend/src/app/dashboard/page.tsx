@@ -12,7 +12,6 @@ import {
   fetchTimetable,
   fetchSpProfile,
   fetchSpInternalMarks,
-  fetchAcademiaAttendance,
   fetchAcademiaMarks,
   fetchUser,
   fetchCampusWebUser,
@@ -270,8 +269,8 @@ export default function DashboardPage() {
       return;
     }
 
-    // SP path
-    if (!isAcademiaLoggedIn() && !isCampusWebSession()) {
+    // SP path — always fetch profile, calendar, internal marks from SP when session exists
+    if (isSpLoggedIn()) {
       const [pRes, calRes, imRes] = await Promise.allSettled([
         fetchSpProfile(),
         fetchCalendar(),
@@ -301,18 +300,13 @@ export default function DashboardPage() {
       }
     }
 
-    // Academia path — fetch attendance, marks, timetable, calendar via academia cookie
+    // Academia enrichment — marks, user profile, timetable via academia cookie
     if (isAcademiaLoggedIn()) {
       try {
-        const [attRes, marksRes, userRes] = await Promise.allSettled([
-          fetchAcademiaAttendance(),
+        const [marksRes, userRes] = await Promise.allSettled([
           fetchAcademiaMarks(),
           fetchUser(),
         ]);
-
-        if (attRes.status === 'fulfilled' && attRes.value.attendance?.length) {
-          setCached('attendance', { raw: attRes.value.attendance });
-        }
 
         if (marksRes.status === 'fulfilled') {
           const marks = marksRes.value.marks || [];
