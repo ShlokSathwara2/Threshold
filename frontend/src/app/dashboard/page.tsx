@@ -109,6 +109,13 @@ export default function DashboardPage() {
       return true;
     }
   });
+  const [showApkBanner, setShowApkBanner] = useState(() => {
+    try {
+      return localStorage.getItem('threshold_apk_banner_dismissed') !== '1';
+    } catch {
+      return true;
+    }
+  });
 
   // Scroll parallax
   const { scrollY } = useScroll();
@@ -783,7 +790,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Web-only: features not available notice */}
-      {isCampusWebSession() && (
+      {isCampusWebSession() && showApkBanner && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -834,6 +841,25 @@ export default function DashboardPage() {
                 Download APK
               </a>
             </div>
+            <button
+              onClick={() => {
+                try { localStorage.setItem('threshold_apk_banner_dismissed', '1'); } catch {}
+                setShowApkBanner(false);
+              }}
+              style={{
+                flexShrink: 0,
+                background: 'none',
+                border: 'none',
+                color: W(0.4),
+                fontSize: '1rem',
+                cursor: 'pointer',
+                padding: '4px',
+                lineHeight: 1,
+              }}
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
           </div>
         </motion.div>
       )}

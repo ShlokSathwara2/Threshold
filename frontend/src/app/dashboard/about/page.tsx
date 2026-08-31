@@ -11,8 +11,6 @@ const LINKS = {
   githubHandle: 'ShlokSathwara2',
   linkedin: 'https://www.linkedin.com/in/shlok-sathwara-4b91ab319/',
   linkedinHandle: 'shlok-sathwara',
-  instagram: 'https://www.instagram.com/_shlok_sathwara_/',
-  instagramHandle: '@_shlok_sathwara_',
 };
 
 const SOCIALS = [
@@ -29,13 +27,6 @@ const SOCIALS = [
     icon: 'in',
     color: '#0a66c2',
     bg: 'rgba(10, 102, 194, 0.12)',
-  },
-  {
-    key: 'instagram' as const,
-    label: 'Instagram',
-    icon: '◉',
-    color: '#e1306c',
-    bg: 'rgba(225, 48, 108, 0.12)',
   },
 ];
 
@@ -225,7 +216,7 @@ export default function AboutPage() {
           private, offline-first, and built for SRM students who want the numbers, not the noise.
           All settings (notifications, tap sounds, app lock) are off by default — you choose
           what to enable. If you spot a bug or have a feature request, feel free to reach out
-          on Instagram or LinkedIn above.
+          on LinkedIn above.
         </p>
         <p style={{ margin: '10px 0 0', fontSize: '0.68rem', color: W(0.3), fontWeight: 600 }}>
           NEXT.JS · CAPACITOR · SRM STUDENT PORTAL

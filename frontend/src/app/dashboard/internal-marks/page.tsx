@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, isAcademiaLoggedIn } from '@/lib/api';
+import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser, adaptCampusWebMarks, type InternalMark } from '@/lib/api';
 import InternalMarks from '@/components/grades/InternalMarks';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
@@ -12,8 +12,8 @@ export default function InternalMarksPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
-  const WB = (a: number) => overlayBg(theme, a);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [externalMarks, setExternalMarks] = useState<InternalMark[] | null>(null);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
   usePullToRefresh(refresh);
@@ -21,8 +21,36 @@ export default function InternalMarksPage() {
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push('/welcome');
+      return;
     }
-  }, [router]);
+    if (isCampusWebSession()) {
+      fetchCampusWebUser().then((user) => {
+        const marksResp = adaptCampusWebMarks(user);
+        const im: InternalMark[] = marksResp.marks.flatMap((m) => {
+          const items: InternalMark[] = [];
+          if (m.testPerformance?.length) {
+            for (const tp of m.testPerformance) {
+              items.push({
+                code: m.courseCode,
+                description: tp.test || m.courseName,
+                scored: String(tp.marks?.scored ?? ''),
+                maxMark: String(tp.marks?.total ?? ''),
+              });
+            }
+          } else if (m.overall?.scored) {
+            items.push({
+              code: m.courseCode,
+              description: m.courseName,
+              scored: m.overall.scored,
+              maxMark: m.overall.total,
+            });
+          }
+          return items;
+        });
+        setExternalMarks(im.length > 0 ? im : []);
+      }).catch(() => setExternalMarks([]));
+    }
+  }, [router, refreshKey]);
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
@@ -46,7 +74,7 @@ export default function InternalMarksPage() {
         </p>
       </motion.div>
 
-      <InternalMarks refreshKey={refreshKey} />
+      <InternalMarks refreshKey={refreshKey} externalMarks={externalMarks} />
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
         <button
