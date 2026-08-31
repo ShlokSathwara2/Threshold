@@ -32,7 +32,7 @@ export default function InternalMarksPage() {
             for (const tp of m.testPerformance) {
               items.push({
                 code: m.courseCode,
-                description: tp.test || m.courseName,
+                description: m.courseName,
                 scored: String(tp.marks?.scored ?? ''),
                 maxMark: String(tp.marks?.total ?? ''),
               });
