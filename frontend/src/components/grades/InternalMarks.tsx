@@ -18,9 +18,11 @@ import {
 export default function InternalMarks({
   refreshKey = 0,
   subjects = [],
+  externalMarks,
 }: {
   refreshKey?: number;
   subjects?: SubjectAttendance[];
+  externalMarks?: import('@/lib/api').InternalMark[] | null;
 }) {
   const [marks, setMarks] = useState<MergedSubjectMark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,9 +41,18 @@ export default function InternalMarks({
       const sp = isAcademiaLoggedIn();
       setAcademiaOn(sp);
       try {
-        const spRes = fetchSpInternalMarks();
+        // Use externally-provided marks (from Campus Web) if available, else fetch from SP
+        let spOut: { internal_marks?: import('@/lib/api').InternalMark[] } = { internal_marks: externalMarks ?? undefined };
+        if (!externalMarks) {
+          try {
+            spOut = await fetchSpInternalMarks();
+          } catch {
+            // SP not available (e.g. Campus Web session) — use empty
+            spOut = { internal_marks: [] };
+          }
+        }
         const acRes = sp ? fetchAcademiaMarks() : Promise.resolve(null);
-        const [spOut, acOut] = await Promise.all([spRes, acRes]);
+        const acOut = await acRes;
         if (cancelled) return;
         const merged = mergeInternalMarks(
           spOut.internal_marks || [],
@@ -55,7 +66,7 @@ export default function InternalMarks({
       }
     })();
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [refreshKey, externalMarks]);
 
   if (loading) {
     return (

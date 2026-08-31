@@ -1254,7 +1254,7 @@ export default function DashboardPage() {
 
       {/* ── Internal Marks (above Alerts) ── */}
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <InternalMarks refreshKey={gradesKey} subjects={subjects} />
+        <InternalMarks refreshKey={gradesKey} subjects={subjects} externalMarks={internalMarks} />
       </div>
 
       {/* ── Exams strip ── */}

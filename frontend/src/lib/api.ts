@@ -1027,16 +1027,34 @@ export function adaptCampusWebPlanner(plannerData: any): CalendarResponse {
 
 export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse {
   console.log('[adaptCampusWebMarks] testPerformances count:', user.testPerformances?.length ?? 0, 'data:', JSON.stringify(user.testPerformances).substring(0, 500));
-  const marks: Mark[] = (user.testPerformances || []).map((tp) => ({
-    courseName: (tp as any).courseName || tp.subject_name || '',
-    courseCode: (tp as any).courseCode || tp.subject_code || '',
-    courseType: (tp as any).courseType || '',
-    overall: {
-      scored: String(tp.totalMarkGot ?? ''),
-      total: String(tp.totalMarks ?? ''),
-    },
-    testPerformance: [],
-  }));
+  const marks: Mark[] = (user.testPerformances || []).map((tp) => {
+    // Convert Campus Web tests Record to TestPerformance array
+    const testPerformance: TestPerformance[] = [];
+    if (tp.tests && typeof tp.tests === 'object') {
+      for (const [testName, testData] of Object.entries(tp.tests)) {
+        if (testData && typeof testData === 'object') {
+          const d = testData as Record<string, unknown>;
+          // Handle nested marks: { scored: X, total: Y } or { marks: { scored, total } }
+          const scored = d.scored ?? (d.marks as any)?.scored ?? '';
+          const total = d.total ?? (d.marks as any)?.total ?? '';
+          testPerformance.push({
+            test: testName,
+            marks: { scored: String(scored), total: String(total) },
+          });
+        }
+      }
+    }
+    return {
+      courseName: (tp as any).courseName || tp.subject_name || '',
+      courseCode: (tp as any).courseCode || tp.subject_code || '',
+      courseType: (tp as any).courseType || '',
+      overall: {
+        scored: String(tp.totalMarkGot ?? ''),
+        total: String(tp.totalMarks ?? ''),
+      },
+      testPerformance,
+    };
+  });
   return { regNumber: '', marks, status: 200 };
 }
 
