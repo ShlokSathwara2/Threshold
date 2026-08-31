@@ -8,6 +8,7 @@ import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { saveSession, campusWebLogin, saveCampusSession, isCampusWebSession } from '@/lib/api';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
+import LoginRedirect from '@/components/ui/LoginRedirect';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
 const PortalRift = dynamic(() => import('@/components/animations/PortalRift'), { ssr: false });
@@ -37,6 +38,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [webLoginLoading, setWebLoginLoading] = useState(false);
   const [webLoginError, setWebLoginError] = useState('');
+  const [showRedirect, setShowRedirect] = useState(false);
 
   useEffect(() => {
     setIsNative(isNativePlatform());
@@ -50,7 +52,8 @@ export default function LoginPage() {
 
   const storeAndNavigate = useCallback(async (cookieStr: string) => {
     await storeSession(cookieStr);
-    router.push('/dashboard');
+    setShowRedirect(true);
+    setTimeout(() => router.push('/dashboard'), 600);
   }, [storeSession, router]);
 
   const handleNativeLogin = useCallback(async () => {
@@ -154,7 +157,8 @@ export default function LoginPage() {
       }
 
       saveCampusSession(token, netId.trim().split('@')[0].toLowerCase());
-      router.push('/dashboard');
+      setShowRedirect(true);
+      setTimeout(() => router.push('/dashboard'), 600);
     } catch (err) {
       setWebLoginError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -425,6 +429,7 @@ export default function LoginPage() {
           )}
         </motion.div>
       </div>
+      {showRedirect && <LoginRedirect />}
     </div>
   );
 }

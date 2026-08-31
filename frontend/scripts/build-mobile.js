@@ -22,7 +22,7 @@ try {
     console.log('[build-mobile] Temporarily hid src/app/api/');
   }
 
-  execSync('next build', {
+  execSync('npx next build', {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
     env: { ...process.env, CAPACITOR_BUILD: 'true' },

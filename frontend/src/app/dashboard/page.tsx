@@ -87,6 +87,12 @@ export default function DashboardPage() {
     await refetchAttendance();
     setGradesKey((k) => k + 1);
     await fetchAll();
+    // Sync exams from cloud
+    syncExamsFromCloud().then((cloud) => {
+      if (cloud) setExams(cloud);
+    });
+    // Reload opt hours (persisted in localStorage, may have changed elsewhere)
+    setOptedOut(loadOptionalHours());
   });
 
   const [profile, setProfile] = useState<SpProfile | null>(null);
@@ -267,6 +273,12 @@ export default function DashboardPage() {
         } catch {
           // Keep cached timetable — don't clear on failure
         }
+
+        // Sync exams from cloud
+        try {
+          const cloudExams = await syncExamsFromCloud();
+          if (cloudExams) setExams(cloudExams);
+        } catch { /* keep cached */ }
       } catch {
         setProfile(null);
         setInternalMarks(null);
@@ -366,6 +378,11 @@ export default function DashboardPage() {
         // Keep cached timetable
       }
     }
+
+    // Sync exams from cloud (both SP and Campus Web paths)
+    syncExamsFromCloud().then((cloud) => {
+      if (cloud) setExams(cloud);
+    });
   }, []);
 
   useEffect(() => {
@@ -1218,6 +1235,7 @@ export default function DashboardPage() {
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
+          onClick={() => router.push('/dashboard/attendance')}
           style={{
             padding: '18px',
             borderRadius: '18px',
@@ -1228,6 +1246,7 @@ export default function DashboardPage() {
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
+            cursor: 'pointer',
           }}
         >
           <div style={{
@@ -1250,6 +1269,7 @@ export default function DashboardPage() {
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.26 }}
+          onClick={() => router.push('/dashboard/attendance')}
           style={{
             padding: '18px',
             borderRadius: '18px',
@@ -1260,6 +1280,7 @@ export default function DashboardPage() {
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
+            cursor: 'pointer',
           }}
         >
           <div style={{
@@ -1279,63 +1300,74 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ── Internal Marks (above Alerts) ── */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div
+        onClick={() => router.push('/dashboard/internal-marks')}
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          cursor: 'pointer',
+          borderRadius: '16px',
+          marginBottom: '16px',
+        }}
+      >
         <InternalMarks refreshKey={gradesKey} subjects={subjects} externalMarks={internalMarks} />
       </div>
 
       {/* ── Exams strip ── */}
-      {exams.length > 0 && (
-        <motion.div
-          className="thr-gradient-border"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28 }}
-          onClick={() => router.push('/dashboard/exams')}
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '13px 16px',
-            borderRadius: '14px',
-            marginBottom: '16px',
-            background: 'linear-gradient(135deg, rgba(217,70,239,0.1), rgba(139,92,246,0.05))',
-            border: '1px solid rgba(217,70,239,0.25)',
-            cursor: 'pointer',
-          }}
-        >
-          <span style={{
-            flexShrink: 0,
-            width: '36px',
-            height: '36px',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(217,70,239,0.15)',
-            border: '1px solid rgba(217,70,239,0.35)',
-            fontSize: '1rem',
-          }}>
-            📝
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
-              {nextExam
+      <motion.div
+        className="thr-gradient-border"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.28 }}
+        onClick={() => router.push('/dashboard/exams')}
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '13px 16px',
+          borderRadius: '14px',
+          marginBottom: '16px',
+          background: 'linear-gradient(135deg, rgba(217,70,239,0.1), rgba(139,92,246,0.05))',
+          border: '1px solid rgba(217,70,239,0.25)',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{
+          flexShrink: 0,
+          width: '36px',
+          height: '36px',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(217,70,239,0.15)',
+          border: '1px solid rgba(217,70,239,0.35)',
+          fontSize: '1rem',
+        }}>
+          📝
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--threshold-text)' }}>
+            {exams.length > 0
+              ? (nextExam
                 ? `Next exam: ${nextExam.entry.subjectTitle}`
-                : 'All exams done'}
-            </p>
-            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.5) }}>
-              {nextExam
+                : 'All exams done')
+              : 'Add your first exam'}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.5) }}>
+            {exams.length > 0
+              ? (nextExam
                 ? `${formatExamDate(nextExam.next)} · ${nextExam && daysUntil(nextExam.next, todayD) === 0 ? 'today' : nextExam && daysUntil(nextExam.next, todayD) === 1 ? 'tomorrow' : `in ${daysUntil(nextExam.next, todayD)} days`} · ${upcomingCount} upcoming`
-                : 'No upcoming exams — plan the next round'}
-            </p>
-          </div>
-          <span style={{ flexShrink: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--threshold-accent-text)' }}>
-            Manage →
-          </span>
-        </motion.div>
-      )}
+                : 'No upcoming exams — plan the next round')
+              : 'Track dates & never miss a test'}
+          </p>
+        </div>
+        <span style={{ flexShrink: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--threshold-accent-text)' }}>
+          {exams.length > 0 ? 'Manage →' : 'Add →'}
+        </span>
+      </motion.div>
 
       {/* ── Alerts ── */}
       {(!loading || upcomingExams.length > 0) && (

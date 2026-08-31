@@ -1,16 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getCursorStyle, getCursorParticles, type CursorStyle, type ParticleEffect } from '@/lib/cursor-effects';
 
 const COLORS = [
-  '#8b5cf6', // purple
-  '#06b6d4', // cyan
-  '#f43f5e', // rose
-  '#22c55e', // green
-  '#f59e0b', // amber
-  '#ec4899', // pink
-  '#3b82f6', // blue
-  '#14b8a6', // teal
+  '#8b5cf6', '#06b6d4', '#f43f5e', '#22c55e',
+  '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6',
 ];
 
 interface Particle {
@@ -29,6 +24,7 @@ export default function CustomCursor() {
   const dotRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
+  const crossRef = useRef<HTMLDivElement>(null);
   const particleContainerRef = useRef<HTMLDivElement>(null);
   const colorIndexRef = useRef(0);
   const [visible, setVisible] = useState(false);
@@ -36,27 +32,67 @@ export default function CustomCursor() {
   const [hovering, setHovering] = useState(false);
   const [currentColor, setCurrentColor] = useState(COLORS[0]);
   const particlesRef = useRef<Particle[]>([]);
+  const styleRef = useRef<CursorStyle>(getCursorStyle());
+  const particleRef = useRef<ParticleEffect>(getCursorParticles());
+
+  // Re-read prefs on storage change (settings updated in another tab or same tab)
+  useEffect(() => {
+    const onStorage = () => {
+      styleRef.current = getCursorStyle();
+      particleRef.current = getCursorParticles();
+    };
+    window.addEventListener('storage', onStorage);
+    // Also poll every 1s for same-tab changes
+    const iv = setInterval(() => {
+      styleRef.current = getCursorStyle();
+      particleRef.current = getCursorParticles();
+    }, 1000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(iv);
+    };
+  }, []);
 
   const spawnParticles = useCallback((x: number, y: number, color: string) => {
     const container = particleContainerRef.current;
     if (!container) return;
+    const mode = particleRef.current;
+    if (mode === 'none') return;
 
-    const count = 12;
+    if (mode === 'ring') {
+      // Single expanding ring
+      const el = document.createElement('div');
+      el.style.cssText = `
+        position: fixed; top: 0; left: 0;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        border: 2px solid ${color};
+        pointer-events: none; z-index: 10002;
+        box-shadow: 0 0 12px ${color}55;
+        left: ${x - 5}px; top: ${y - 5}px;
+      `;
+      container.appendChild(el);
+      particlesRef.current.push({
+        x, y, vx: 0, vy: 0,
+        life: 1, maxLife: 0.5, size: 10, color,
+        element: el,
+      });
+      return;
+    }
+
+    const count = mode === 'sparkle' ? 20 : 12;
     for (let i = 0; i < count; i++) {
       const el = document.createElement('div');
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
-      const speed = 1.5 + Math.random() * 3;
-      const size = 2 + Math.random() * 4;
+      const speed = mode === 'sparkle' ? 1 + Math.random() * 2 : 1.5 + Math.random() * 3;
+      const size = mode === 'sparkle' ? 1 + Math.random() * 2 : 2 + Math.random() * 4;
 
       el.style.cssText = `
-        position: fixed;
-        top: 0; left: 0;
-        width: ${size}px;
-        height: ${size}px;
+        position: fixed; top: 0; left: 0;
+        width: ${size}px; height: ${size}px;
         border-radius: 50%;
         background: ${color};
-        pointer-events: none;
-        z-index: 10002;
+        pointer-events: none; z-index: 10002;
         box-shadow: 0 0 ${size * 2}px ${color};
       `;
       container.appendChild(el);
@@ -66,10 +102,8 @@ export default function CustomCursor() {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 1,
-        maxLife: 0.5 + Math.random() * 0.4,
-        size,
-        color,
-        element: el,
+        maxLife: mode === 'sparkle' ? 0.3 + Math.random() * 0.3 : 0.5 + Math.random() * 0.4,
+        size, color, element: el,
       });
     }
   }, []);
@@ -88,13 +122,8 @@ export default function CustomCursor() {
       mouseY = e.clientY;
       if (!visible) setVisible(true);
     };
-
-    const onLeave = () => {
-      if (!isTouch) setVisible(false);
-    };
-    const onEnter = () => {
-      if (!isTouch) setVisible(true);
-    };
+    const onLeave = () => { if (!isTouch) setVisible(false); };
+    const onEnter = () => { if (!isTouch) setVisible(true); };
 
     const pressAt = (x: number, y: number) => {
       colorIndexRef.current = (colorIndexRef.current + 1) % COLORS.length;
@@ -121,13 +150,8 @@ export default function CustomCursor() {
       setPressing(true);
       pressAt(t.clientX, t.clientY);
     };
-
-    // Don't chase the finger during drags — leaves scrolling untouched
     const onTouchMove = (_e: TouchEvent) => {};
-
-    const onTouchEnd = () => {
-      setPressing(false);
-    };
+    const onTouchEnd = () => { setPressing(false); };
 
     const checkHover = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -156,23 +180,44 @@ export default function CustomCursor() {
       if (glowRef.current) {
         glowRef.current.style.transform = `translate(${glowX - 80}px, ${glowY - 80}px)`;
       }
+      if (crossRef.current) {
+        crossRef.current.style.transform = `translate(${dotX - 12}px, ${dotY - 12}px)`;
+      }
 
       // Update particles
       const dt = 0.016;
       const toRemove: number[] = [];
       particlesRef.current.forEach((p, i) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.05; // gravity
-        p.vx *= 0.98; // friction
-        p.life -= dt / p.maxLife;
-
-        if (p.life <= 0) {
-          p.element.remove();
-          toRemove.push(i);
+        const mode = particleRef.current;
+        if (mode === 'ring') {
+          // Expand ring
+          p.life -= dt / p.maxLife;
+          const progress = 1 - p.life;
+          const sz = p.size + progress * 60;
+          if (p.life <= 0) {
+            p.element.remove();
+            toRemove.push(i);
+          } else {
+            p.element.style.width = `${sz}px`;
+            p.element.style.height = `${sz}px`;
+            p.element.style.left = `${p.x - sz / 2}px`;
+            p.element.style.top = `${p.y - sz / 2}px`;
+            p.element.style.opacity = String(p.life * 0.7);
+            p.element.style.borderWidth = `${Math.max(0.5, 2 * p.life)}px`;
+          }
         } else {
-          p.element.style.transform = `translate(${p.x - p.size / 2}px, ${p.y - p.size / 2}px)`;
-          p.element.style.opacity = String(p.life);
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += mode === 'sparkle' ? 0.02 : 0.05;
+          p.vx *= 0.98;
+          p.life -= dt / p.maxLife;
+          if (p.life <= 0) {
+            p.element.remove();
+            toRemove.push(i);
+          } else {
+            p.element.style.transform = `translate(${p.x - p.size / 2}px, ${p.y - p.size / 2}px)`;
+            p.element.style.opacity = String(p.life);
+          }
         }
       });
       toRemove.reverse().forEach(i => particlesRef.current.splice(i, 1));
@@ -187,7 +232,7 @@ export default function CustomCursor() {
     window.addEventListener('click', onClick);
     window.addEventListener('mousedown', onDown);
     window.addEventListener('mouseup', onUp);
-window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
     raf = requestAnimationFrame(animate);
@@ -200,15 +245,17 @@ window.addEventListener('touchstart', onTouchStart, { passive: true });
       window.removeEventListener('click', onClick);
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('mouseup', onUp);
-window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
       cancelAnimationFrame(raf);
-      // Cleanup particles
       particlesRef.current.forEach(p => p.element.remove());
       particlesRef.current = [];
     };
   }, [spawnParticles, visible]);
+
+  const mode = styleRef.current;
+  if (mode === 'off') return null;
 
   const dotSize = pressing ? 6 : hovering ? 5 : 8;
   const ringSize = pressing ? 32 : hovering ? 44 : 36;
@@ -217,58 +264,92 @@ window.removeEventListener('touchstart', onTouchStart);
   return (
     <>
       <div ref={particleContainerRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 10002 }} />
-      <div
-        ref={glowRef}
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: `${glowSize}px`,
-          height: `${glowSize}px`,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${currentColor}1f 0%, transparent 70%)`,
-          pointerEvents: 'none',
-          zIndex: 9999,
-          opacity: visible ? 1 : 0,
-          transition: 'opacity 0.3s, width 0.4s ease, height 0.4s ease, background 0.4s',
-          mixBlendMode: 'screen',
-        }}
-      />
-      <div
-        ref={ringRef}
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: `${ringSize}px`,
-          height: `${ringSize}px`,
-          borderRadius: '50%',
-          border: `1.5px solid ${hovering ? `${currentColor}99` : 'rgba(255,255,255,0.25)'}`,
-          pointerEvents: 'none',
-          zIndex: 10000,
-          opacity: visible ? 1 : 0,
-          transition: 'opacity 0.3s, width 0.4s ease, height 0.4s ease, border-color 0.4s',
-        }}
-      />
-      <div
-        ref={dotRef}
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: `${dotSize}px`,
-          height: `${dotSize}px`,
-          borderRadius: '50%',
-          background: hovering ? currentColor : '#fff',
-          boxShadow: `0 0 ${pressing ? 20 : 8}px ${currentColor}`,
-          pointerEvents: 'none',
-          zIndex: 10001,
-          opacity: visible ? 1 : 0,
-          transition: 'opacity 0.3s, width 0.3s ease, height 0.3s ease, background 0.4s, box-shadow 0.4s',
-        }}
-      />
+
+      {/* Glow layer — skipped for minimal */}
+      {mode !== 'minimal' && (
+        <div
+          ref={glowRef}
+          style={{
+            position: 'fixed', top: 0, left: 0,
+            width: `${glowSize}px`, height: `${glowSize}px`,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${currentColor}1f 0%, transparent 70%)`,
+            pointerEvents: 'none', zIndex: 9999,
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.3s, width 0.4s ease, height 0.4s ease, background 0.4s',
+            mixBlendMode: 'screen',
+            ...(mode === 'neon' ? {
+              animation: 'cursor-neon-pulse 1.5s ease-in-out infinite',
+              boxShadow: `0 0 30px ${currentColor}44, 0 0 60px ${currentColor}22`,
+            } : {}),
+          }}
+        />
+      )}
+
+      {/* Ring layer — skipped for minimal */}
+      {mode !== 'minimal' && (
+        <div
+          ref={ringRef}
+          style={{
+            position: 'fixed', top: 0, left: 0,
+            width: `${ringSize}px`, height: `${ringSize}px`,
+            borderRadius: '50%',
+            border: `1.5px solid ${hovering ? `${currentColor}99` : 'rgba(255,255,255,0.25)'}`,
+            pointerEvents: 'none', zIndex: 10000,
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.3s, width 0.4s ease, height 0.4s ease, border-color 0.4s',
+            ...(mode === 'neon' ? {
+              boxShadow: `0 0 12px ${currentColor}88, inset 0 0 8px ${currentColor}44`,
+            } : {}),
+          }}
+        />
+      )}
+
+      {/* Crosshair — only for crosshair mode */}
+      {mode === 'crosshair' && (
+        <div
+          ref={crossRef}
+          style={{
+            position: 'fixed', top: 0, left: 0,
+            width: '24px', height: '24px',
+            pointerEvents: 'none', zIndex: 10001,
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.3s',
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <line x1="12" y1="0" x2="12" y2="8" stroke={currentColor} strokeWidth="1.5" opacity="0.8" />
+            <line x1="12" y1="16" x2="12" y2="24" stroke={currentColor} strokeWidth="1.5" opacity="0.8" />
+            <line x1="0" y1="12" x2="8" y2="12" stroke={currentColor} strokeWidth="1.5" opacity="0.8" />
+            <line x1="16" y1="12" x2="24" y2="12" stroke={currentColor} strokeWidth="1.5" opacity="0.8" />
+            <circle cx="12" cy="12" r="3" stroke={currentColor} strokeWidth="1" opacity="0.5" />
+          </svg>
+        </div>
+      )}
+
+      {/* Dot layer */}
+      {mode !== 'crosshair' && (
+        <div
+          ref={dotRef}
+          style={{
+            position: 'fixed', top: 0, left: 0,
+            width: `${dotSize}px`, height: `${dotSize}px`,
+            borderRadius: '50%',
+            background: hovering ? currentColor : '#fff',
+            boxShadow: `0 0 ${pressing ? 20 : 8}px ${currentColor}`,
+            pointerEvents: 'none', zIndex: 10001,
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.3s, width 0.3s ease, height 0.3s ease, background 0.4s, box-shadow 0.4s',
+          }}
+        />
+      )}
+
       <style>{`
         * { cursor: none !important; }
+        @keyframes cursor-neon-pulse {
+          0%, 100% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.08); }
+        }
       `}</style>
     </>
   );

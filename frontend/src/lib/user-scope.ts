@@ -18,15 +18,12 @@ export function scopedKey(prefix: string, user?: string): string {
 
 const SCOPED_PREFIXES = [
   'threshold_cache',
-  'threshold_exams_user',
   'threshold_skip_log',
   'threshold_attendance_snapshot',
-  'threshold_optional_hours',
   'threshold_subject_registry',
   'threshold_delta_hash',
   'threshold_delta_raw',
   'threshold_sync_log',
-  'threshold_notif_prefs',
   'threshold_timetable_cache',
 ];
 

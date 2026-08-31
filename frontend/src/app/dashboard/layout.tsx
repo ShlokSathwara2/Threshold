@@ -16,6 +16,7 @@ import { checkForUpdate, notifyUpdate, type UpdateInfo } from '@/lib/update-chec
 import UpdatePrompt from '@/components/dashboard/UpdatePrompt';
 import WelcomeModal from '@/components/dashboard/WelcomeModal';
 import FeatureLockModal from '@/components/dashboard/FeatureLockModal';
+import FeatureAnnouncement from '@/components/ui/FeatureAnnouncement';
 import Lenis from 'lenis';
 
 const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 hours
@@ -72,7 +73,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Insights',
     items: [
-      { label: 'Analytics', path: '/dashboard/analytics', icon: '◉', locked: true },
+      { label: 'Analytics', path: '/dashboard/analytics', icon: '◉' },
       { label: 'Insights', path: '/dashboard/insights', icon: '🧭' },
     ],
   },
@@ -737,6 +738,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Feature lock modal for Campus Web */}
       <FeatureLockModal show={lockModal.show} feature={lockModal.feature} onClose={() => setLockModal({ show: false })} />
+
+      {/* New feature announcement popup */}
+      <FeatureAnnouncement />
 
       {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
       {sessionExpired && (

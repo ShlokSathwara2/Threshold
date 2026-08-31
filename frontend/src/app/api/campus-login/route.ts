@@ -25,44 +25,62 @@ export async function POST(req: Request) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     };
 
-    // Try /api/auth/login/ first
-    let response = await fetch('https://campusapi.fly.dev/api/auth/login/', {
+    // Race both endpoints — use whichever responds first with success
+    const parseResponse = async (res: Response) => {
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
+      return { ok: res.ok, status: res.status, data };
+    };
+
+    const endpoint1 = fetch('https://campusapi.fly.dev/api/auth/login/', {
       method: 'POST',
       headers,
       body: JSON.stringify({ username, password }),
-    });
+    }).then(async (res) => ({ source: 'auth', ...(await parseResponse(res)) }));
 
-    let resText = await response.text();
-    let data: any = {};
-    try {
-      data = JSON.parse(resText);
-    } catch {
-      data = { message: resText };
-    }
+    const endpoint2 = fetch('https://campusapi.fly.dev/api/student-portal/login', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ net_id: cleanNetId, password }),
+    }).then(async (res) => ({ source: 'portal', ...(await parseResponse(res)) }));
 
-    // Fallback to /api/student-portal/login if needed
-    if (!response.ok || data.status === 'fail' || data.status === 'error' || data.code?.includes('unavailable')) {
-      response = await fetch('https://campusapi.fly.dev/api/student-portal/login', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ net_id: cleanNetId, password }),
-      });
-      resText = await response.text();
-      try {
-        data = JSON.parse(resText);
-      } catch {
-        data = { message: resText };
+    const results = await Promise.allSettled([endpoint1, endpoint2]);
+
+    // Pick the first successful result
+    let result: { ok: boolean; status: number; data: any; source: string } | null = null;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok && r.value.data.status !== 'fail' && r.value.data.status !== 'error') {
+        result = r.value;
+        break;
       }
     }
 
-    if (!response.ok || data.status === 'fail' || data.status === 'error') {
+    // If neither succeeded, use the first one for error message
+    if (!result) {
+      const first = results[0];
+      if (first.status === 'fulfilled') {
+        result = first.value;
+      } else if (results[1].status === 'fulfilled') {
+        result = results[1].value;
+      } else {
+        return NextResponse.json(
+          { success: false, message: 'Failed to connect to Campus Web' },
+          { status: 502 }
+        );
+      }
+    }
+
+    const { data } = result;
+
+    if (!result.ok || data.status === 'fail' || data.status === 'error') {
       return NextResponse.json(
         { success: false, message: data.message || data.Message || 'Login failed — check your Net ID and password' },
-        { status: response.status || 400 }
+        { status: result.status || 400 }
       );
     }
 
-    // Extract CSRF token from headers or data
+    // Extract token from various possible response shapes
     const csrfToken =
       data.cookies ||
       data.token ||
@@ -70,9 +88,8 @@ export async function POST(req: Request) {
       data.COOKIE ||
       data.cookie ||
       data['X-CSRF-Token'] ||
-      response.headers.get('x-csrf-token') ||
-      response.headers.get('set-cookie')?.split(';')[0] ||
-      (data.status === 'success' && data.semester_id ? `semester:${data.semester_id}` : null);
+      data.sp_session ||
+      (typeof result.source === 'string' && result.source === 'portal' ? data.sp_session : null);
 
     if (!csrfToken) {
       return NextResponse.json(

@@ -46,20 +46,29 @@ export default function AnalyticsPage() {
     setError(null);
     try {
       if (isCampusWebSession()) {
-        throw new Error('Analytics requires the Android app. SRM portal does not allow the website to access grades and internal marks data.');
-      }
-      const [gRes, iRes] = await Promise.allSettled([
-        fetchSpGrades(),
-        fetchSpInternalMarks(),
-      ]);
-      if (gRes.status === 'fulfilled' && gRes.value) {
-        setGrades(gRes.value);
-      }
-      if (iRes.status === 'fulfilled') {
-        setInternals(iRes.value.internal_marks || []);
-      }
-      if (gRes.status === 'rejected' && iRes.status === 'rejected') {
-        throw new Error('Could not load analytics data');
+        // Campus Web: fetch internal marks from cached data, skip grades
+        const { getCached } = await import('@/lib/cache');
+        const cachedIM = getCached<import('@/lib/api').InternalMark[]>('internalMarks');
+        if (cachedIM?.data?.length) {
+          setInternals(cachedIM.data);
+        } else {
+          setInternals([]);
+        }
+        setGrades(null);
+      } else {
+        const [gRes, iRes] = await Promise.allSettled([
+          fetchSpGrades(),
+          fetchSpInternalMarks(),
+        ]);
+        if (gRes.status === 'fulfilled' && gRes.value) {
+          setGrades(gRes.value);
+        }
+        if (iRes.status === 'fulfilled') {
+          setInternals(iRes.value.internal_marks || []);
+        }
+        if (gRes.status === 'rejected' && iRes.status === 'rejected') {
+          throw new Error('Could not load analytics data');
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load analytics');

@@ -11,6 +11,8 @@ import { clearOptionalHours } from '@/lib/optional-hours';
 import { BiometricLock, appLockEnabled, setAppLockEnabled } from '@/lib/applock';
 import { SOUND_OPTIONS, getSoundPref, setSoundPref, playClickSound } from '@/lib/sounds';
 import type { SoundId } from '@/lib/sounds';
+import { CURSOR_OPTIONS, PARTICLE_OPTIONS, getCursorStyle, setCursorStyle, getCursorParticles, setCursorParticles } from '@/lib/cursor-effects';
+import type { CursorStyle, ParticleEffect } from '@/lib/cursor-effects';
 import { exportBackup, importBackup } from '@/lib/backup';
 import { useRef } from 'react';
 
@@ -59,6 +61,8 @@ export default function SettingsPage() {
   const [lockOn, setLockOn] = useState(false);
   const [bioAvailable, setBioAvailable] = useState<boolean | null>(null);
   const [sound, setSound] = useState<SoundId>('off');
+  const [cursorStyle, setCursorStyleState] = useState<CursorStyle>('classic');
+  const [particleEffect, setParticleEffectState] = useState<ParticleEffect>('burst');
   const [busy, setBusy] = useState<'export' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +73,8 @@ export default function SettingsPage() {
   useEffect(() => {
     setLockOn(appLockEnabled());
     setSound(getSoundPref());
+    setCursorStyleState(getCursorStyle());
+    setParticleEffectState(getCursorParticles());
     let mounted = true;
     BiometricLock.isAvailable()
       .then((r) => {
@@ -313,6 +319,104 @@ export default function SettingsPage() {
                   setSound(o.id);
                   playClickSound();
                 }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '2px',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: active ? `1.5px solid ${theme.accent}` : `1px solid ${WB(0.08)}`,
+                  background: active ? theme.accentDim : WB(0.02),
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: theme.text }}>
+                  {o.label} {active ? '✓' : ''}
+                </span>
+                <span style={{ fontSize: '0.64rem', color: W(0.4), lineHeight: 1.35 }}>{o.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.section>
+
+      {/* Cursor style */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        style={{
+          padding: '18px',
+          borderRadius: '18px',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
+          marginBottom: '14px',
+        }}
+      >
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px' }}>
+          Cursor style
+        </h2>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
+          Pick how your cursor looks and moves
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {CURSOR_OPTIONS.map((o) => {
+            const active = cursorStyle === o.id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => { setCursorStyle(o.id); setCursorStyleState(o.id); }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '2px',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: active ? `1.5px solid ${theme.accent}` : `1px solid ${WB(0.08)}`,
+                  background: active ? theme.accentDim : WB(0.02),
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: theme.text }}>
+                  {o.label} {active ? '✓' : ''}
+                </span>
+                <span style={{ fontSize: '0.64rem', color: W(0.4), lineHeight: 1.35 }}>{o.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.section>
+
+      {/* Click particle effect */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.13 }}
+        style={{
+          padding: '18px',
+          borderRadius: '18px',
+          background: WB(0.03),
+          border: `1px solid ${WB(0.08)}`,
+          marginBottom: '14px',
+        }}
+      >
+        <h2 style={{ fontSize: '0.9rem', fontWeight: 700, color: theme.text, marginBottom: '4px' }}>
+          Click effect
+        </h2>
+        <p style={{ fontSize: '0.72rem', color: W(0.35), marginBottom: '14px' }}>
+          What happens when you tap or click
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {PARTICLE_OPTIONS.map((o) => {
+            const active = particleEffect === o.id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => { setCursorParticles(o.id); setParticleEffectState(o.id); }}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -604,8 +708,6 @@ export default function SettingsPage() {
         </p>
         <p style={{ fontSize: '0.68rem', color: W(0.3), margin: '10px 0 0', lineHeight: 1.5 }}>
           Found a bug or have feedback? Reach out on{' '}
-          <a href="https://www.instagram.com/_shlok_sathwara_/" target="_blank" rel="noreferrer" style={{ color: '#e1306c', fontWeight: 700, textDecoration: 'none' }}>Instagram</a>{' '}
-          or{' '}
           <a href="https://www.linkedin.com/in/shlok-sathwara-4b91ab319/" target="_blank" rel="noreferrer" style={{ color: '#0a66c2', fontWeight: 700, textDecoration: 'none' }}>LinkedIn</a>.
         </p>
       </motion.section>

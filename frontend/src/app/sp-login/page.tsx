@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { campusWebLogin, saveCampusSession, saveSession } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+import LoginRedirect from '@/components/ui/LoginRedirect';
 
 const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), { ssr: false });
 const PortalRift = dynamic(() => import('@/components/animations/PortalRift'), { ssr: false });
@@ -32,6 +33,7 @@ export default function SpLoginPage() {
   const [elapsed, setElapsed] = useState(0);
   const [step, setStep] = useState<'credentials' | 'captcha'>('credentials');
   const [activeAnimation, setActiveAnimation] = useState<AnimType | null>(null);
+  const [showRedirect, setShowRedirect] = useState(false);
   const captchaRef = useRef<HTMLInputElement>(null);
   const animDoneRef = useRef(false);
 
@@ -75,7 +77,9 @@ export default function SpLoginPage() {
         throw new Error('Login failed — invalid credentials');
       }
       saveCampusSession(token, username.trim().split('@')[0].toLowerCase());
-      router.push('/dashboard');
+      setShowRedirect(true);
+      // Navigate after a brief delay so the overlay is visible
+      setTimeout(() => router.push('/dashboard'), 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -526,6 +530,7 @@ export default function SpLoginPage() {
           )}
         </motion.div>
       </div>
+      {showRedirect && <LoginRedirect />}
     </div>
   );
 }
