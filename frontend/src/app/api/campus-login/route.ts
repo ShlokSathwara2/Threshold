@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     // Fallback to /api/student-portal/login if needed
-    if (!response.ok && data.message?.includes('Invalid request body')) {
+    if (!response.ok || data.status === 'fail' || data.status === 'error' || data.code?.includes('unavailable')) {
       response = await fetch('https://campusapi.fly.dev/api/student-portal/login', {
         method: 'POST',
         headers,
@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       data.cookie ||
       data['X-CSRF-Token'] ||
       response.headers.get('x-csrf-token') ||
-      response.headers.get('set-cookie');
+      response.headers.get('set-cookie')?.split(';')[0] ||
+      (data.status === 'success' && data.semester_id ? `semester:${data.semester_id}` : null);
 
     if (!csrfToken) {
       return NextResponse.json(

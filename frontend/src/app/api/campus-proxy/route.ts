@@ -20,7 +20,10 @@ export async function GET(req: Request) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     };
 
-    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+      if (csrfToken.includes('=')) headers['Cookie'] = csrfToken;
+    }
     if (netId) headers['X-Net-ID'] = netId;
 
     const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;
@@ -74,7 +77,10 @@ export async function POST(req: Request) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     };
 
-    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+      if (csrfToken.includes('=')) headers['Cookie'] = csrfToken;
+    }
     if (netId) headers['X-Net-ID'] = netId;
 
     const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;

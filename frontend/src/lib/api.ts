@@ -1034,8 +1034,8 @@ export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse 
       for (const [testName, testData] of Object.entries(tp.tests)) {
         if (testData && typeof testData === 'object') {
           const d = testData as Record<string, unknown>;
-          // Handle nested marks: { scored: X, total: Y } or { marks: { scored, total } }
-          const scored = d.scored ?? (d.marks as any)?.scored ?? '';
+          // Handle nested marks: { got: X, total: Y } or { scored: X, total: Y }
+          const scored = d.got ?? d.scored ?? (d.marks as any)?.scored ?? '';
           const total = d.total ?? (d.marks as any)?.total ?? '';
           testPerformance.push({
             test: testName,
