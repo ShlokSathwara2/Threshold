@@ -929,14 +929,14 @@ export async function fetchCampusWebStudentPortalAttendance(netId: string): Prom
     return {
       regNumber: cleanNetId,
       attendance: list.map((a: any) => ({
-        courseCode: a.courseCode || a.course_code || a.code || '',
-        courseTitle: a.courseTitle || a.course_name || a.title || '',
+        courseCode: a.courseCode || a.course_code || a.code || a.subjectcode || '',
+        courseTitle: a.courseTitle || a.course_name || a.title || a.subjectdesc || '',
         category: a.category || a.type || '',
         facultyName: a.facultyName || a.faculty || '',
         slot: a.slot || '',
-        hoursConducted: Number(a.hoursConducted || a.conducted || a.total_hours) || 0,
+        hoursConducted: Number(a.hoursConducted || a.conducted || a.total_hours || a.total) || 0,
         hoursAbsent: Number(a.hoursAbsent || a.absent) || 0,
-        attendancePercentage: Number(a.attendancePercentage || a.percentage || a.percent) || 0,
+        attendancePercentage: Number(a.attendancePercentage || a.percentage || a.percent || a.presentpercentage) || 0,
       })),
       status: 200,
     };
