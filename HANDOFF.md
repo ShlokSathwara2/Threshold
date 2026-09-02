@@ -6,7 +6,7 @@ You are continuing work on **Threshold**, an SRM (SRM Institute of Science and T
 - **Frontend:** Next.js 16.3.1 (Turbopack) + TypeScript + Tailwind, at `D:\Threshold\frontend\` — deployed to Vercel: https://threshold-jet.vercel.app
 - **Backend:** Python FastAPI at `D:\Threshold\backend\` — deployed to Render: https://threshold-1-ly01.onrender.com (healthy, verified 200)
 - **Mobile:** Capacitor 8 Android app (appId `com.threshold.app`), built locally with Gradle — NO Android Studio needed
-- **GitHub:** https://github.com/ShlokSathwara2/Threshold (last commit `a655aaa`; Capacitor changes uncommitted)
+- **GitHub:** https://github.com/ShlokSathwara2/Threshold (last commit `df4b57c`)
 - **Roadmap:** `D:\Threshold\Threshold_Roadmap_v2.md` — current phase 1.6: Android APK with native in-app WebView login to SRM Student Portal, capture session cookies, fetch student data via backend
 - **Environment (Windows, PowerShell 5.1):** JDK 24 (`JAVA_HOME=C:\Program Files\Java\jdk-24`), Android SDK at `%LOCALAPPDATA%\Android\Sdk` (build-tools 35.0.0), Gradle 8.14.3 wrapper. Phone: Galaxy S25 Ultra SM-S938B, USB debugging connected (`adb` device `R5CYA12VL5K`), `adb` at `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`
 
@@ -54,7 +54,36 @@ $adb="$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb logcat -s InAppBrowserCaptcha:I
 ```
 
+## Campus Web Attendance Bug — FIXED (2026-09-02)
+**Problem:** Attendance showed 0% for all subjects when logged in via Campus Web (web browser, not APK).
+
+**Root cause:** Field name mismatch in `fetchCampusWebStudentPortalAttendance()` (`frontend/src/lib/api.ts:931-940`). The Campus Web API endpoint `/api/student-portal/attendance` (proxied via `campusapi.fly.dev`) returns:
+```
+subjectcode, subjectdesc, present, absent, total, presentpercentage
+```
+But the adapter was mapping from field names that don't exist in this response:
+```
+courseCode, courseTitle, hoursConducted, hoursAbsent, attendancePercentage
+```
+All values defaulted to `0` → `calculateSubjectAttendance()` computed `0/0 = 0%`.
+
+**Fix:** Added the actual Campus Web API field names as `||` fallbacks in the mapping chains:
+- `a.subjectcode` → `courseCode`
+- `a.subjectdesc` → `courseTitle`
+- `a.total` → `hoursConducted`
+- `a.presentpercentage` → `attendancePercentage`
+
+**Verified:** Tested with credentials `ss1516` / `kolhS#24` — all 9 subjects now return correct percentages (100%, 83.33%, 77.78%, etc.). Commit `df4b57c`, pushed to `main`, Vercel auto-deploys.
+
+**Campus Web API details (for future reference):**
+- Login: `POST https://campusapi.fly.dev/api/auth/login/` with `{username: "ss1516@srmist.edu.in", password: "..."}` → returns `Cookies` field (use as `X-CSRF-Token` header)
+- Also: `POST https://campusapi.fly.dev/api/student-portal/login` with `{net_id: "ss1516", password: "..."}` → returns `semester_id`
+- Attendance: `POST https://campusapi.fly.dev/api/student-portal/attendance` with `{net_id: "ss1516"}` + cookies → returns `{attendance: [...], net_id, status}`
+- User data: `GET https://campusapi.fly.dev/api/auth/user/` with cookies → returns courses, testPerformances, profile
+- All proxied through `frontend/src/app/api/campus-proxy/route.ts` (Next.js API route) and `frontend/src/app/api/campus-login/route.ts`
+
 ## Current Status (what a fresh agent inherits)
+- **Campus Web attendance is FIXED and deployed:** `fetchCampusWebStudentPortalAttendance()` now correctly maps Campus Web API field names. Verified with `ss1516` credentials — 9 subjects with correct percentages. See ## Campus Web Attendance Bug — FIXED section above.
 - **The captcha/login battle is RESOLVED differently than planned:** the app now uses the phone's real Chrome via `@capgo/capacitor-inappbrowser` with desktop UA + cookie capture (`InAppBrowser.getCookies` → `storeSession()`). Do NOT re-open the WAF investigation; it was solved by the WebView login flow that is live and working.
 - **Web login via curl (IN PROGRESS — NOT WORKING YET):** backend `curl_login.py` + frontend CAPTCHA flow exist but login POST always returns "Invalid credentials". See ## Web Login Status below.
 - **Current feature state (all installed & verified on device):** swipe-to-start welcome, dashboard (bunk planner, habit insights, universal search, today-at-a-glance, sync-status caption), exams page with **cloud sync** (backend `GET/PUT /sp/exams` keyed by `X-User`, store at `backend/data/user_exams.json`), **delta sync** (`X-Delta-Hash` on `/sp/attendance|marks|internal-marks|calendar|profile` → `{"delta":"unchanged"}` short-circuit; client stores raw under `threshold_delta_raw__*`), **deep links** (`threshold://attendance|subject/{code}|timetable|marks|exams` — manifest intent-filter + `appUrlOpen` in dashboard layout), **App lock** (local Kotlin plugin `BiometricLockPlugin` — androidx.biometric fingerprint/face/PIN via DEVICE_CREDENTIAL; settings toggle `threshold_applock`; `AppLockGate` overlay in dashboard layout; re-locks on background), **local notifications** (`@capacitor/local-notifications@8.3.0` — morning brief 8 AM: at-risk <75% + exams ≤3 days; exam-day/tomorrow reminders 9 AM; gated by `notif` prefs; rescheduled from dashboard effect), hamburger sidebar name fix (avatar initial + prettified name) + staggered nav animations, settings Trust & security section, welcome features updated.
