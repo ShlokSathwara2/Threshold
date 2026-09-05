@@ -32,11 +32,15 @@ import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import HappyUpdates from '@/components/dashboard/HappyUpdates';
 import AttendanceChanges from '@/components/dashboard/AttendanceChanges';
+import AttendanceUpdateBanner from '@/components/dashboard/AttendanceUpdateBanner';
 import Announcements from '@/components/dashboard/Announcements';
 import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
 import { recordAttendanceSnapshot, loadSnapshot, detectAttendanceChanges, type AttendanceChange } from '@/lib/habits';
+import { useAttendanceUpdates } from '@/hooks/useAttendanceUpdates';
+import { useWebAttendancePoll } from '@/hooks/useWebAttendancePoll';
+import { syncDeltaHash } from '@/lib/attendance-background';
 import { toDate, toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
 import { syncWidget } from '@/lib/widget-sync';
 
@@ -82,9 +86,13 @@ export default function DashboardPage() {
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
   const { subjects, overall, loading, stale, refetch: refetchAttendance } = useAttendance();
+  const { changes: bgUpdates, hasUpdates, refresh: refreshUpdates } = useAttendanceUpdates();
+  const { changes: webPollChanges } = useWebAttendancePoll();
   const [gradesKey, setGradesKey] = useState(0);
   usePullToRefresh(async () => {
     await refetchAttendance();
+    await syncDeltaHash();
+    await refreshUpdates();
     setGradesKey((k) => k + 1);
     await fetchAll();
     // Sync exams from cloud
@@ -165,6 +173,19 @@ export default function DashboardPage() {
     setAttendanceChanges(changes);
     recordAttendanceSnapshot(subjects, toDateStr(new Date()), todayDO);
   }, [subjects, todayDO]);
+
+  // Sync delta hash to native background checker whenever attendance changes
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    void syncDeltaHash();
+  }, [subjects]);
+
+  // When web poll detects new changes, refresh the updates display
+  useEffect(() => {
+    if (webPollChanges.length > 0) {
+      void refreshUpdates();
+    }
+  }, [webPollChanges, refreshUpdates]);
 
   const loadTimetable = async () => {
     if (!isAcademiaLoggedIn() && !isCampusWebSession()) return;
@@ -1139,6 +1160,12 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* Background attendance updates (APK only) */}
+      <AttendanceUpdateBanner
+        changes={bgUpdates}
+        onTap={(code) => router.push(`/dashboard/attendance?code=${code}`)}
+      />
+
       {/* Attendance changes */}
       <AttendanceChanges
         changes={attendanceChanges}
@@ -1169,8 +1196,29 @@ export default function DashboardPage() {
             boxShadow: '0 6px 24px rgba(76,29,149,0.18)',
             cursor: 'pointer',
             textAlign: 'center',
+            position: 'relative',
           }}
         >
+          {/* Update badge */}
+          {hasUpdates && (
+            <motion.div
+              animate={{
+                scale: [1, 1.2, 1],
+                opacity: [1, 0.7, 1],
+              }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#22c55e',
+                boxShadow: '0 0 10px rgba(34,197,94,0.6)',
+              }}
+            />
+          )}
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
             <svg width="64" height="64" style={{ transform: 'rotate(-90deg)' }}>
               <circle cx="32" cy="32" r="26" fill="none" stroke={WB(0.07)} strokeWidth="5" />

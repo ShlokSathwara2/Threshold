@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
+import { useAttendanceUpdates } from '@/hooks/useAttendanceUpdates';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
 import SubjectAttendanceCard from '@/components/attendance/SubjectAttendanceCard';
 import LeavePlanner from '@/components/attendance/LeavePlanner';
@@ -35,6 +36,7 @@ export default function AttendancePage() {
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
   const { subjects, overall, loading, error, refetch } = useAttendance();
+  const { hasUpdates } = useAttendanceUpdates();
   const [scheduleByCourse, setScheduleByCourse] = useState<DayOrderSchedule>(new Map());
   const [dayOrderLookup, setDayOrderLookup] = useState<Map<string, string | null>>(new Map());
   const [metaReady, setMetaReady] = useState(false);
@@ -324,6 +326,20 @@ export default function AttendancePage() {
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
           {subjects.length} subjects tracked • Sorted by risk (lowest margin first)
+          {hasUpdates && (
+            <span style={{
+              marginLeft: '8px',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              color: '#86efac',
+              background: 'rgba(34,197,94,0.12)',
+              padding: '2px 8px',
+              borderRadius: '999px',
+              verticalAlign: 'middle',
+            }}>
+              Updated today
+            </span>
+          )}
         </p>
         <p style={{
           color: 'var(--threshold-accent-text)',
