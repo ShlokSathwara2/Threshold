@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isSpLoggedIn, fetchCourses, type Mark } from '@/lib/api';
+import { isSpLoggedIn, fetchCourses, isCampusWebSession, fetchCampusWebUser, type Mark } from '@/lib/api';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
 import { GRADE_POINTS, computeSgpa, type CgpaRow } from '@/lib/grade-calculator';
 import GradeTargetTool from '@/components/marks/GradeTargetTool';
@@ -69,24 +69,36 @@ export default function CgpaCalculatorPage() {
     }
   }, [router]);
 
-  // Best-effort real credits from academia /courses (falls back to 3)
+  // Best-effort real credits from academia /courses or Campus Web (falls back to 3)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await Promise.race([
-          fetchCourses(),
-          new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('timeout')), 4000)),
-        ]);
-        if (cancelled) return;
-        const map = new Map<string, number>();
-        for (const c of res.courses || []) {
-          const n = parseFloat(c.credit);
-          if (!isNaN(n) && n > 0) map.set(c.code, n);
+        if (isCampusWebSession()) {
+          const user = await fetchCampusWebUser();
+          if (cancelled) return;
+          const map = new Map<string, number>();
+          for (const c of user.courses || []) {
+            const n = parseFloat(c.credit || '');
+            const code = c.courseCode || c.subject_code || '';
+            if (!isNaN(n) && n > 0 && code) map.set(code, n);
+          }
+          if (map.size > 0) setCreditMap(map);
+        } else {
+          const res = await Promise.race([
+            fetchCourses(),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('timeout')), 4000)),
+          ]);
+          if (cancelled) return;
+          const map = new Map<string, number>();
+          for (const c of res.courses || []) {
+            const n = parseFloat(c.credit);
+            if (!isNaN(n) && n > 0) map.set(c.code, n);
+          }
+          if (map.size > 0) setCreditMap(map);
         }
-        if (map.size > 0) setCreditMap(map);
       } catch {
-        // academia unavailable — keep default credits
+        // unavailable — keep default credits
       } finally {
         if (!cancelled) setCreditsSettled(true);
       }

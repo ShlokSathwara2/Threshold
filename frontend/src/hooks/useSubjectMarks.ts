@@ -8,6 +8,11 @@ import {
   fetchAttendance,
   fetchSpProfile,
   isAcademiaLoggedIn,
+  isCampusWebSession,
+  fetchCampusWebUser,
+  adaptCampusWebMarks,
+  adaptCampusWebProfile,
+  adaptCampusWebAttendance,
   type MarksResponse,
   type Mark,
 } from '@/lib/api';
@@ -30,6 +35,40 @@ export function useSubjectMarks(): UseSubjectMarksResult {
     setLoading(true);
     setError(null);
     try {
+      // ── Campus Web path ────────────────────────────────────────────
+      if (isCampusWebSession()) {
+        const cwUser = await fetchCampusWebUser();
+
+        const cwProfile = adaptCampusWebProfile(
+          cwUser,
+          cwUser.registrationNumber || '',
+        );
+        if (typeof cwProfile.profile?.semester === 'number') {
+          setSemester(cwProfile.profile.semester);
+        }
+
+        const cwMarksResp = adaptCampusWebMarks(cwUser);
+        const cwMarks = cwMarksResp.marks || [];
+
+        const cwAttResp = adaptCampusWebAttendance(cwUser);
+        const cwAttendance = cwAttResp.attendance || [];
+
+        const currentCodes = new Set<string>();
+        for (const a of cwAttendance) if (a.courseCode) currentCodes.add(a.courseCode);
+        for (const m of cwMarks) if (m.courseCode) currentCodes.add(m.courseCode);
+
+        const byCode = new Map<string, Mark>();
+        for (const m of cwMarks) {
+          if (currentCodes.size > 0 && !currentCodes.has(m.courseCode)) continue;
+          byCode.set(m.courseCode, m);
+        }
+
+        setMarks([...byCode.values()]);
+        setLoading(false);
+        return;
+      }
+
+      // ── SP / Academia path (original) ─────────────────────────────
       const academiaOn = isAcademiaLoggedIn();
       const [marksRes, internalRes, attRes, profileRes, acaRes] = await Promise.allSettled([
         fetchMarks(),
