@@ -140,6 +140,9 @@ export interface NotifPrefs {
   classAlerts: boolean;
   bunkAlerts: boolean;
   weeklyReport: boolean;
+  stepClasses: boolean;
+  aptitudeClasses: boolean;
+  examDayBefore: boolean;
 }
 
 export const DEFAULT_NOTIF: NotifPrefs = {
@@ -149,6 +152,9 @@ export const DEFAULT_NOTIF: NotifPrefs = {
   classAlerts: false,
   bunkAlerts: false,
   weeklyReport: false,
+  stepClasses: false,
+  aptitudeClasses: false,
+  examDayBefore: false,
 };
 
 const THEME_KEY = 'threshold_theme';

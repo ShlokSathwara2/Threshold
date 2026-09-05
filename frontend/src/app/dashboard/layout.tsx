@@ -78,6 +78,14 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: 'Schedule',
+    items: [
+      { label: 'STEP Classes', path: '/dashboard/step', icon: '△' },
+      { label: 'Aptitude', path: '/dashboard/aptitude', icon: '◈' },
+      { label: 'Exams', path: '/dashboard/exams', icon: '📝' },
+    ],
+  },
+  {
     label: 'Helper',
     expandable: true,
     items: [
@@ -113,6 +121,9 @@ const pageTitles: Record<string, string> = {
   '/dashboard/insights': 'Insights',
   '/dashboard/helper/resources': 'Resources',
   '/dashboard/helper/study-plus': 'Study Plus',
+  '/dashboard/step': 'STEP Classes',
+  '/dashboard/aptitude': 'Aptitude Classes',
+  '/dashboard/exams': 'Exams',
 };
 
 function NoiseOverlay() {

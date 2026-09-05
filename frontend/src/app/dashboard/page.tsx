@@ -25,6 +25,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { getCached, setCached } from '@/lib/cache';
 import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
+import { loadStepClasses, loadAptitudeClasses, getTodayClasses as getTodayScheduleClasses, formatTime, parseTime } from '@/lib/schedule-classes';
 import { lastSyncTime } from '@/lib/api';
 import { refreshNotifications } from '@/lib/notifications';
 import GradesSummary from '@/components/grades/GradesSummary';
@@ -33,6 +34,7 @@ import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import HappyUpdates from '@/components/dashboard/HappyUpdates';
 import AttendanceChanges from '@/components/dashboard/AttendanceChanges';
 import AttendanceUpdateBanner from '@/components/dashboard/AttendanceUpdateBanner';
+import NotificationPermissionBanner from '@/components/ui/NotificationPermissionBanner';
 import Announcements from '@/components/dashboard/Announcements';
 import UniversalSearch from '@/components/dashboard/UniversalSearch';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
@@ -561,6 +563,37 @@ export default function DashboardPage() {
         route: '/dashboard/timetable',
       });
     }
+  }
+  // STEP/Aptitude briefs — always show if there are classes today, even on holidays/weekends
+  const todayStepClasses = getTodayScheduleClasses(loadStepClasses());
+  const todayAptClasses = getTodayScheduleClasses(loadAptitudeClasses());
+  if (todayStepClasses.length > 0) {
+    const first = todayStepClasses[0];
+    const firstSchedule = first.schedule.find((s) => {
+      const dayNames: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      return s.day === dayNames[todayD.getDay()];
+    });
+    briefs.push({
+      icon: '△',
+      tone: 'info',
+      title: `STEP: ${first.name}`,
+      body: firstSchedule ? `Today at ${formatTime(firstSchedule.startTime)}` : `${todayStepClasses.length} class${todayStepClasses.length > 1 ? 'es' : ''} scheduled today`,
+      route: '/dashboard/step',
+    });
+  }
+  if (todayAptClasses.length > 0) {
+    const first = todayAptClasses[0];
+    const firstSchedule = first.schedule.find((s) => {
+      const dayNames: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      return s.day === dayNames[todayD.getDay()];
+    });
+    briefs.push({
+      icon: '◈',
+      tone: 'info',
+      title: `Aptitude: ${first.name}`,
+      body: firstSchedule ? `Today at ${formatTime(firstSchedule.startTime)}` : `${todayAptClasses.length} class${todayAptClasses.length > 1 ? 'es' : ''} scheduled today`,
+      route: '/dashboard/aptitude',
+    });
   }
   for (const s of atRiskToday) {
     const slot = slotByCode(s.courseCode);
@@ -1165,6 +1198,9 @@ export default function DashboardPage() {
         changes={bgUpdates}
         onTap={(code) => router.push(`/dashboard/attendance?code=${code}`)}
       />
+
+      {/* Notification permission prompt (web only) */}
+      <NotificationPermissionBanner />
 
       {/* Attendance changes */}
       <AttendanceChanges

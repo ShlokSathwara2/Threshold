@@ -42,6 +42,8 @@ sp_auth_service = StudentPortalAuth()
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(exist_ok=True)
 _EXAMS_FILE = _DATA_DIR / "user_exams.json"
+_STEP_FILE = _DATA_DIR / "user_step_classes.json"
+_APTITUDE_FILE = _DATA_DIR / "user_aptitude_classes.json"
 
 
 def _load_exams_store() -> dict:
@@ -689,4 +691,94 @@ def sp_exams_put(
     store = _load_exams_store()
     store[x_user] = body.get("exams", [])
     _save_exams_store(store)
+    return {"success": True, "count": len(store[x_user])}
+
+
+# ── Per-user app data (STEP classes) ─────────────────────────────────
+
+def _load_step_store() -> dict:
+    try:
+        if _STEP_FILE.exists():
+            return json.loads(_STEP_FILE.read_text("utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_step_store(store: dict) -> None:
+    try:
+        _STEP_FILE.write_text(json.dumps(store), "utf-8")
+    except Exception:
+        pass
+
+
+@router.get("/sp/step-classes")
+def sp_step_get(
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    store = _load_step_store()
+    return {"classes": store.get(x_user, [])}
+
+
+@router.put("/sp/step-classes")
+def sp_step_put(
+    body: dict,
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    if not x_user:
+        return {"error": "X-User header required", "status": 400}
+    store = _load_step_store()
+    store[x_user] = body.get("classes", [])
+    _save_step_store(store)
+    return {"success": True, "count": len(store[x_user])}
+
+
+# ── Per-user app data (Aptitude classes) ─────────────────────────────
+
+def _load_aptitude_store() -> dict:
+    try:
+        if _APTITUDE_FILE.exists():
+            return json.loads(_APTITUDE_FILE.read_text("utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_aptitude_store(store: dict) -> None:
+    try:
+        _APTITUDE_FILE.write_text(json.dumps(store), "utf-8")
+    except Exception:
+        pass
+
+
+@router.get("/sp/aptitude-classes")
+def sp_aptitude_get(
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    store = _load_aptitude_store()
+    return {"classes": store.get(x_user, [])}
+
+
+@router.put("/sp/aptitude-classes")
+def sp_aptitude_put(
+    body: dict,
+    x_user: str = Header(default="", alias="X-User"),
+    x_csrf_token: str = Header(default="", alias="X-CSRF-Token"),
+):
+    if not _get_sp_cookie(x_csrf_token):
+        return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
+    if not x_user:
+        return {"error": "X-User header required", "status": 400}
+    store = _load_aptitude_store()
+    store[x_user] = body.get("classes", [])
+    _save_aptitude_store(store)
     return {"success": True, "count": len(store[x_user])}

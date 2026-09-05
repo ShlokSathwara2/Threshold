@@ -770,6 +770,46 @@ export async function saveSpExams(user: string, exams: CloudExam[]): Promise<voi
   });
 }
 
+// ── STEP class store ─────────────────────────────────────────────
+
+export interface CloudScheduleClass {
+  id: string;
+  name: string;
+  schedule: { day: string; startTime: string; endTime: string }[];
+}
+
+export async function fetchSpStepClasses(user: string): Promise<CloudScheduleClass[]> {
+  const res = await apiFetch<{ classes: CloudScheduleClass[] }>('/sp/step-classes', {
+    headers: { 'X-User': user },
+  });
+  return Array.isArray(res.classes) ? res.classes : [];
+}
+
+export async function saveSpStepClasses(user: string, classes: CloudScheduleClass[]): Promise<void> {
+  await apiFetch('/sp/step-classes', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-User': user },
+    body: JSON.stringify({ classes }),
+  });
+}
+
+// ── Aptitude class store ─────────────────────────────────────────
+
+export async function fetchSpAptitudeClasses(user: string): Promise<CloudScheduleClass[]> {
+  const res = await apiFetch<{ classes: CloudScheduleClass[] }>('/sp/aptitude-classes', {
+    headers: { 'X-User': user },
+  });
+  return Array.isArray(res.classes) ? res.classes : [];
+}
+
+export async function saveSpAptitudeClasses(user: string, classes: CloudScheduleClass[]): Promise<void> {
+  await apiFetch('/sp/aptitude-classes', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-User': user },
+    body: JSON.stringify({ classes }),
+  });
+}
+
 // ── Campus Web API (Web login) ────────────────────────────────────
 // When running in a browser (not the native APK), we use Campus Web's
 // backend to bypass the WAF and avoid CAPTCHA entirely.

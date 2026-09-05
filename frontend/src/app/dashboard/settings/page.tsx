@@ -250,8 +250,11 @@ export default function SettingsPage() {
           {[
             { key: 'attendanceRisk' as const, label: 'Attendance-risk alerts', desc: 'Subjects below 75% — shown in dashboard alerts' },
             { key: 'examDates' as const, label: 'Exam-date reminders', desc: 'Exams within the next few days' },
+            { key: 'examDayBefore' as const, label: 'Exam day-before alert', desc: 'Reminder the evening before each exam' },
             { key: 'classAlerts' as const, label: '"Attend this class" alerts', desc: 'Reminders 30 min before classes of subjects below 75%' },
             { key: 'bunkAlerts' as const, label: 'Bunk-window alerts', desc: 'Tell you when today\u2019s remaining class is safe to skip' },
+            { key: 'stepClasses' as const, label: 'STEP class reminders', desc: '15 min before each STEP class' },
+            { key: 'aptitudeClasses' as const, label: 'Aptitude class reminders', desc: '15 min before each Aptitude class' },
             { key: 'weeklyReport' as const, label: 'Weekly report card', desc: 'Sunday summary of attendance, misses and next week' },
           ].map((c) => (
             <div

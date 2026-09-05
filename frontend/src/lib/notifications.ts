@@ -4,6 +4,16 @@ import { nextExamDate, type ExamEntry } from './exams';
 import { buildDayOrderLookup } from './day-order';
 import { loadAttributions } from './habits';
 import type { CalendarMonth, TimetableSlot } from './api';
+import {
+  loadStepClasses,
+  loadAptitudeClasses,
+  getTodayClasses,
+  getUpcomingClasses,
+  parseTime,
+  DAY_LABELS,
+  type ScheduleClassEntry,
+  type DayOfWeek,
+} from './schedule-classes';
 
 export interface NotifSubject {
   courseCode: string;
@@ -198,6 +208,74 @@ function parseDateStr(d: string): Date | null {
   return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
 }
 
+// STEP / Aptitude class reminders: 15 min before each class, scheduled
+// for upcoming days (recurring weekly classes — not just today).
+function scheduleClassTypeAlerts(
+  classes: ScheduleClassEntry[],
+  type: 'STEP' | 'Aptitude',
+  now: Date,
+  startId: number
+): Array<{ id: number; title: string; body: string; at: Date }> {
+  const out: Array<{ id: number; title: string; body: string; at: Date }> = [];
+  const upcoming = getUpcomingClasses(classes, 7); // next 7 days
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let id = startId;
+
+  for (const item of upcoming) {
+    const startMin = parseTime(item.startTime);
+    const triggerMin = startMin - 15;
+
+    // Calculate the trigger date on the actual class day
+    const trigger = new Date(item.date);
+    trigger.setHours(0, triggerMin, 0, 0);
+
+    // Skip if trigger is in the past (including today's already-passed classes)
+    if (trigger.getTime() <= now.getTime() + 5 * 60000) continue;
+
+    const hh = Math.floor(startMin / 60);
+    const mm = startMin % 60;
+    const h12 = ((hh + 11) % 12) + 1;
+    const ap = hh >= 12 ? 'PM' : 'AM';
+    const timeStr = `${h12}:${String(mm).padStart(2, '0')} ${ap}`;
+    const dayLabel = DAY_LABELS[item.day];
+    const isToday = trigger.toDateString() === now.toDateString();
+
+    out.push({
+      id: id++,
+      title: `${type} class in 15 min`,
+      body: `${item.entry.name} at ${timeStr}${isToday ? '' : ` (${dayLabel})`}`,
+      at: trigger,
+    });
+  }
+  return out;
+}
+
+// Exam day-before reminder: notify at 7 PM the evening before each exam.
+function scheduleExamDayBeforeAlerts(
+  exams: ExamEntry[],
+  now: Date,
+  startId: number
+): Array<{ id: number; title: string; body: string; at: Date }> {
+  const out: Array<{ id: number; title: string; body: string; at: Date }> = [];
+  let id = startId;
+  for (const entry of exams) {
+    const next = nextExamDate(entry, now);
+    if (!next) continue;
+    const days = Math.round((next.getTime() - now.getTime()) / 86400000);
+    if (days !== 1) continue;
+    const trigger = new Date(next);
+    trigger.setHours(19, 0, 0, 0);
+    if (trigger.getTime() <= now.getTime()) continue;
+    out.push({
+      id: id++,
+      title: `Exam tomorrow: ${entry.subjectTitle}`,
+      body: `${entry.subjectCode} — prep tonight, you've got this!`,
+      at: trigger,
+    });
+  }
+  return out;
+}
+
 // Weekly report card: every Sunday at 8 PM, summarise the week.
 async function scheduleWeeklyReport(
   subjects: NotifSubject[],
@@ -327,6 +405,23 @@ export async function refreshNotifications(
         at: remindAt,
       });
     }
+  }
+
+  // ── Exam day-before reminder (7 PM the evening before) ───────────
+  if (notif.examDayBefore) {
+    toSchedule.push(...scheduleExamDayBeforeAlerts(exams, now, 5000));
+  }
+
+  // ── STEP class reminders (15 min before) ─────────────────────────
+  if (notif.stepClasses) {
+    const stepClasses = loadStepClasses();
+    toSchedule.push(...scheduleClassTypeAlerts(stepClasses, 'STEP', now, 6000));
+  }
+
+  // ── Aptitude class reminders (15 min before) ─────────────────────
+  if (notif.aptitudeClasses) {
+    const aptClasses = loadAptitudeClasses();
+    toSchedule.push(...scheduleClassTypeAlerts(aptClasses, 'Aptitude', now, 7000));
   }
 
   if (toSchedule.length === 0) return;
