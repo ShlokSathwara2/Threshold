@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const FEATURE_VERSION = '1.1.0';
+const FEATURE_VERSION = '2.5.0';
 const STORAGE_KEY = 'threshold_feature_announcement_seen';
 
 export default function FeatureAnnouncement() {
@@ -27,9 +27,9 @@ export default function FeatureAnnouncement() {
     setShow(false);
   };
 
-  const goToSettings = () => {
+  const goToStep = () => {
     dismiss();
-    router.push('/dashboard/settings');
+    router.push('/dashboard/step');
   };
 
   return (
@@ -94,7 +94,7 @@ export default function FeatureAnnouncement() {
                 marginBottom: '12px',
               }}
             >
-              ✨
+              📅
             </motion.div>
 
             <h2 style={{
@@ -103,7 +103,7 @@ export default function FeatureAnnouncement() {
               color: '#fff',
               margin: '0 0 6px',
             }}>
-              New features just dropped!
+              Class Scheduler is here!
             </h2>
 
             <p style={{
@@ -112,27 +112,26 @@ export default function FeatureAnnouncement() {
               margin: '0 0 18px',
               lineHeight: 1.5,
             }}>
-              Custom cursor styles, click particle effects, improved exam tracking, and faster login.
-              Check them out in Settings!
+              Schedule your STEP and Aptitude classes — pick your days and times, get reminded 15 minutes before each class. Never miss a session!
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button
-                onClick={goToSettings}
+                onClick={goToStep}
                 style={{
                   width: '100%',
                   padding: '13px',
                   borderRadius: '12px',
                   border: 'none',
-                  background: 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
+                  background: 'linear-gradient(135deg, #06b6d4, #22d3ee)',
                   color: '#fff',
                   fontSize: '0.85rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
+                  boxShadow: '0 4px 20px rgba(6,182,212,0.4)',
                 }}
               >
-                Open Settings
+                Open Scheduler
               </button>
               <button
                 onClick={dismiss}
