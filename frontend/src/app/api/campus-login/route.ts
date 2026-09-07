@@ -26,70 +26,81 @@ export async function POST(req: Request) {
     };
 
     // Race both endpoints — use whichever responds first with success
-    const parseResponse = async (res: Response) => {
+    const parseResponseWithCookies = async (res: Response) => {
       const text = await res.text();
       let data: any = {};
       try { data = JSON.parse(text); } catch { data = { message: text }; }
-      return { ok: res.ok, status: res.status, data };
+      // Extract sp_session from Set-Cookie header (Student Portal login puts token here, not in body)
+      // Use getSetCookie() (Node.js array) or get('set-cookie') fallback
+      let spSession: string | null = null;
+      const cookies: string[] = typeof res.headers.getSetCookie === 'function'
+        ? res.headers.getSetCookie()
+        : (res.headers.get('set-cookie') || '').split(',').map(s => s.trim()).filter(Boolean);
+      for (const sc of cookies) {
+        const match = sc.match(/sp_session=([^;]+)/);
+        if (match) {
+          // Format as cookie pair so backend _build_client can parse it
+          spSession = `sp_session=${match[1]}`;
+          break;
+        }
+      }
+      return { ok: res.ok, status: res.status, data, spSession };
     };
 
     const endpoint1 = fetch('https://campusapi.fly.dev/api/auth/login/', {
       method: 'POST',
       headers,
       body: JSON.stringify({ username, password }),
-    }).then(async (res) => ({ source: 'auth', ...(await parseResponse(res)) }));
+    }).then(async (res) => ({ source: 'auth', ...(await parseResponseWithCookies(res)) }));
 
     const endpoint2 = fetch('https://campusapi.fly.dev/api/student-portal/login', {
       method: 'POST',
       headers,
       body: JSON.stringify({ net_id: cleanNetId, password }),
-    }).then(async (res) => ({ source: 'portal', ...(await parseResponse(res)) }));
+    }).then(async (res) => ({ source: 'portal', ...(await parseResponseWithCookies(res)) }));
 
     const results = await Promise.allSettled([endpoint1, endpoint2]);
 
-    // Pick the first successful result
-    let result: { ok: boolean; status: number; data: any; source: string } | null = null;
+    // Collect all successful results
+    const successes: Array<{ ok: boolean; status: number; data: any; source: string; spSession: string | null }> = [];
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value.ok && r.value.data.status !== 'fail' && r.value.data.status !== 'error') {
-        result = r.value;
-        break;
+        successes.push(r.value);
       }
     }
 
-    // If neither succeeded, use the first one for error message
-    if (!result) {
+    if (successes.length === 0) {
+      // Use the first result for error message
       const first = results[0];
       if (first.status === 'fulfilled') {
-        result = first.value;
-      } else if (results[1].status === 'fulfilled') {
-        result = results[1].value;
-      } else {
+        const d = first.value.data;
         return NextResponse.json(
-          { success: false, message: 'Failed to connect to Campus Web' },
-          { status: 502 }
+          { success: false, message: d.message || d.Message || 'Login failed — check your Net ID and password' },
+          { status: first.value.status || 400 }
         );
       }
-    }
-
-    const { data } = result;
-
-    if (!result.ok || data.status === 'fail' || data.status === 'error') {
       return NextResponse.json(
-        { success: false, message: data.message || data.Message || 'Login failed — check your Net ID and password' },
-        { status: result.status || 400 }
+        { success: false, message: 'Failed to connect to Campus Web' },
+        { status: 502 }
       );
     }
 
-    // Extract token from various possible response shapes
+    // Prefer the Student Portal result (has the actual SP session cookie we need)
+    const portalResult = successes.find(r => r.source === 'portal');
+    const result = portalResult || successes[0];
+    const { data } = result;
+
+    // Extract token — prefer sp_session from Set-Cookie header (portal login),
+    // fall back to body fields (auth/login returns Cookies in body)
     const csrfToken =
+      result.spSession ||
       data.cookies ||
       data.token ||
       data.Cookies ||
       data.COOKIE ||
       data.cookie ||
       data['X-CSRF-Token'] ||
-      data.sp_session ||
-      (typeof result.source === 'string' && result.source === 'portal' ? data.sp_session : null);
+      data.sp_session;
 
     if (!csrfToken) {
       return NextResponse.json(
