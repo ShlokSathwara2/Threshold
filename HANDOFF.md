@@ -3,7 +3,7 @@
 You are continuing work on **Threshold**, an SRM (SRM Institute of Science and Technology) student companion app. Read this entire document before doing anything.
 
 ## Project Overview
-- **Frontend:** Next.js 16.3.1 (Turbopack) + TypeScript + Tailwind, at `D:\Threshold\frontend\` — deployed to Vercel: https://threshold-jet.vercel.app
+- **Frontend:** Next.js 16.3.1 (Turbopack) + TypeScript + Tailwind, at `D:\Threshold\frontend\` — deployed to Vercel: https://threshold-pi-seven.vercel.app (NOTE: the older `threshold-jet.vercel.app` URL is dead — `DEPLOYMENT_NOT_FOUND`; `threshold.vercel.app` and `threshold-app.vercel.app` belong to unrelated/old builds. Use `threshold-pi-seven.vercel.app` everywhere.)
 - **Backend:** Python FastAPI at `D:\Threshold\backend\` — deployed to Render: https://threshold-1-ly01.onrender.com (healthy, verified 200)
 - **Mobile:** Capacitor 8 Android app (appId `com.threshold.app`), built locally with Gradle — NO Android Studio needed
 - **GitHub:** https://github.com/ShlokSathwara2/Threshold (last commit `df4b57c`)

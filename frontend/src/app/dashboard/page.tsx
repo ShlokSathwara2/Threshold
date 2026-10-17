@@ -275,17 +275,28 @@ export default function DashboardPage() {
         setInternalMarks(im);
         if (im) setCached<InternalMark[]>('internalMarks', im);
 
-        try {
-          const planner: any = await import('@/lib/api').then((m) => m.fetchCampusWebPlanner());
-          const cal = adaptCampusWebPlanner(planner);
-          setCalendar(cal);
-          setCached<CalendarResponse>('calendar', cal);
-          applyToday(cal);
-          setStaleAsOf(null);
-          setOffline(false);
-        } catch {
+        // Profile + internal marks came back ⇒ the connection works. A missing
+        // planner (see below) must never flip the offline banner on.
+        setOffline(false);
+
+        // Day order / calendar comes from /api/auth/planner, which requires an
+        // Academia session — a pure Net ID (Campus Web) login gets a 401 there.
+        // Skip it in that case instead of treating it as "offline".
+        if (isAcademiaLoggedIn()) {
+          try {
+            const planner: any = await import('@/lib/api').then((m) => m.fetchCampusWebPlanner());
+            const cal = adaptCampusWebPlanner(planner);
+            setCalendar(cal);
+            setCached<CalendarResponse>('calendar', cal);
+            applyToday(cal);
+            setStaleAsOf(null);
+          } catch {
+            // Planner unavailable — show no day order rather than a false
+            // "you're offline" warning.
+            applyToday(null);
+          }
+        } else {
           applyToday(null);
-          setOffline(true);
         }
 
         try {

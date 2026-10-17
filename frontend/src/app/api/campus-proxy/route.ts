@@ -2,6 +2,63 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+// Only these Campus Web paths may be reached through this proxy. Without an
+// allowlist the `endpoint` parameter turns the route into an open proxy to
+// any URL (it previously accepted absolute `http(s)://…` targets).
+const ALLOWED_ENDPOINTS: RegExp[] = [
+  /^\/api\/auth\/user\/?$/,
+  /^\/api\/auth\/timetable\/[^/]+$/,
+  /^\/api\/auth\/planner\/?$/,
+  /^\/api\/student-portal\/attendance$/,
+];
+
+function resolveEndpoint(endpoint: string | null): string | null {
+  if (!endpoint || endpoint.startsWith('http')) return null;
+  return ALLOWED_ENDPOINTS.some((re) => re.test(endpoint))
+    ? `https://campusapi.fly.dev${endpoint}`
+    : null;
+}
+
+// Timeout → a clear 504 instead of a generic 500 ("Server proxy error").
+function upstreamErrorResponse(error: unknown, label: string): NextResponse {
+  const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+  if (timedOut) {
+    return NextResponse.json(
+      { success: false, message: 'Campus Web took too long to respond — pull down to refresh and try again.' },
+      { status: 504 }
+    );
+  }
+  console.error(`Campus Web proxy ${label} error:`, error);
+  return NextResponse.json(
+    { success: false, message: error instanceof Error ? error.message : 'Server proxy error' },
+    { status: 500 }
+  );
+}
+
+// Shared upstream headers. `X-Academia-Token` must be forwarded: endpoints
+// such as /api/auth/planner require an Academia session, which the Net ID
+// (Campus Web) login alone does not provide.
+function buildUpstreamHeaders(req: Request): Record<string, string> {
+  const csrfToken = req.headers.get('x-csrf-token') || '';
+  const netId = req.headers.get('x-net-id') || '';
+  const academiaToken = req.headers.get('x-academia-token') || '';
+
+  const headers: Record<string, string> = {
+    'Origin': 'https://campusweb.in',
+    'Referer': 'https://campusweb.in/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  };
+
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+    if (csrfToken.includes('=')) headers['Cookie'] = csrfToken;
+  }
+  if (netId) headers['X-Net-ID'] = netId;
+  if (academiaToken) headers['X-Academia-Token'] = academiaToken;
+
+  return headers;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -11,28 +68,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'endpoint parameter required' }, { status: 400 });
     }
 
-    const csrfToken = req.headers.get('x-csrf-token') || '';
-    const netId = req.headers.get('x-net-id') || '';
-
-    const headers: Record<string, string> = {
-      'Origin': 'https://campusweb.in',
-      'Referer': 'https://campusweb.in/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    };
-
-    if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken;
-      if (csrfToken.includes('=')) headers['Cookie'] = csrfToken;
+    const targetUrl = resolveEndpoint(endpoint);
+    if (!targetUrl) {
+      return NextResponse.json({ success: false, message: 'endpoint not allowed' }, { status: 403 });
     }
-    if (netId) headers['X-Net-ID'] = netId;
 
-    const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;
-    console.log('[Proxy GET]', targetUrl, { csrfToken: csrfToken?.substring(0, 20) + '...', netId });
+    const headers = buildUpstreamHeaders(req);
+    console.log('[Proxy GET]', targetUrl, { netId: req.headers.get('x-net-id') });
 
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers,
       cache: 'no-store',
+      signal: AbortSignal.timeout(12000),
     });
 
     const rawText = await response.text();
@@ -49,11 +97,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Campus Web proxy GET error:', error);
-    return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : 'Server proxy error' },
-      { status: 500 }
-    );
+    return upstreamErrorResponse(error, 'GET');
   }
 }
 
@@ -67,29 +111,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const csrfToken = req.headers.get('x-csrf-token') || '';
-    const netId = req.headers.get('x-net-id') || '';
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Origin': 'https://campusweb.in',
-      'Referer': 'https://campusweb.in/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    };
-
-    if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken;
-      if (csrfToken.includes('=')) headers['Cookie'] = csrfToken;
+    const targetUrl = resolveEndpoint(endpoint);
+    if (!targetUrl) {
+      return NextResponse.json({ success: false, message: 'endpoint not allowed' }, { status: 403 });
     }
-    if (netId) headers['X-Net-ID'] = netId;
 
-    const targetUrl = endpoint.startsWith('http') ? endpoint : `https://campusapi.fly.dev${endpoint}`;
-    console.log('[Proxy POST]', targetUrl, { csrfToken: csrfToken?.substring(0, 20) + '...', netId, body });
+    const headers = { 'Content-Type': 'application/json', ...buildUpstreamHeaders(req) };
+    console.log('[Proxy POST]', targetUrl, { netId: req.headers.get('x-net-id') });
 
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
     });
 
     const rawText = await response.text();
@@ -106,10 +140,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Campus Web proxy POST error:', error);
-    return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : 'Server proxy error' },
-      { status: 500 }
-    );
+    return upstreamErrorResponse(error, 'POST');
   }
 }

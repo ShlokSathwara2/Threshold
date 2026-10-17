@@ -2,8 +2,76 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+// Both Campus Web upstreams are third-party and occasionally stall. Every
+// upstream call is bounded by this timeout so a hung upstream can never
+// leave the login button spinning forever.
+const UPSTREAM_TIMEOUT_MS = 9000;
+
+const CAMPUS_API = 'https://campusapi.fly.dev';
+
 export async function GET() {
   return NextResponse.json({ message: 'Campus Web Login Proxy' });
+}
+
+interface UpstreamResult {
+  source: 'portal' | 'auth';
+  ok: boolean;
+  status: number;
+  data: any;
+  spSession: string | null;
+}
+
+async function callUpstream(
+  path: string,
+  body: Record<string, string>,
+  headers: Record<string, string>,
+  source: UpstreamResult['source'],
+): Promise<UpstreamResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${CAMPUS_API}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    return {
+      source,
+      ok: false,
+      status: timedOut ? 504 : 502,
+      data: {
+        message: timedOut
+          ? 'Campus Web took too long to respond — please try again.'
+          : 'Could not reach Campus Web — please try again.',
+      },
+      spSession: null,
+    };
+  }
+
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { message: text.slice(0, 300) }; }
+
+  // The Student Portal login puts the token in Set-Cookie, not in the body.
+  // Use getSetCookie() (Node) with a header fallback for other runtimes.
+  let spSession: string | null = null;
+  const setCookies: string[] = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : (res.headers.get('set-cookie') || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const sc of setCookies) {
+    const match = sc.match(/sp_session=([^;]+)/);
+    if (match) {
+      // Format as cookie pair so backend _build_client can parse it
+      spSession = `sp_session=${match[1]}`;
+      break;
+    }
+  }
+
+  const failed = data?.status === 'fail' || data?.status === 'error';
+  return { source, ok: res.ok && !failed, status: res.status, data, spSession };
 }
 
 export async function POST(req: Request) {
@@ -25,73 +93,42 @@ export async function POST(req: Request) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     };
 
-    // Race both endpoints — use whichever responds first with success
-    const parseResponseWithCookies = async (res: Response) => {
-      const text = await res.text();
-      let data: any = {};
-      try { data = JSON.parse(text); } catch { data = { message: text }; }
-      // Extract sp_session from Set-Cookie header (Student Portal login puts token here, not in body)
-      // Use getSetCookie() (Node.js array) or get('set-cookie') fallback
-      let spSession: string | null = null;
-      const cookies: string[] = typeof res.headers.getSetCookie === 'function'
-        ? res.headers.getSetCookie()
-        : (res.headers.get('set-cookie') || '').split(',').map(s => s.trim()).filter(Boolean);
-      for (const sc of cookies) {
-        const match = sc.match(/sp_session=([^;]+)/);
-        if (match) {
-          // Format as cookie pair so backend _build_client can parse it
-          spSession = `sp_session=${match[1]}`;
-          break;
-        }
-      }
-      return { ok: res.ok, status: res.status, data, spSession };
-    };
-
-    const endpoint1 = fetch('https://campusapi.fly.dev/api/auth/login/', {
-      method: 'POST',
+    // Student Portal first: it is the one that returns the `sp_session` every
+    // other Campus Web call in this app needs. It is started together with
+    // the auth endpoint (so both make progress) but we only wait on auth if
+    // the portal call fails — that keeps the happy path at portal latency
+    // instead of "whichever upstream is slowest".
+    const authPromise = callUpstream(
+      '/api/auth/login/',
+      { username, password },
       headers,
-      body: JSON.stringify({ username, password }),
-    }).then(async (res) => ({ source: 'auth', ...(await parseResponseWithCookies(res)) }));
+      'auth',
+    );
+    // Swallow the fallback result if we never read it (no unhandled rejection).
+    authPromise.catch(() => {});
 
-    const endpoint2 = fetch('https://campusapi.fly.dev/api/student-portal/login', {
-      method: 'POST',
+    const portal = await callUpstream(
+      '/api/student-portal/login',
+      { net_id: cleanNetId, password },
       headers,
-      body: JSON.stringify({ net_id: cleanNetId, password }),
-    }).then(async (res) => ({ source: 'portal', ...(await parseResponseWithCookies(res)) }));
+      'portal',
+    );
 
-    const results = await Promise.allSettled([endpoint1, endpoint2]);
+    const result = portal.ok ? portal : await authPromise;
 
-    // Collect all successful results
-    const successes: Array<{ ok: boolean; status: number; data: any; source: string; spSession: string | null }> = [];
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value.ok && r.value.data.status !== 'fail' && r.value.data.status !== 'error') {
-        successes.push(r.value);
-      }
+    if (!result.ok) {
+      const message =
+        (portal.data && (portal.data.message || portal.data.Message)) ||
+        (result.data && (result.data.message || result.data.Message)) ||
+        'Login failed — check your Net ID and password';
+      const status = portal.status || result.status || 400;
+      return NextResponse.json({ success: false, message }, { status: status >= 400 ? status : 400 });
     }
 
-    if (successes.length === 0) {
-      // Use the first result for error message
-      const first = results[0];
-      if (first.status === 'fulfilled') {
-        const d = first.value.data;
-        return NextResponse.json(
-          { success: false, message: d.message || d.Message || 'Login failed — check your Net ID and password' },
-          { status: first.value.status || 400 }
-        );
-      }
-      return NextResponse.json(
-        { success: false, message: 'Failed to connect to Campus Web' },
-        { status: 502 }
-      );
-    }
-
-    // Prefer the Student Portal result (has the actual SP session cookie we need)
-    const portalResult = successes.find(r => r.source === 'portal');
-    const result = portalResult || successes[0];
     const { data } = result;
 
-    // Extract token — prefer sp_session from Set-Cookie header (portal login),
-    // fall back to body fields (auth/login returns Cookies in body)
+    // Extract token — prefer sp_session from the portal's Set-Cookie header,
+    // fall back to body fields (auth/login returns `Cookies` in the body).
     const csrfToken =
       result.spSession ||
       data.cookies ||
@@ -104,7 +141,7 @@ export async function POST(req: Request) {
 
     if (!csrfToken) {
       return NextResponse.json(
-        { success: false, message: data.message || 'Login failed — session token not received. Check your credentials.' },
+        { success: false, message: 'Login failed — session token not received. Check your credentials.' },
         { status: 401 }
       );
     }

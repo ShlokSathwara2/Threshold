@@ -831,16 +831,34 @@ export interface CampusWebLoginResponse {
 
 export async function campusWebLogin(netId: string, password: string): Promise<CampusWebLoginResponse> {
   const cleanNetId = netId.split('@')[0].trim();
-  const res = await fetch('/api/campus-login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ net_id: cleanNetId, password }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/campus-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ net_id: cleanNetId, password }),
+      // The route has its own upstream timeouts; this is the outer ceiling so
+      // the button can never spin forever on a stalled request.
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    throw new Error(
+      timedOut
+        ? 'Login is taking longer than usual — tap Log in to try again.'
+        : 'Could not reach the server — check your connection and try again.'
+    );
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.success) {
     throw new Error(data.message || 'Login failed — check your Net ID and password');
   }
-  const token = data.cookies || data.token || cleanNetId;
+  const token = data.cookies || data.token;
+  if (!token) {
+    // Never fall back to the Net ID: a session key that is not a real token
+    // would "log in" successfully and then break every data fetch.
+    throw new Error(data.message || 'Login failed — no session token received. Please try again.');
+  }
   return { cookies: token, status: '200' };
 }
 
@@ -934,7 +952,11 @@ export async function fetchCampusWebPlanner(): Promise<unknown> {
   if (!session?.cookies) throw new Error('Not logged in');
   const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
   if (session.user) headers['X-Net-ID'] = session.user;
-  console.log('[fetchCampusWebPlanner] fetching planner');
+  // /api/auth/planner requires an Academia session (401 otherwise) — forward
+  // it when the user has also signed into Academia.
+  const academia = getAcademiaCookies();
+  if (academia) headers['X-Academia-Token'] = academia;
+  console.log('[fetchCampusWebPlanner] fetching planner, academia session:', !!academia);
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/planner')}`, {
     method: 'GET',
     headers,
