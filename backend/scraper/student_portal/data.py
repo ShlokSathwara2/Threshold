@@ -533,35 +533,70 @@ def fetch_internal_marks(cookie: str) -> list[dict[str, str]]:
 
 
 def fetch_internal_marks_detail(
-    cookie: str, subject_id: str, status: str
-) -> list[dict[str, str]]:
-    """POST studentInternalMarkDetailsInner.jsp and parse component-wise breakdown."""
+    cookie: str, subject_id: str, status: str, code: str = "", desc: str = ""
+) -> tuple[list[dict[str, str]], list[str]]:
+    """POST studentInternalMarkDetailsInner.jsp and parse component-wise breakdown.
+
+    The portal's "View Details" link calls
+    ``funViewComponentWiseMarks(subjectId, code, desc, status)`` and submits a
+    hidden form to the Inner JSP. The exact hidden field names differ between
+    portal builds (``iden`` vs ``hdnSubjectId`` vs ``hdnStatus``…), and the
+    original code guessed ``iden = subject_id``, which the JSP ignores. So we
+    try every known variant and keep the first that actually yields rows.
+
+    Returns ``(components, attempt_log)`` where ``attempt_log`` records what
+    each variant returned — surfaced to the app while this is being verified.
+    """
     print(f"[SP-DATA] fetch_internal_marks_detail — subject_id={subject_id}, status={status}")
 
+    candidates: list[dict[str, str]] = []
+
+    def add(d: dict[str, str]) -> None:
+        clean = {k: v for k, v in d.items() if v not in ("", None)}
+        if clean and clean not in candidates:
+            candidates.append(clean)
+
+    # Documented contract (STUDENT_PORTAL_ENDPOINTS.md §5)
+    add({"iden": "1", "hdnSubjectId": subject_id, "status": status})
+    # hdnSubjectId + status only
+    add({"hdnSubjectId": subject_id, "status": status})
+    # status carried as hdnStatus
+    add({"iden": "1", "hdnSubjectId": subject_id, "hdnStatus": status})
+    # the JS handler also receives code + desc — pass them through
+    add({"iden": "1", "hdnSubjectId": subject_id, "status": status, "code": code, "desc": desc})
+    add({"iden": "1", "hdnSubjectId": subject_id, "hdnStatus": status, "hdnCourseCode": code, "hdnCourseDesc": desc})
+    # menu-style inner-page params (same shape as _post_sp_menu_page)
+    add({"iden": "1", "hdnSubjectId": subject_id, "status": status,
+         "filter": "", "hdnFormDetails": "1", "csrfPreventionSalt": ""})
+    # legacy guesses
+    add({"iden": subject_id, "hdnSubjectId": subject_id, "status": status})
+    add({"ids": subject_id, "hdnSubjectId": subject_id, "status": status})
+
+    parser = StudentPortalParser()
     client = _build_client(cookie)
+    log: list[str] = []
     try:
         _init_session(client)
-        response = client.post(
-            settings.sp_internal_marks_detail_url,
-            data={
-                "iden": subject_id,
-                "hdnSubjectId": subject_id,
-                "status": status,
-            },
-        )
-        print(f"[SP-DATA] internal-marks-detail status: {response.status_code}")
-
-        if response.status_code != 200:
-            print(f"[SP-DATA] internal-marks-detail parse failure: HTTP {response.status_code}")
-            return []
-
-        parser = StudentPortalParser()
-        components = parser.parse_internal_marks_detail(response.text)
-        print(f"[SP-DATA] internal-marks-detail parse success: {len(components)} components")
-        return components
+        for data in candidates:
+            label = ",".join(sorted(data))
+            try:
+                response = client.post(settings.sp_internal_marks_detail_url, data=data)
+            except Exception as e:  # noqa: BLE001
+                log.append(f"[{label}] err {e}")
+                continue
+            if response.status_code != 200:
+                log.append(f"[{label}] HTTP {response.status_code}")
+                continue
+            components = parser.parse_internal_marks_detail(response.text)
+            log.append(f"[{label}] {len(components)} rows")
+            if components:
+                print(f"[SP-DATA] internal-marks-detail OK via {label} ({len(components)} rows)")
+                return components, log
+        print(f"[SP-DATA] internal-marks-detail no components; attempts: {log}")
+        return [], log
     except Exception as e:
         print(f"[SP-DATA] internal-marks-detail exception: {e}")
-        return []
+        return [], log + [f"exception {e}"]
     finally:
         client.close()
 

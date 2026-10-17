@@ -337,6 +337,35 @@ class StudentPortalParser:
                             "enteredOn": entered,
                         })
 
+        if components:
+            return components
+
+        # Fallback: some portal builds render this table without a <thead>, or
+        # with header text the keyword match above misses. Scan every row for a
+        # "scored/max" cell — the component name is the cell right before it.
+        frac = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*$")
+        date_re = re.compile(r"^\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}")
+        for table in tables:
+            for row in table.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+                texts = [c.get_text(strip=True) for c in cells]
+                mi = next((i for i, t in enumerate(texts) if frac.match(t)), None)
+                if mi is None or mi == 0:
+                    continue
+                fm = frac.match(texts[mi])
+                name = texts[mi - 1]
+                if not name or frac.match(name):
+                    continue
+                entered = texts[mi - 2] if mi >= 2 else ""
+                components.append({
+                    "component": name,
+                    "scored": fm.group(1),
+                    "maxMark": fm.group(2),
+                    "enteredOn": entered if date_re.match(entered) else "",
+                })
+
         return components
 
     def parse_academic_calendar(self, html: str) -> CalendarResponse:

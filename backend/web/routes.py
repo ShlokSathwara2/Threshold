@@ -610,11 +610,18 @@ def sp_internal_marks_detail(body: dict, x_csrf_token: str = Header(default="", 
         return {"error": "No cookie. POST /sp/set-cookies first.", "status": 401}
     subject_id = body.get("subject_id", "")
     status = body.get("status", "")
+    code = body.get("code", "")
+    desc = body.get("desc", "")
     if not subject_id:
         return {"error": "subject_id required", "status": 400}
     try:
-        components = fetch_internal_marks_detail(cookie, subject_id, status)
-        return {"components": components}
+        components, log = fetch_internal_marks_detail(cookie, subject_id, status, code, desc)
+        out: dict = {"components": components}
+        if not components:
+            # Surface what the portal actually returned — this drill-down is
+            # behind a portal form whose field names are not contractual.
+            out["attempts"] = log
+        return out
     except Exception as e:
         import traceback
         traceback.print_exc()
