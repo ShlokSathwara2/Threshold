@@ -15,11 +15,13 @@ import {
   fetchAcademiaMarks,
   fetchUser,
   fetchCampusWebUser,
+  getCampusAcademiaToken,
   type CalendarResponse,
   type TimetableResponse,
   type TimetableSlot,
   type SpProfile,
   type InternalMark,
+  type Mark,
 } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import { getCached, setCached } from '@/lib/cache';
@@ -111,6 +113,10 @@ export default function DashboardPage() {
   const [calError, setCalError] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<CalendarResponse | null>(null);
   const [internalMarks, setInternalMarks] = useState<InternalMark[] | null>(null);
+  // Campus Web marks with their component-wise breakdown, passed to the
+  // Internal Marks card (the flattened InternalMark[] above drops the test
+  // names and totals that Campus Web itself displays).
+  const [cwMarks, setCwMarks] = useState<Mark[] | null>(null);
   const [academiaKey, setAcademiaKey] = useState(0);
   const [staleAsOf, setStaleAsOf] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
@@ -249,28 +255,22 @@ export default function DashboardPage() {
         }
 
         const marksResp = adaptCampusWebMarks(user);
+        // Keep the full Campus Web marks — they carry the component-wise
+        // breakdown (FT-I, FT-II …) and each subject's total, which the
+        // Internal Marks card renders.
+        setCwMarks(marksResp.marks.length ? marksResp.marks : null);
+        // One flattened row PER SUBJECT for search/analytics. (A row per
+        // component used to create duplicate subjects whose "total" was just
+        // the last component's score.)
         const im: InternalMark[] | null = marksResp.marks.length
-          ? marksResp.marks.flatMap((m) => {
-            const items: InternalMark[] = [];
-            if (m.testPerformance?.length) {
-              for (const tp of m.testPerformance) {
-                items.push({
-                  code: m.courseCode,
-                  description: m.courseName,
-                  scored: String(tp.marks?.scored ?? ''),
-                  maxMark: String(tp.marks?.total ?? ''),
-                });
-              }
-            } else if (m.overall?.scored) {
-              items.push({
-                code: m.courseCode,
-                description: m.courseName,
-                scored: m.overall.scored,
-                maxMark: m.overall.total,
-              });
-            }
-            return items;
-          })
+          ? marksResp.marks
+            .map((m) => ({
+              code: m.courseCode,
+              description: m.courseName,
+              scored: m.overall?.scored ?? '',
+              maxMark: m.overall?.total ?? '',
+            }))
+            .filter((m) => m.scored !== '' || m.maxMark !== '')
           : null;
         setInternalMarks(im);
         if (im) setCached<InternalMark[]>('internalMarks', im);
@@ -282,7 +282,12 @@ export default function DashboardPage() {
         // Day order / calendar comes from /api/auth/planner, which requires an
         // Academia session — a pure Net ID (Campus Web) login gets a 401 there.
         // Skip it in that case instead of treating it as "offline".
-        if (isAcademiaLoggedIn()) {
+        // Day order / calendar comes from /api/auth/planner, which needs an
+        // Academia session. A Campus Web login now carries one (the token
+        // captured at login), and a separately-signed-in Academia session
+        // counts too. Skip it only when neither exists — and never treat a
+        // failure as "offline".
+        if (isAcademiaLoggedIn() || getCampusAcademiaToken()) {
           try {
             const planner: any = await import('@/lib/api').then((m) => m.fetchCampusWebPlanner());
             const cal = adaptCampusWebPlanner(planner);
@@ -316,6 +321,7 @@ export default function DashboardPage() {
       } catch {
         setProfile(null);
         setInternalMarks(null);
+        setCwMarks(null);
         applyToday(null);
         setOffline(true);
       }
@@ -1405,7 +1411,14 @@ export default function DashboardPage() {
           marginBottom: '16px',
         }}
       >
-        <InternalMarks refreshKey={gradesKey} subjects={subjects} externalMarks={internalMarks} />
+        <InternalMarks
+          refreshKey={gradesKey}
+          subjects={subjects}
+          externalMarks={internalMarks}
+          // Campus Web marks (component-wise + totals) take precedence when we
+          // have them — internalMarks above is only the flattened search copy.
+          externalMarksRaw={cwMarks}
+        />
       </div>
 
       {/* ── Exams strip ── */}

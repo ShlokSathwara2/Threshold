@@ -156,7 +156,7 @@ export default function LoginPage() {
         throw new Error('No session token received');
       }
 
-      saveCampusSession(token, netId.trim().split('@')[0].toLowerCase());
+      saveCampusSession(token, netId.trim().split('@')[0].toLowerCase(), result.academiaToken);
       setShowRedirect(true);
       setTimeout(() => router.push('/dashboard'), 600);
     } catch (err) {

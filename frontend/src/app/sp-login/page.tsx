@@ -76,7 +76,7 @@ export default function SpLoginPage() {
       if (!token) {
         throw new Error('Login failed — invalid credentials');
       }
-      saveCampusSession(token, username.trim().split('@')[0].toLowerCase());
+      saveCampusSession(token, username.trim().split('@')[0].toLowerCase(), res.academiaToken);
       setShowRedirect(true);
       // Navigate after a brief delay so the overlay is visible
       setTimeout(() => router.push('/dashboard'), 600);

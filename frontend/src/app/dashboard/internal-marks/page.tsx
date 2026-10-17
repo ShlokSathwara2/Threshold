@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser, adaptCampusWebMarks, type InternalMark } from '@/lib/api';
+import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser, adaptCampusWebMarks, type Mark } from '@/lib/api';
 import InternalMarks from '@/components/grades/InternalMarks';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
@@ -12,8 +12,11 @@ export default function InternalMarksPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
+  const WB = (a: number) => overlayBg(theme, a);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [externalMarks, setExternalMarks] = useState<InternalMark[] | null>(null);
+  // Full Campus Web marks — component-wise breakdown + per-subject totals.
+  const [cwMarks, setCwMarks] = useState<Mark[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
   usePullToRefresh(refresh);
@@ -24,31 +27,13 @@ export default function InternalMarksPage() {
       return;
     }
     if (isCampusWebSession()) {
-      fetchCampusWebUser().then((user) => {
-        const marksResp = adaptCampusWebMarks(user);
-        const im: InternalMark[] = marksResp.marks.flatMap((m) => {
-          const items: InternalMark[] = [];
-          if (m.testPerformance?.length) {
-            for (const tp of m.testPerformance) {
-              items.push({
-                code: m.courseCode,
-                description: m.courseName,
-                scored: String(tp.marks?.scored ?? ''),
-                maxMark: String(tp.marks?.total ?? ''),
-              });
-            }
-          } else if (m.overall?.scored) {
-            items.push({
-              code: m.courseCode,
-              description: m.courseName,
-              scored: m.overall.scored,
-              maxMark: m.overall.total,
-            });
-          }
-          return items;
-        });
-        setExternalMarks(im.length > 0 ? im : []);
-      }).catch(() => setExternalMarks([]));
+      setLoaded(false);
+      fetchCampusWebUser()
+        .then((user) => setCwMarks(adaptCampusWebMarks(user).marks))
+        .catch(() => setCwMarks([]))
+        .finally(() => setLoaded(true));
+    } else {
+      setLoaded(true);
     }
   }, [router, refreshKey]);
 
@@ -68,13 +53,34 @@ export default function InternalMarksPage() {
           Internal Marks
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-          {isAcademiaLoggedIn()
-            ? 'Student Portal totals + Academia test-wise breakdowns'
-            : 'Student Portal totals — connect Academia for the per-test breakdown'}
+          {/* Only evaluate session-dependent text AFTER mount: the server has
+              no localStorage, so branching on it during SSR mismatches. */}
+          {!loaded
+            ? 'Loading internal marks…'
+            : isCampusWebSession()
+              ? 'Component-wise marks (FT-I, FT-II, …) with totals — as Campus Web shows them'
+              : isAcademiaLoggedIn()
+                ? 'Student Portal totals + Academia test-wise breakdowns'
+                : 'Student Portal totals — connect Academia for the per-test breakdown'}
         </p>
       </motion.div>
 
-      <InternalMarks refreshKey={refreshKey} externalMarks={externalMarks} />
+      {!loaded ? (
+        <div style={{
+          padding: '20px',
+          borderRadius: '16px',
+          background: 'var(--threshold-surface)',
+          border: `1px solid ${WB(0.06)}`,
+          textAlign: 'center',
+        }}>
+          <p style={{ color: W(0.3), fontSize: '0.8rem' }}>Loading internal marks...</p>
+        </div>
+      ) : (
+        <InternalMarks
+          refreshKey={refreshKey}
+          externalMarksRaw={cwMarks}
+        />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
         <button

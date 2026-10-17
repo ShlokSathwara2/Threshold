@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { fetchSpInternalMarks, fetchAcademiaMarks, isAcademiaLoggedIn } from '@/lib/api';
+import { fetchSpInternalMarks, fetchAcademiaMarks, isAcademiaLoggedIn, type Mark } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import {
@@ -19,10 +19,17 @@ export default function InternalMarks({
   refreshKey = 0,
   subjects = [],
   externalMarks,
+  externalMarksRaw,
 }: {
   refreshKey?: number;
   subjects?: SubjectAttendance[];
   externalMarks?: import('@/lib/api').InternalMark[] | null;
+  /**
+   * Campus Web marks (adapted to Mark[]) — carries the component-wise
+   * breakdown (FT-I, FT-II, …) plus each subject's total, exactly as the
+   * Campus Web site shows it.
+   */
+  externalMarksRaw?: Mark[] | null;
 }) {
   const [marks, setMarks] = useState<MergedSubjectMark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,25 +46,31 @@ export default function InternalMarks({
     (async () => {
       setLoading(true);
       setError(null);
-      const sp = isAcademiaLoggedIn();
-      setAcademiaOn(sp);
+      const academiaOn = isAcademiaLoggedIn();
+      setAcademiaOn(academiaOn);
       try {
-        let spOut: { internal_marks?: import('@/lib/api').InternalMark[] } = { internal_marks: externalMarks ?? undefined };
-        if (!externalMarks) {
-          try {
-            spOut = await fetchSpInternalMarks();
-          } catch {
-            spOut = { internal_marks: [] };
-          }
-        }
-        const acRes = sp ? fetchAcademiaMarks() : Promise.resolve(null);
-        const acOut = await acRes;
+        const acOut = academiaOn ? await fetchAcademiaMarks().catch(() => null) : null;
         if (cancelled) return;
-        const merged = mergeInternalMarks(
-          spOut.internal_marks || [],
-          acOut?.marks || [],
-        );
-        setMarks(merged);
+
+        if (externalMarksRaw) {
+          // Campus Web session: the component-wise breakdown and totals come
+          // straight from /api/auth/user/ — no Student Portal involved.
+          setMarks(mergeInternalMarks([], acOut?.marks || [], externalMarksRaw));
+        } else {
+          let spMarks: import('@/lib/api').InternalMark[] | null = externalMarks ?? null;
+          if (!spMarks) {
+            try {
+              spMarks = (await fetchSpInternalMarks()).internal_marks || [];
+            } catch {
+              spMarks = [];
+            }
+            // The portal fetch is slow: if this run was superseded while it
+            // was in flight, its (usually empty) result must not overwrite
+            // the newer data.
+            if (cancelled) return;
+          }
+          setMarks(mergeInternalMarks(spMarks, acOut?.marks || []));
+        }
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load internal marks');
       } finally {
@@ -65,11 +78,12 @@ export default function InternalMarks({
       }
     })();
     return () => { cancelled = true; };
-  }, [refreshKey, externalMarks]);
+  }, [refreshKey, externalMarks, externalMarksRaw]);
 
   const toggleExpand = (code: string) => {
     setExpanded((prev) => ({ ...prev, [code]: !prev[code] }));
   };
+
 
   if (loading) {
     return (
@@ -281,7 +295,7 @@ export default function InternalMarks({
                       / {m.maxMark.toFixed(0)}
                     </span>
                     <span style={{ fontSize: '0.62rem', color: W(0.3), fontWeight: 400 }}>
-                      {m.academiaOnly ? 'Academia' : 'SP total'}
+                      {m.source === 'campusweb' ? 'Campus Web' : m.source === 'academia' ? 'Academia' : 'SP total'}
                     </span>
                   </div>
                 </div>
@@ -406,6 +420,11 @@ export default function InternalMarks({
                                   {wt}%
                                 </span>
                               )}
+                              {t.percentage && (
+                                <span style={{ fontSize: '0.55rem', color: W(0.35) }}>
+                                  {t.percentage}%
+                                </span>
+                              )}
                               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: tc }}>
                                 {s}
                                 <span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.65rem' }}>/{mx}</span>
@@ -424,6 +443,40 @@ export default function InternalMarks({
                       );
                     })}
                   </div>
+
+                  {/* Subject total — mirrors the Total row on Campus Web */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      marginTop: '10px',
+                      paddingTop: '8px',
+                      borderTop: `1px dashed ${WB(0.1)}`,
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      color: W(0.45),
+                      letterSpacing: '0.4px',
+                      textTransform: 'uppercase',
+                    }}>
+                      Total
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color }}>
+                        {m.scored.toFixed(1)}
+                        <span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.68rem' }}> / {m.maxMark.toFixed(0)}</span>
+                      </span>
+                      {pct !== null && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color }}>
+                          {pct.toFixed(1)}%
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </motion.div>
               )}
             </motion.div>
@@ -432,7 +485,9 @@ export default function InternalMarks({
       </div>
 
       {/* Footer hint */}
-      {!academiaOn && (
+      {/* Only nag about Academia when no component breakdown is available at
+          all — Campus Web logins already get one from /api/auth/user/. */}
+      {!academiaOn && marks.every((m) => m.tests.length === 0) && (
         <p style={{
           margin: '12px 0 0',
           fontSize: '0.68rem',

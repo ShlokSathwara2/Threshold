@@ -7,6 +7,10 @@ export interface Session {
   user: string;
   timestamp: number;
   source?: 'sp' | 'campus_web';
+  // Academia (IAM) token captured during a Campus Web login. /api/auth/user/
+  // only returns the component-wise `tests` breakdown (and /api/auth/planner
+  // only works) when requests carry THIS token instead of the sp_session.
+  academiaToken?: string;
 }
 
 // Academia session is kept in sessionStorage — persists across page refreshes
@@ -391,6 +395,8 @@ export interface TestPerformance {
   marks: MarksDetail;
   external?: string;
   weightage?: string;
+  /** Campus Web reports a per-component percentage (e.g. "73.4"). */
+  percentage?: string;
 }
 
 export interface Mark {
@@ -820,6 +826,7 @@ const CAMPUS_WEB_API = 'https://campusapi.fly.dev';
 
 export interface CampusWebLoginResponse {
   cookies?: string;
+  academiaToken?: string;
   status?: string;
   Status?: string;
   message?: string;
@@ -859,17 +866,39 @@ export async function campusWebLogin(netId: string, password: string): Promise<C
     // would "log in" successfully and then break every data fetch.
     throw new Error(data.message || 'Login failed — no session token received. Please try again.');
   }
-  return { cookies: token, status: '200' };
+  return { cookies: token, academiaToken: data.academiaToken || undefined, status: '200' };
 }
 
 // Campus Web session helpers
-export function saveCampusSession(token: string, netId: string) {
+export function saveCampusSession(token: string, netId: string, academiaToken?: string) {
   localStorage.setItem('threshold_session', JSON.stringify({
     cookies: token,
     user: netId,
     timestamp: Date.now(),
     source: 'campus_web',
+    ...(academiaToken ? { academiaToken } : {}),
   }));
+}
+
+// Academia (IAM) token captured at Campus Web login, if any. Used for the
+// /api/auth/* endpoints that need it (component-wise marks, planner).
+export function getCampusAcademiaToken(): string | null {
+  const session = getSession();
+  if (session?.source !== 'campus_web') return null;
+  return session.academiaToken || null;
+}
+
+// Headers for a Campus Web /api/auth/* call: prefer the Academia token (the
+// only one that unlocks component-wise marks + planner), fall back to the
+// sp_session so older sessions keep working.
+function campusAuthHeaders(): Record<string, string> {
+  const session = getSession();
+  if (!session) return {};
+  const headers: Record<string, string> = {
+    'X-CSRF-Token': session.academiaToken || session.cookies,
+  };
+  if (session.user) headers['X-Net-ID'] = session.user;
+  return headers;
 }
 
 // ── Campus Web data fetching ─────────────────────────────────────
@@ -912,9 +941,14 @@ interface CampusWebUserResponse {
 export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
-  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
-  if (session.user) headers['X-Net-ID'] = session.user;
-  console.log('[fetchCampusWebUser] session:', { cookies: session.cookies?.substring(0, 20) + '...', user: session.user });
+  // Prefer the Academia token: /api/auth/user/ only fills in the component-wise
+  // `tests` breakdown (FT-I, FT-II …) when it is used instead of the sp_session.
+  const headers = campusAuthHeaders();
+  console.log('[fetchCampusWebUser] session:', {
+    csrf: (headers['X-CSRF-Token'] || '').substring(0, 20) + '...',
+    user: session.user,
+    academiaToken: !!session.academiaToken,
+  });
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/user/')}`, {
     method: 'GET',
     headers,
@@ -936,8 +970,7 @@ export async function fetchCampusWebUser(): Promise<CampusWebUserResponse> {
 export async function fetchCampusWebTimetable(comboBatch: string): Promise<unknown> {
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
-  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
-  if (session.user) headers['X-Net-ID'] = session.user;
+  const headers = campusAuthHeaders();
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent(`/api/auth/timetable/${comboBatch}`)}`, {
     method: 'GET',
     headers,
@@ -950,13 +983,13 @@ export async function fetchCampusWebTimetable(comboBatch: string): Promise<unkno
 export async function fetchCampusWebPlanner(): Promise<unknown> {
   const session = getSession();
   if (!session?.cookies) throw new Error('Not logged in');
-  const headers: Record<string, string> = { 'X-CSRF-Token': session.cookies };
-  if (session.user) headers['X-Net-ID'] = session.user;
-  // /api/auth/planner requires an Academia session (401 otherwise) — forward
-  // it when the user has also signed into Academia.
+  // The planner needs an Academia session; campusAuthHeaders() already prefers
+  // the academia token captured at login.
+  const headers = campusAuthHeaders();
+  // Also forward a separately-signed-in Academia session when present.
   const academia = getAcademiaCookies();
   if (academia) headers['X-Academia-Token'] = academia;
-  console.log('[fetchCampusWebPlanner] fetching planner, academia session:', !!academia);
+  console.log('[fetchCampusWebPlanner] fetching planner, academia session:', !!academia || !!session.academiaToken);
   const res = await fetch(`/api/campus-proxy?endpoint=${encodeURIComponent('/api/auth/planner')}`, {
     method: 'GET',
     headers,
@@ -1099,9 +1132,11 @@ export function adaptCampusWebMarks(user: CampusWebUserResponse): MarksResponse 
           // Handle nested marks: { got: X, total: Y } or { scored: X, total: Y }
           const scored = d.got ?? d.scored ?? (d.marks as any)?.scored ?? '';
           const total = d.total ?? (d.marks as any)?.total ?? '';
+          const percentage = d.percentage ?? (d.marks as any)?.percentage;
           testPerformance.push({
             test: testName,
             marks: { scored: String(scored), total: String(total) },
+            ...(percentage !== undefined && percentage !== null ? { percentage: String(percentage) } : {}),
           });
         }
       }

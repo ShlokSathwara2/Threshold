@@ -13,6 +13,17 @@ export async function GET() {
   return NextResponse.json({ message: 'Campus Web Login Proxy' });
 }
 
+// The auth endpoint returns an Academia/IAM session as a cookie string in
+// `Cookies` (e.g. "_iamadt_client_1000…=…"); `sessionToken` is its fallback.
+function extractAcademiaToken(data: any): string | null {
+  if (!data || typeof data !== 'object') return null;
+  return (
+    (typeof data.Cookies === 'string' && data.Cookies.trim()) ||
+    (typeof data.sessionToken === 'string' && data.sessionToken.trim()) ||
+    null
+  );
+}
+
 interface UpstreamResult {
   source: 'portal' | 'auth';
   ok: boolean;
@@ -104,8 +115,6 @@ export async function POST(req: Request) {
       headers,
       'auth',
     );
-    // Swallow the fallback result if we never read it (no unhandled rejection).
-    authPromise.catch(() => {});
 
     const portal = await callUpstream(
       '/api/student-portal/login',
@@ -115,6 +124,14 @@ export async function POST(req: Request) {
     );
 
     const result = portal.ok ? portal : await authPromise;
+
+    // The auth endpoint also yields an Academia (IAM) session token. That is
+    // the ONLY token under which /api/auth/user/ returns the component-wise
+    // `tests` breakdown (FT-I, FT-II, …) and /api/auth/planner works — the
+    // sp_session alone gives empty `tests` and a 401 planner. So always hand
+    // it back alongside the portal token.
+    const authResult = await authPromise;
+    const academiaToken = authResult.ok ? extractAcademiaToken(authResult.data) : null;
 
     if (!result.ok) {
       const message =
@@ -150,6 +167,9 @@ export async function POST(req: Request) {
       success: true,
       cookies: csrfToken,
       token: csrfToken,
+      // Academia (IAM) session from /api/auth/login/ — needed for component-wise
+      // marks and the day-order planner. Null when the auth upstream failed.
+      academiaToken,
       data,
     });
   } catch (error) {

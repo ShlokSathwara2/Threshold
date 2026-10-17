@@ -1,5 +1,7 @@
 import type { InternalMark, Mark, TestPerformance } from '@/lib/api';
 
+export type MarksSource = 'sp' | 'academia' | 'campusweb';
+
 export interface MergedSubjectMark {
   code: string;
   description: string;
@@ -8,6 +10,8 @@ export interface MergedSubjectMark {
   tests: TestPerformance[];
   academiaLoaded: boolean;
   academiaOnly: boolean;
+  /** Which source supplied the totals/breakdown shown for this subject. */
+  source: MarksSource;
 }
 
 function num(v: string | number | undefined): number {
@@ -16,12 +20,29 @@ function num(v: string | number | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
-// Combines the Student Portal total (scored/max per subject) with Academia's
-// per-test breakdown. The breakdown is fully dynamic: however many tests the
-// portal reports (1, 2, 5, 20… any names) they all come through.
-export function mergeInternalMarks(sp: InternalMark[], academia: Mark[]): MergedSubjectMark[] {
+// Like num(), but distinguishes "absent" from a genuine 0 — Campus Web totals
+// must override SP values only when they are actually present.
+function numOrNull(v: string | number | undefined): number | null {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+// Combines the Student Portal totals, the Campus Web component-wise breakdown
+// (FT-I, FT-II, quizzes… exactly as the Campus Web site shows it) and an
+// optional separately-signed-in Academia session. Breakdowns are fully
+// dynamic: however many components a source reports, they all come through.
+export function mergeInternalMarks(
+  sp: InternalMark[],
+  academia: Mark[],
+  campusWeb: Mark[] = [],
+): MergedSubjectMark[] {
   const byCode = new Map<string, MergedSubjectMark>();
 
+  // 1) Student Portal totals — one row per subject.
   for (const m of sp) {
     if (!m.code) continue;
     byCode.set(m.code, {
@@ -32,19 +53,50 @@ export function mergeInternalMarks(sp: InternalMark[], academia: Mark[]): Merged
       tests: [],
       academiaLoaded: false,
       academiaOnly: false,
+      source: 'sp',
     });
   }
 
-  const academiaByCode = new Map(academia.map((a) => [a.courseCode, a]));
-  for (const [code, m] of byCode) {
-    const a = academiaByCode.get(code);
-    if (a && a.testPerformance && a.testPerformance.length > 0) {
-      m.tests = a.testPerformance;
-      m.academiaLoaded = true;
+  // 2) Campus Web — authoritative totals + the component-wise breakdown.
+  for (const cw of campusWeb) {
+    if (!cw.courseCode) continue;
+    const scored = numOrNull(cw.overall?.scored);
+    const max = numOrNull(cw.overall?.total);
+    const tests = cw.testPerformance || [];
+    const existing = byCode.get(cw.courseCode);
+    if (existing) {
+      if (scored !== null) existing.scored = scored;
+      if (max !== null) existing.maxMark = max;
+      if (tests.length > 0) existing.tests = tests;
+      if (!existing.description && cw.courseName) existing.description = cw.courseName;
+      existing.source = 'campusweb';
+    } else {
+      byCode.set(cw.courseCode, {
+        code: cw.courseCode,
+        description: cw.courseName || '',
+        scored: scored ?? 0,
+        maxMark: max ?? 0,
+        tests,
+        academiaLoaded: tests.length > 0,
+        academiaOnly: false,
+        source: 'campusweb',
+      });
     }
   }
 
-  // Subjects that only Academia reports (no SP internal entry yet).
+  // 3) A separately signed-in Academia session fills in any breakdown the
+  //    other sources are still missing.
+  const academiaByCode = new Map(academia.map((a) => [a.courseCode, a]));
+  for (const [code, m] of byCode) {
+    const a = academiaByCode.get(code);
+    if (a && a.testPerformance && a.testPerformance.length > 0 && m.tests.length === 0) {
+      m.tests = a.testPerformance;
+      m.academiaLoaded = true;
+      if (m.source === 'sp') m.source = 'academia';
+    }
+  }
+
+  // 4) Subjects that only Academia reports (no SP/CW entry yet).
   for (const a of academia) {
     if (!a.courseCode || byCode.has(a.courseCode)) continue;
     const tests = a.testPerformance || [];
@@ -59,6 +111,7 @@ export function mergeInternalMarks(sp: InternalMark[], academia: Mark[]): Merged
       tests,
       academiaLoaded: true,
       academiaOnly: true,
+      source: 'academia',
     });
   }
 
