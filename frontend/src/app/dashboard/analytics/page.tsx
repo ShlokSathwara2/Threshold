@@ -149,13 +149,14 @@ export default function AnalyticsPage() {
   const internalPct = totalMax > 0 ? (totalScored / totalMax) * 100 : null;
 
   function gradeFor(avg: number): string {
-    if (avg >= 0.9) return 'O';
-    if (avg >= 0.85) return 'A+';
-    if (avg >= 0.8) return 'A';
-    if (avg >= 0.75) return 'B+';
-    if (avg >= 0.7) return 'B';
-    if (avg >= 0.6) return 'C';
-    if (avg >= 0.5) return 'D';
+    // avg is a fraction (0–1). SRM KTR bands.
+    const pct = avg * 100;
+    if (pct >= 91) return 'O';
+    if (pct >= 81) return 'A+';
+    if (pct >= 71) return 'A';
+    if (pct >= 61) return 'B+';
+    if (pct >= 56) return 'B';
+    if (pct >= 50) return 'C';
     return 'F';
   }
 

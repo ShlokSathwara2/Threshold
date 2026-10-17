@@ -30,6 +30,13 @@ const SCOPED_PREFIXES = [
   'threshold_academia_session',
 ];
 
+// Scoped keys that are NOT erased on an explicit logout. The Academia (IAM)
+// session is a ONE-TIME login per student: it stays scoped to that student's
+// own key, so the next time THAT student signs in it is picked up again and
+// they are never asked for their Academia password twice — while a different
+// login (its own hash) still starts clean and gets prompted.
+const PRESERVE_ON_LOGOUT = ['threshold_academia_session'];
+
 // Hard wipe of every user-scoped key on this device — used on explicit logout
 // so the next person signing in (e.g. a friend on the same phone) starts with
 // zero leftovers: no old timetable, no old exams, no old attendance snapshots.
@@ -39,6 +46,7 @@ export function clearAllScopedData() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
+      if (PRESERVE_ON_LOGOUT.some((p) => k.startsWith(p))) continue;
       for (const p of SCOPED_PREFIXES) {
         if (k.startsWith(p)) {
           keys.push(k);

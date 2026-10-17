@@ -21,9 +21,101 @@ function fmtPct(v: string | number): string {
   return n.toFixed(1).replace(/\.0$/, '');
 }
 
-const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F'];
+const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F'];
 const gradeColor = (g: string): string =>
-  g === 'O' || g === 'A+' || g === 'A' ? '#34d399' : g === 'D' || g === 'F' ? '#f87171' : '#facc15';
+  g === 'O' || g === 'A+' || g === 'A' ? '#34d399' : g === 'F' ? '#f87171' : '#facc15';
+
+// Per-subject component chart: one bar per component (height = %) with a
+// trend line across the bar tops. Shown on the Internal Marks page (charts
+// mode) so the APK and the website share the same per-subject breakdown.
+function ComponentChart({
+  tests,
+  accent,
+  W,
+  WB,
+}: {
+  tests: MergedSubjectMark['tests'];
+  accent: string;
+  W: (a: number) => string;
+  WB: (a: number) => string;
+}) {
+  const WIDTH = 320;
+  const HEIGHT = 122;
+  const PAD_X = 12;
+  const PAD_TOP = 18;
+  const PAD_BOTTOM = 30;
+  const n = tests.length;
+  if (n === 0) return null;
+
+  const plotW = WIDTH - PAD_X * 2;
+  const plotH = HEIGHT - PAD_TOP - PAD_BOTTOM;
+  const step = plotW / n;
+  const barW = Math.min(30, step * 0.5);
+
+  const pts = tests.map((t, i) => {
+    const s = parseFloat(t.marks.scored) || 0;
+    const mx = parseFloat(t.marks.total) || 0;
+    const pct = mx > 0 ? (s / mx) * 100 : 0;
+    return { cx: PAD_X + step * i + step / 2, pct, label: t.test };
+  });
+
+  const yOf = (pct: number) => PAD_TOP + plotH * (1 - Math.min(100, Math.max(0, pct)) / 100);
+  const line = pts.map((p) => `${p.cx},${yOf(p.pct)}`).join(' ');
+  const short = (s: string) => (s.length > 8 ? `${s.slice(0, 7)}…` : s);
+
+  return (
+    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+      {[0, 50, 100].map((g) => (
+        <line
+          key={g}
+          x1={PAD_X}
+          x2={WIDTH - PAD_X}
+          y1={yOf(g)}
+          y2={yOf(g)}
+          stroke={WB(0.08)}
+          strokeWidth={1}
+          strokeDasharray={g === 0 ? undefined : '3 4'}
+        />
+      ))}
+      {pts.map((p, i) => {
+        const h = Math.max(0, plotH - (yOf(p.pct) - PAD_TOP));
+        const color = pctColor(p.pct);
+        return (
+          <g key={i}>
+            <motion.rect
+              x={p.cx - barW / 2}
+              width={barW}
+              rx={3}
+              fill={color}
+              initial={{ height: 0, y: PAD_TOP + plotH }}
+              animate={{ height: h, y: yOf(p.pct) }}
+              transition={{ duration: 0.6, delay: 0.1 + i * 0.06, ease: 'easeOut' }}
+            />
+            <text x={p.cx} y={yOf(p.pct) - 4} textAnchor="middle" fontSize="8" fontWeight={700} fill={W(0.6)}>
+              {Math.round(p.pct)}%
+            </text>
+            <text x={p.cx} y={HEIGHT - 12} textAnchor="middle" fontSize="7" fill={W(0.35)}>
+              {short(p.label)}
+            </text>
+          </g>
+        );
+      })}
+      {n > 1 && (
+        <motion.polyline
+          fill="none"
+          stroke={accent}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={line}
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 0.9 }}
+          transition={{ duration: 0.9, delay: 0.35, ease: 'easeOut' }}
+        />
+      )}
+    </svg>
+  );
+}
 
 export default function InternalMarks({
   refreshKey = 0,
@@ -514,6 +606,11 @@ export default function InternalMarks({
                   }}>
                     Components
                   </p>
+                  {charts && (
+                    <div style={{ margin: '0 0 12px' }}>
+                      <ComponentChart tests={m.tests} accent={color} W={W} WB={WB} />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {m.tests.map((t, ti) => {
                       const s = parseFloat(t.marks.scored) || 0;

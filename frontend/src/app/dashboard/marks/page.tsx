@@ -1,12 +1,15 @@
 ﻿"use client";
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { isLoggedIn } from '@/lib/api';
 import { useResults } from '@/hooks/useResults';
 import { useSubjectMarks } from '@/hooks/useSubjectMarks';
+import { useSubjectRegistry } from '@/lib/subject-registry';
+import { projectSgpa } from '@/lib/sgpa-projection';
 import SubjectMarksCard from '@/components/marks/SubjectMarksCard';
+import SgpaProjectionCard from '@/components/marks/SgpaProjectionCard';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
@@ -105,6 +108,17 @@ export default function MarksPage() {
   const WB = (a: number) => overlayBg(theme, a);
   const { semesters, cgpa, creditsRegistered, creditsEarned, creditsRequired, loading, error, refetch } = useResults();
   const { marks: subjectMarks, loading: marksLoading, error: marksError, semester, refetch: refetchMarks } = useSubjectMarks();
+  const { getSubject } = useSubjectRegistry();
+  // Campus-Web-style forecast: published marks scaled to 60 internals + assumed
+  // 40/40 externals, credit-weighted, with best / current / worst scenarios.
+  const projection = useMemo(
+    () =>
+      projectSgpa(subjectMarks, (code) => {
+        const credit = parseFloat(getSubject(code)?.credit ?? '');
+        return isNaN(credit) || credit <= 0 ? 3 : credit;
+      }),
+    [subjectMarks, getSubject]
+  );
   usePullToRefresh(async () => {
     await Promise.all([refetch(), refetchMarks()]);
   });
@@ -253,6 +267,11 @@ export default function MarksPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* SGPA Forecast — best / current / worst */}
+      {!marksLoading && !marksError && subjectMarks.length > 0 && (
+        <SgpaProjectionCard projection={projection} />
       )}
 
       {/* Subject Marks & Grade Targets */}

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { App } from '@capacitor/app';
-import { isSpLoggedIn, isCampusWebSession, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser, clearAcademiaCookies } from '@/lib/api';
+import { isSpLoggedIn, isCampusWebSession, clearSession, getSession, fetchSpProfile, checkSpSession, upgradeSessionUser } from '@/lib/api';
 import { clearAllScopedData } from '@/lib/user-scope';
 import PullRefresh from '@/components/ui/PullRefresh';
 import AppLockGate from '@/components/ui/AppLockGate';
@@ -349,7 +349,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     clearSession();
     clearAllScopedData();
-    clearAcademiaCookies();
+    // The Academia (IAM) session is intentionally NOT cleared: it is a one-time
+    // login per student and is kept scoped to that student's own key, so the
+    // same student is never asked again after logging back in.
     router.push('/welcome');
   };
 

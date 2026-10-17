@@ -213,14 +213,39 @@ class StudentPortalParser:
                         max_mark = ""
 
                     if code:
+                        # Each row's "View Details" button carries the ids the
+                        # portal needs for the component drill-down:
+                        #   funViewComponentWiseMarks(subjectId, code, desc, status)
+                        subject_id, status = self._parse_mark_detail_ids(str(row))
                         marks_list.append({
                             "code": code,
                             "description": description,
                             "scored": scored,
                             "maxMark": max_mark,
+                            "subjectId": subject_id,
+                            "status": status,
                         })
 
         return marks_list
+
+    @staticmethod
+    def _parse_mark_detail_ids(row_html: str) -> tuple[str, str]:
+        """Pull the component-drill-down ids out of a marks row.
+
+        Primary source is the inline handler the portal renders:
+            funViewComponentWiseMarks('<subjectId>', '<code>', '<desc>', <status>)
+        with hidden-input fallbacks for older portal builds.
+        """
+        m = re.search(
+            r"funViewComponentWiseMarks\(\s*'([^']+)'\s*,\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'?([^')]+?)'?\s*\)",
+            row_html,
+        )
+        if m:
+            return m.group(1).strip(), m.group(2).strip()
+
+        sid = re.search(r"hdnSubjectId['\"]?\s*(?:value\s*=\s*['\"]|:\s*['\"])([^'\"]+)", row_html)
+        st = re.search(r"['\"]?status['\"]?\s*(?:value\s*=\s*['\"]|:\s*['\"])([^'\"]+)", row_html)
+        return (sid.group(1).strip() if sid else ""), (st.group(1).strip() if st else "")
 
     def parse_attendance_detail(self, html: str) -> list[dict[str, str]]:
         """Parse attendance detail (absent drill-down) HTML into date records."""
@@ -256,7 +281,11 @@ class StudentPortalParser:
         return records
 
     def parse_internal_marks_detail(self, html: str) -> list[dict[str, str]]:
-        """Parse internal marks detail (component breakdown) HTML."""
+        """Parse internal marks detail (component breakdown) HTML.
+
+        Real portal table columns: ``Entered on | Component | Mark / Max. Mark``
+        — so the component name is NOT the first cell.
+        """
         soup = BeautifulSoup(html, "lxml")
         components: list[dict[str, str]] = []
 
@@ -270,13 +299,26 @@ class StudentPortalParser:
             headers = [th.get_text(strip=True).lower() for th in header_row.find_all(["th", "td"])]
 
             if any("component" in h or "test" in h or "mark" in h for h in headers):
+                comp_idx = next((i for i, h in enumerate(headers) if "component" in h or "test" in h), None)
+                mark_idx = next((i for i, h in enumerate(headers) if "mark" in h), None)
+                date_idx = next((i for i, h in enumerate(headers) if "enter" in h or "date" in h), None)
+                if comp_idx is None:
+                    comp_idx = 1 if len(headers) > 2 else 0
+                if mark_idx is None:
+                    mark_idx = comp_idx + 1
+
                 for row in rows[1:]:
                     cells = row.find_all("td")
-                    if len(cells) < 2:
+                    if len(cells) <= max(comp_idx, mark_idx):
                         continue
 
-                    component = cells[0].get_text(strip=True)
-                    mark_text = cells[1].get_text(strip=True)
+                    component = cells[comp_idx].get_text(strip=True)
+                    mark_text = cells[mark_idx].get_text(strip=True)
+                    entered = (
+                        cells[date_idx].get_text(strip=True)
+                        if date_idx is not None and len(cells) > date_idx
+                        else ""
+                    )
 
                     # Parse "45/50" format
                     if "/" in mark_text:
@@ -292,6 +334,7 @@ class StudentPortalParser:
                             "component": component,
                             "scored": scored,
                             "maxMark": max_mark,
+                            "enteredOn": entered,
                         })
 
         return components

@@ -1,4 +1,4 @@
-﻿﻿"use client";
+﻿"use client";
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -9,6 +9,17 @@ import {
   gradeForTotal,
   FULL_INTERNAL_THRESHOLD,
 } from '@/lib/grade-calculator';
+import { forecastTotals } from '@/lib/sgpa-projection';
+
+const GRADE_COLORS: Record<string, string> = {
+  O: '#34d399',
+  'A+': '#4ade80',
+  A: '#a3e635',
+  'B+': '#facc15',
+  B: '#fb923c',
+  C: '#f87171',
+  F: '#ef4444',
+};
 
 function parseNum(v: string): number {
   const n = parseFloat(v);
@@ -27,8 +38,47 @@ export default function GradeTargetTool({ subject }: { subject?: Mark | null }) 
 
   const bands = gradeBandsForInternal(internalScored, internalTotal);
 
+  // Per-subject outlook (best / current pace / worst), matching the SGPA
+  // forecast. Only meaningful once portal marks exist.
+  const hasPortalMarks = overallTotal > 0;
+  const forecast = hasPortalMarks ? forecastTotals(internalScored, overallTotal) : null;
+
   return (
     <div>
+      {/* Outlook: worst · projected · highest possible */}
+      {forecast && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '10px' }}>
+          {[
+            { label: 'Worst', value: forecast.worst, accent: false },
+            { label: 'Projected', value: forecast.projected, accent: true },
+            { label: 'Highest possible', value: forecast.best, accent: false },
+          ].map((s) => {
+            const g = gradeForTotal(s.value);
+            const c = GRADE_COLORS[g.grade] || '#94a3b8';
+            return (
+              <div
+                key={s.label}
+                style={{
+                  padding: '7px 6px',
+                  borderRadius: '9px',
+                  textAlign: 'center',
+                  background: s.accent ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${s.accent ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)'}`,
+                }}
+              >
+                <p style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.4)', marginBottom: '3px' }}>
+                  {s.label}
+                </p>
+                <p style={{ fontSize: '0.92rem', fontWeight: 800, color: c, lineHeight: 1 }}>{g.grade}</p>
+                <p style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.35)', marginTop: '3px' }}>
+                  {s.value.toFixed(1)}/100
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Scheme badge */}
       <div style={{
         display: 'inline-flex',

@@ -55,12 +55,33 @@ if (typeof window !== 'undefined') {
   } catch { /* corrupted — ignore */ }
 }
 
+// Read the Academia session saved for the CURRENT login. Reading from the
+// scoped key (instead of trusting a copy loaded once at import) means that
+// after an explicit logout + login the SAME student's saved Academia session
+// is picked straight back up — while a different login, scoped to its own key,
+// still sees nothing.
+function readAcademiaStored(): { cookie: string | null; username: string | null } {
+  if (typeof window === 'undefined') {
+    return { cookie: academiaCookie, username: academiaUsername };
+  }
+  try {
+    const raw = localStorage.getItem(academiaStorageKey());
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { cookie: parsed?.cookie ?? null, username: parsed?.username ?? null };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { cookie: academiaCookie, username: academiaUsername };
+}
+
 export function getAcademiaCookies(): string | null {
-  return academiaCookie;
+  return readAcademiaStored().cookie;
 }
 
 export function getAcademiaUsername(): string | null {
-  return academiaUsername;
+  return readAcademiaStored().username;
 }
 
 export function setAcademiaCookies(cookies: string, username?: string) {
@@ -83,7 +104,9 @@ export function clearAcademiaCookies() {
 }
 
 export function isAcademiaLoggedIn(): boolean {
-  return !!academiaCookie;
+  // Read through the scoped key so the answer is correct even after a logout +
+  // re-login (or an in-app identity upgrade) changed which key holds it.
+  return !!readAcademiaStored().cookie;
 }
 
 export function getSession(): Session | null {

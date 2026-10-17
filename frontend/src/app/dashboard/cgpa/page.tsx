@@ -272,6 +272,9 @@ export default function CgpaCalculatorPage() {
         <p style={{ color: W(0.4), fontSize: '0.75rem', marginTop: '8px' }}>
           {totalPoints.toFixed(1)} grade points ÷ {totalCredits} credits
         </p>
+        <p style={{ color: W(0.45), fontSize: '0.72rem', marginTop: '4px' }}>
+          ≈ {(sgpa * 10).toFixed(1)}% equivalent (CGPA × 10)
+        </p>
       </motion.div>
 
       {/* Actions */}

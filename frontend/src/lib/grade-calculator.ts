@@ -1,10 +1,13 @@
+// SRM KTR letter grades: marks % band → grade → grade points.
+// O 91-100 (10) · A+ 81-90 (9) · A 71-80 (8) · B+ 61-70 (7) · B 56-60 (6)
+// · C 50-55 (5) · F/Ab/I 0-49 (0)
 export const GRADE_TABLE: { min: number; grade: string; gp: number }[] = [
   { min: 91, grade: 'O', gp: 10 },
   { min: 81, grade: 'A+', gp: 9 },
   { min: 71, grade: 'A', gp: 8 },
   { min: 61, grade: 'B+', gp: 7 },
-  { min: 51, grade: 'B', gp: 6 },
-  { min: 41, grade: 'C', gp: 5 },
+  { min: 56, grade: 'B', gp: 6 },
+  { min: 50, grade: 'C', gp: 5 },
   { min: 0, grade: 'F', gp: 0 },
 ];
 

@@ -1,4 +1,5 @@
 import type { InternalMark, Mark, TestPerformance } from '@/lib/api';
+import { GRADE_TABLE } from '@/lib/grade-calculator';
 
 export type MarksSource = 'sp' | 'academia' | 'campusweb';
 
@@ -146,13 +147,11 @@ export function subjectPct(s: MergedSubjectMark): number | null {
 }
 
 export function gradeFor(avg: number): string {
-  if (avg >= 0.9) return 'O';
-  if (avg >= 0.85) return 'A+';
-  if (avg >= 0.8) return 'A';
-  if (avg >= 0.75) return 'B+';
-  if (avg >= 0.7) return 'B';
-  if (avg >= 0.6) return 'C';
-  if (avg >= 0.5) return 'D';
+  // avg is a fraction (0–1). SRM KTR bands, single source of truth.
+  const pct = avg * 100;
+  for (const row of GRADE_TABLE) {
+    if (pct >= row.min) return row.grade;
+  }
   return 'F';
 }
 
