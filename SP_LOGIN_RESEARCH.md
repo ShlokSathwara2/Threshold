@@ -1,4 +1,4 @@
-# Student Portal Login — Research & Implementation Guide
+﻿# Student Portal Login â€” Research & Implementation Guide
 
 > **Date:** August 31, 2026
 > **Status:** Proxy verified working. Ready to implement.
@@ -44,13 +44,13 @@ SP (Student Portal) login fails when the backend is deployed on Render (non-Indi
 
 - `browser_login.py` line 74: "Spoof Windows platform & userAgent on Linux cloud containers (Render / Fly.io / Docker)"
 - `curl_login.py` line 1-6: "Uses curl.exe (libcurl) instead of Python requests/httpx, which have different JA3 TLS fingerprints that trigger the Imperva/F5 WAF"
-- Three progressively more sophisticated login implementations exist (httpx → curl → Playwright with stealth)
+- Three progressively more sophisticated login implementations exist (httpx â†’ curl â†’ Playwright with stealth)
 
 ### Render deployment location
 
 - Render servers are in US/EU (not India)
 - SRM WAF blocks these IPs at network level
-- No code fix possible — must deploy in India
+- No code fix possible â€” must deploy in India
 
 ---
 
@@ -60,9 +60,9 @@ SP (Student Portal) login fails when the backend is deployed on Render (non-Indi
 
 ```
 Frontend (Vercel)
-    ↓
+    â†“
 sp-api.srminsider.in (AWS API Gateway - Mumbai)
-    ↓
+    â†“
 sp.srmist.edu.in (SRM Student Portal)
 ```
 
@@ -85,10 +85,10 @@ Response: {"engine":"puppeteer+http","scrappeyConfigured":false,"proxyConfigured
 
 | Endpoint | Method | Status | Description |
 |----------|--------|--------|-------------|
-| `/api/auth/login-context` | GET | ✅ | Get CAPTCHA image + session tokens |
-| `/api/auth/login` | POST | ✅ | Submit credentials + CAPTCHA |
-| `/api/student/attendance` | GET | ✅ | Fetch attendance (full course list) |
-| `/api/student/profile` | GET | ✅ | Fetch student profile |
+| `/api/auth/login-context` | GET | âœ… | Get CAPTCHA image + session tokens |
+| `/api/auth/login` | POST | âœ… | Submit credentials + CAPTCHA |
+| `/api/student/attendance` | GET | âœ… | Fetch attendance (full course list) |
+| `/api/student/profile` | GET | âœ… | Fetch student profile |
 
 ### Not available on proxy (404)
 
@@ -102,25 +102,25 @@ Response: {"engine":"puppeteer+http","scrappeyConfigured":false,"proxyConfigured
 
 ## 4. Threshold's Current Architecture
 
-### Frontend → Backend flow
+### Frontend â†’ Backend flow
 
 ```
 Browser (Vercel)
-    ↓
+    â†“
 /api/campus-login (Next.js route)
-    ↓
+    â†“
 campusapi.fly.dev (EXTERNAL - broken, returns 404)
-    ↓
+    â†“
 sp.srmist.edu.in
 ```
 
-### Backend → SP flow (direct)
+### Backend â†’ SP flow (direct)
 
 ```
 Browser (Vercel)
-    ↓
+    â†“
 threshold-1-ly01.onrender.com (Python FastAPI)
-    ↓
+    â†“
 sp.srmist.edu.in (BLOCKED - non-Indian IP)
 ```
 
@@ -179,8 +179,8 @@ Submit credentials + CAPTCHA answer.
 **Request:**
 ```json
 {
-  "username": "ss1516",
-  "password": "kolhS#24",
+  "username": "<netid>",
+  "password": "<password>",
   "captcha": "5Y37Kz",
   "sessionId": "9557f437-ea05-4edc-bef3-15573305a242",
   "dtokenFieldName": "dtoken_e09b4c",
@@ -242,15 +242,15 @@ Fetch student profile.
 
 ### Test credentials used
 
-- NetID: `ss1516`
-- Password: `kolhS#24`
-- Tested: August 31, 2026 — Login successful, attendance + profile fetched
+- NetID: `<netid>`
+- Password: `<password>`
+- Tested: August 31, 2026 â€” Login successful, attendance + profile fetched
 
 ---
 
 ## 6. Solution Options
 
-### Option 1: Use external proxy (Simplest — no deployment)
+### Option 1: Use external proxy (Simplest â€” no deployment)
 
 **What:** Call `sp-api.srminsider.in` directly from frontend
 **Pros:** Zero deployment, works now
@@ -275,7 +275,7 @@ Fetch student profile.
 
 **What:** Rent a VPS in India (Contabo, Hetzner, DigitalOcean)
 **Pros:** Full control, no timeouts, can run anything
-**Cons:** Costs ₹400-700/month
+**Cons:** Costs â‚¹400-700/month
 **Best for:** Maximum reliability
 
 ### Recommendation
@@ -286,7 +286,7 @@ Fetch student profile.
 
 ## 7. Testing Plan
 
-### Phase 1: Verify proxy works (done ✓)
+### Phase 1: Verify proxy works (done âœ“)
 
 ```bash
 # Get CAPTCHA
@@ -295,7 +295,7 @@ curl "https://sp-api.srminsider.in/api/auth/login-context"
 # Login
 curl -X POST "https://sp-api.srminsider.in/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"ss1516","password":"kolhS#24","captcha":"5Y37Kz","sessionId":"...","dtokenFieldName":"...","cptokenFieldName":"...","randomDelimiter":"..."}'
+  -d '{"username":"<netid>","password":"<password>","captcha":"5Y37Kz","sessionId":"...","dtokenFieldName":"...","cptokenFieldName":"...","randomDelimiter":"..."}'
 
 # Fetch attendance
 curl "https://sp-api.srminsider.in/api/student/attendance?sessionId=..."
@@ -481,9 +481,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://threshold-proxy.fly
 
 | Service | URL | Status |
 |---------|-----|--------|
-| AcadLoop SP proxy | `sp-api.srminsider.in` | ✅ Working |
-| Campus Web API | `campusapi.fly.dev` | ❌ Broken (404) |
-| Threshold backend | `threshold-1-ly01.onrender.com` | ✅ Working (but SP blocked) |
+| AcadLoop SP proxy | `sp-api.srminsider.in` | âœ… Working |
+| Campus Web API | `campusapi.fly.dev` | âŒ Broken (404) |
+| Threshold backend | `threshold-1-ly01.onrender.com` | âœ… Working (but SP blocked) |
 
 ---
 
