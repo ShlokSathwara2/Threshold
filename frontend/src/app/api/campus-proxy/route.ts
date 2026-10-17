@@ -10,6 +10,7 @@ const ALLOWED_ENDPOINTS: RegExp[] = [
   /^\/api\/auth\/timetable\/[^/]+$/,
   /^\/api\/auth\/planner\/?$/,
   /^\/api\/student-portal\/attendance$/,
+  /^\/api\/student-portal\/exam-timetable$/,
 ];
 
 function resolveEndpoint(endpoint: string | null): string | null {

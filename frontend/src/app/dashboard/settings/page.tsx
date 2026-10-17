@@ -14,6 +14,7 @@ import type { SoundId } from '@/lib/sounds';
 import { CURSOR_OPTIONS, PARTICLE_OPTIONS, getCursorStyle, setCursorStyle, getCursorParticles, setCursorParticles } from '@/lib/cursor-effects';
 import type { CursorStyle, ParticleEffect } from '@/lib/cursor-effects';
 import { exportBackup, importBackup } from '@/lib/backup';
+import { requestWebNotifPermission } from '@/lib/web-notifications';
 import { useRef } from 'react';
 
 function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () => void; accent: string }) {
@@ -242,7 +243,13 @@ export default function SettingsPage() {
             </div>
             <Toggle
               checked={notif.enabled}
-              onChange={() => setNotif({ enabled: !notif.enabled })}
+              onChange={() => {
+                const next = !notif.enabled;
+                setNotif({ enabled: next });
+                // Browsers only grant notification permission from a user
+                // gesture — ask right when the student switches them on.
+                if (next) void requestWebNotifPermission();
+              }}
               accent={theme.accent}
             />
           </div>
@@ -251,7 +258,7 @@ export default function SettingsPage() {
             { key: 'attendanceRisk' as const, label: 'Attendance-risk alerts', desc: 'Subjects below 75% — shown in dashboard alerts' },
             { key: 'examDates' as const, label: 'Exam-date reminders', desc: 'Exams within the next few days' },
             { key: 'examDayBefore' as const, label: 'Exam day-before alert', desc: 'Reminder the evening before each exam' },
-            { key: 'classAlerts' as const, label: '"Attend this class" alerts', desc: 'Reminders 30 min before classes of subjects below 75%' },
+            { key: 'classAlerts' as const, label: 'Class reminders', desc: 'A reminder 10 minutes before every class' },
             { key: 'bunkAlerts' as const, label: 'Bunk-window alerts', desc: 'Tell you when today\u2019s remaining class is safe to skip' },
             { key: 'stepClasses' as const, label: 'STEP class reminders', desc: '15 min before each STEP class' },
             { key: 'aptitudeClasses' as const, label: 'Aptitude class reminders', desc: '15 min before each Aptitude class' },

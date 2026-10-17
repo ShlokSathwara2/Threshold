@@ -129,6 +129,15 @@ export function useAttendance(): UseAttendanceResult {
       }
 
       const data = res.attendance || [];
+
+      // Session expired / portal returned nothing: never wipe the last-known
+      // data. Keep what is on screen (and in the cache) until the student
+      // logs out explicitly — switching tabs must not zero everything out.
+      if (data.length === 0 && hasDataRef.current) {
+        setStale(true);
+        return;
+      }
+
       setRaw(data);
       let calculated = calculateAllSubjects(data);
 

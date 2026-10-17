@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   isSpLoggedIn,
+  isCampusWebSession,
+  getSession,
   fetchSpExamTimetable,
+  fetchCampusWebExamTimetable,
   type ExamTimetableResponse,
 } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
@@ -25,7 +28,15 @@ export default function ExamTimetablePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchSpExamTimetable();
+      // Campus Web (Net ID) logins get the exam timetable from the Campus Web
+      // API; Student Portal logins use the SP scraper.
+      let res: ExamTimetableResponse;
+      if (isCampusWebSession()) {
+        const netId = getSession()?.user || '';
+        res = await fetchCampusWebExamTimetable(netId);
+      } else {
+        res = await fetchSpExamTimetable();
+      }
       if (res.error) throw new Error(res.error);
       setData(res);
     } catch (e: unknown) {
@@ -36,7 +47,7 @@ export default function ExamTimetablePage() {
   }, []);
 
   useEffect(() => {
-    if (!isSpLoggedIn()) {
+    if (!isSpLoggedIn() && !isCampusWebSession()) {
       router.push('/sp-login');
       return;
     }
@@ -62,7 +73,9 @@ export default function ExamTimetablePage() {
           Exam Timetable
         </h1>
         <p style={{ color: 'var(--threshold-text-faint)', fontSize: '0.8rem' }}>
-          Your exam schedule from the Student Portal
+          {isCampusWebSession()
+            ? 'Your exam schedule from Campus Web'
+            : 'Your exam schedule from the Student Portal'}
         </p>
       </motion.div>
 

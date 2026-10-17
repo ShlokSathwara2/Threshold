@@ -66,7 +66,7 @@ const navGroups: NavGroup[] = [
     expandable: true,
     items: [
       { label: 'Hall Ticket', path: '/dashboard/exam/hall-ticket', icon: '⚑', locked: true },
-      { label: 'Exam Timetable', path: '/dashboard/exam/timetable', icon: '▧', locked: true },
+      { label: 'Exam Timetable', path: '/dashboard/exam/timetable', icon: '▧' },
       { label: 'Provisional Results', path: '/dashboard/exam/provisional-results', icon: '★', locked: true },
     ],
   },

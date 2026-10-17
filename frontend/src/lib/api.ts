@@ -1062,6 +1062,49 @@ export async function fetchCampusWebStudentPortalAttendance(netId: string): Prom
   return { regNumber: cleanNetId, attendance: [], status: 200 };
 }
 
+/**
+ * Exam timetable for a Campus Web (Net ID) session. Mirrors
+ * `fetchCampusWebStudentPortalAttendance`: POST the Net ID and map the
+ * portal's `examTimeTable` rows onto our ExamTimetableRow shape, so the Exam
+ * Timetable page renders a Net ID login exactly like the Student Portal one.
+ */
+export async function fetchCampusWebExamTimetable(netId: string): Promise<ExamTimetableResponse> {
+  const cleanNetId = netId.split('@')[0].trim();
+  const session = getSession();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (session?.cookies) headers['X-CSRF-Token'] = session.cookies;
+  if (session?.user) headers['X-Net-ID'] = session.user;
+  try {
+    const res = await fetch(
+      `/api/campus-proxy?endpoint=${encodeURIComponent('/api/student-portal/exam-timetable')}`,
+      { method: 'POST', headers, body: JSON.stringify({ net_id: cleanNetId }) }
+    );
+    const rawText = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(rawText); } catch { data = {}; }
+    const list: any[] = Array.isArray(data.examTimeTable) ? data.examTimeTable : [];
+    return {
+      available: list.length > 0,
+      rows: list.map((e: any) => ({
+        sem_year_trim: e.semester || '',
+        subject_code: e.course_code || '',
+        subject_description: e.course_name || '',
+        date_session:
+          e.date_session ||
+          [e.date, e.session, e.time ? `(${e.time})` : ''].filter(Boolean).join(' '),
+        hall_no: e.hall_no || '',
+        seat_no: e.seat_no || '',
+      })),
+    };
+  } catch (e) {
+    return {
+      available: false,
+      rows: [],
+      error: e instanceof Error ? e.message : 'Failed to load exam timetable',
+    };
+  }
+}
+
 export function adaptCampusWebAttendance(user: CampusWebUserResponse | any): AttendanceResponse {
   const courses: any[] = user?.courses || user?.data?.courses || (Array.isArray(user) ? user : []);
   console.log('[adaptCampusWebAttendance] input keys:', Object.keys(user || {}), 'courses count:', courses.length);

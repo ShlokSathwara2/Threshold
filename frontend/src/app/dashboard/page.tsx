@@ -258,22 +258,26 @@ export default function DashboardPage() {
         // Keep the full Campus Web marks — they carry the component-wise
         // breakdown (FT-I, FT-II …) and each subject's total, which the
         // Internal Marks card renders.
-        setCwMarks(marksResp.marks.length ? marksResp.marks : null);
-        // One flattened row PER SUBJECT for search/analytics. (A row per
-        // component used to create duplicate subjects whose "total" was just
-        // the last component's score.)
-        const im: InternalMark[] | null = marksResp.marks.length
-          ? marksResp.marks
+        // Only replace when marks actually came back: an expired session must
+        // never blank the card — last-known values stay until logout.
+        if (marksResp.marks.length) {
+          setCwMarks(marksResp.marks);
+          // One flattened row PER SUBJECT for search/analytics. (A row per
+          // component used to create duplicate subjects whose "total" was
+          // just the last component's score.)
+          const im: InternalMark[] = marksResp.marks
             .map((m) => ({
               code: m.courseCode,
               description: m.courseName,
               scored: m.overall?.scored ?? '',
               maxMark: m.overall?.total ?? '',
             }))
-            .filter((m) => m.scored !== '' || m.maxMark !== '')
-          : null;
-        setInternalMarks(im);
-        if (im) setCached<InternalMark[]>('internalMarks', im);
+            .filter((m) => m.scored !== '' || m.maxMark !== '');
+          if (im.length) {
+            setInternalMarks(im);
+            setCached<InternalMark[]>('internalMarks', im);
+          }
+        }
 
         // Profile + internal marks came back ⇒ the connection works. A missing
         // planner (see below) must never flip the offline banner on.
@@ -319,10 +323,9 @@ export default function DashboardPage() {
           if (cloudExams) setExams(cloudExams);
         } catch { /* keep cached */ }
       } catch {
-        setProfile(null);
-        setInternalMarks(null);
-        setCwMarks(null);
-        applyToday(null);
+        // Session expired / network failed: keep the last-known values on
+        // screen (they stay until the student logs out explicitly) and just
+        // flag that we're showing stale data.
         setOffline(true);
       }
       return;
@@ -349,13 +352,16 @@ export default function DashboardPage() {
         setStaleAsOf(null);
         setOffline(false);
       } else {
-        applyToday(null);
+        // Keep the cached day order; a failed calendar fetch must not wipe it.
         setOffline(true);
       }
       if (imRes.status === 'fulfilled') {
         const im = imRes.value.internal_marks?.length ? imRes.value.internal_marks : null;
-        setInternalMarks(im);
-        if (im) setCached<InternalMark[]>('internalMarks', im);
+        // Only replace when we actually got marks — never blank the card.
+        if (im) {
+          setInternalMarks(im);
+          setCached<InternalMark[]>('internalMarks', im);
+        }
       }
     }
 
@@ -915,7 +921,7 @@ export default function DashboardPage() {
                 Some features are only in the APK
               </p>
               <p style={{ fontSize: '0.72rem', color: W(0.5), margin: '5px 0 0', lineHeight: 1.5 }}>
-                Hall Ticket, Exam Timetable, Provisional Results, Course Status, Announcements &amp; Personal Details require the Android app.
+                Hall Ticket, Provisional Results, Course Status, Announcements &amp; Personal Details require the Android app.
               </p>
               <a
                 href="https://github.com/ShlokSathwara2/Threshold_APK/raw/main/Threshold.apk"

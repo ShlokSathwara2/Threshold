@@ -146,15 +146,15 @@ export interface NotifPrefs {
 }
 
 export const DEFAULT_NOTIF: NotifPrefs = {
-  enabled: false,
-  attendanceRisk: false,
-  examDates: false,
-  classAlerts: false,
-  bunkAlerts: false,
-  weeklyReport: false,
-  stepClasses: false,
-  aptitudeClasses: false,
-  examDayBefore: false,
+  enabled: true,
+  attendanceRisk: true,
+  examDates: true,
+  classAlerts: true,
+  bunkAlerts: true,
+  weeklyReport: true,
+  stepClasses: true,
+  aptitudeClasses: true,
+  examDayBefore: true,
 };
 
 const THEME_KEY = 'threshold_theme';
@@ -162,21 +162,44 @@ const THEME_KEY = 'threshold_theme';
 // bleed into another login on the same phone.
 const LEGACY_NOTIF_KEY = 'threshold_notif_prefs';
 const NOTIF_KEY = () => scopedKey('threshold_notif_prefs');
+// One-time upgrade marker: existing users get the full alert set switched on
+// once so the new reminders actually fire. Stamped, so if they then turn an
+// alert off it stays off.
+const NOTIF_ALLON_KEY = () => scopedKey('threshold_notif_allon_v1');
+
+function parseNotif(raw: string | null): Partial<NotifPrefs> {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Partial<NotifPrefs>;
+  } catch {
+    return {};
+  }
+}
 
 function loadNotifPrefs(): NotifPrefs {
   try {
     let raw = localStorage.getItem(NOTIF_KEY());
     if (!raw) {
       // Adopt legacy device-wide prefs only on a single-user device.
-      if (!isSingleUserDevice()) return DEFAULT_NOTIF;
-      raw = localStorage.getItem(LEGACY_NOTIF_KEY);
-      if (raw) {
-        localStorage.setItem(NOTIF_KEY(), raw);
-        localStorage.removeItem(LEGACY_NOTIF_KEY);
+      if (isSingleUserDevice()) {
+        raw = localStorage.getItem(LEGACY_NOTIF_KEY);
+        if (raw) {
+          localStorage.setItem(NOTIF_KEY(), raw);
+          localStorage.removeItem(LEGACY_NOTIF_KEY);
+        }
       }
     }
-    if (!raw) return DEFAULT_NOTIF;
-    return { ...DEFAULT_NOTIF, ...JSON.parse(raw) };
+
+    // One-time: turn the whole alert set on so the new reminders fire. After
+    // the marker is set the student's own toggles win.
+    if (localStorage.getItem(NOTIF_ALLON_KEY()) !== '1') {
+      const allOn: NotifPrefs = { ...DEFAULT_NOTIF };
+      localStorage.setItem(NOTIF_KEY(), JSON.stringify(allOn));
+      localStorage.setItem(NOTIF_ALLON_KEY(), '1');
+      return allOn;
+    }
+
+    return { ...DEFAULT_NOTIF, ...parseNotif(raw) };
   } catch {
     return DEFAULT_NOTIF;
   }

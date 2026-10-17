@@ -1,5 +1,7 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { NotifPrefs } from './theme';
+import { isNativePlatform } from './capacitor';
+import { refreshWebNotifications } from './web-notifications';
 import { nextExamDate, type ExamEntry } from './exams';
 import { buildDayOrderLookup } from './day-order';
 import { loadAttributions } from './habits';
@@ -95,9 +97,22 @@ function normDO(label: string | null | undefined): string | null {
   return `DO-${m[1]}`;
 }
 
-// "Attend this class" alerts: for every subject below 75%, schedule a
-// reminder ~30 min before each of that subject's classes over the next 7
-// days (resolved via the academic calendar's day order for each date).
+// Short "what's my margin?" line for a class reminder.
+function marginHint(s?: NotifSubject): string {
+  if (!s) return 'Open the app to check your attendance margin.';
+  if (s.canBunk >= 1) {
+    return `Margin: you can skip ${s.canBunk} class${s.canBunk === 1 ? '' : 'es'} and stay above 75%.`;
+  }
+  if (s.mustAttend > 0) {
+    return `Margin: attend — ${s.mustAttend} more class${s.mustAttend === 1 ? '' : 'es'} needed to reach 75%.`;
+  }
+  return 'Margin: right at the 75% line — attend to be safe.';
+}
+
+// Class reminders: 10 minutes before EVERY class over the next 7 days (the day
+// order is resolved from the academic calendar). The body carries the class
+// name, the time, and the attendance margin so the student knows at a glance
+// whether skipping is safe.
 async function scheduleClassAlerts(
   subjects: NotifSubject[],
   meta: NotifMeta | undefined,
@@ -105,24 +120,23 @@ async function scheduleClassAlerts(
 ): Promise<Array<{ id: number; title: string; body: string; at: Date }>> {
   const out: Array<{ id: number; title: string; body: string; at: Date }> = [];
   if (!meta || !meta.slots.length || !meta.months.length) return out;
-  const atRisk = subjects
-    .filter((s) => s.percentage < 75 && s.percentage > 0)
-    .sort((a, b) => a.percentage - b.percentage);
-  if (atRisk.length === 0) return out;
 
+  const byCourse = new Map(subjects.map((s) => [s.courseCode, s]));
   const lookup = buildDayOrderLookup(meta.months);
-  const byCourseDO = new Map<string, Map<string, TimetableSlot[]>>();
+
+  // Day order → course → earliest slot (so a lab that lists twice yields one
+  // reminder at its earliest start).
+  const byDO = new Map<string, Map<string, TimetableSlot>>();
   for (const s of meta.slots) {
     const key = normDO(s.day);
     if (!key) continue;
-    let perCourse = byCourseDO.get(key);
+    let perCourse = byDO.get(key);
     if (!perCourse) {
       perCourse = new Map();
-      byCourseDO.set(key, perCourse);
+      byDO.set(key, perCourse);
     }
-    const list = perCourse.get(s.courseCode) ?? [];
-    list.push(s);
-    perCourse.set(s.courseCode, list);
+    const existing = perCourse.get(s.courseCode);
+    if (!existing || slotStart(s) < slotStart(existing)) perCourse.set(s.courseCode, s);
   }
 
   let id = 2000;
@@ -132,24 +146,25 @@ async function scheduleClassAlerts(
     const dateStr = toDateStr(day);
     const doName = normDO(lookup.get(dateStr) ?? null);
     if (!doName) continue;
-    const byCourse = byCourseDO.get(doName);
-    if (!byCourse) continue;
-    for (const s of atRisk) {
-      const slots = byCourse.get(s.courseCode) ?? [];
-      if (slots.length === 0) continue;
-      const startMin = Math.min(...slots.map((x) => slotStart(x)));
+    const perCourse = byDO.get(doName);
+    if (!perCourse) continue;
+    for (const slot of perCourse.values()) {
+      const startMin = slotStart(slot);
       const trigger = new Date(day);
-      trigger.setHours(0, startMin - 30, 0, 0);
+      trigger.setHours(0, startMin - 10, 0, 0);
       if (trigger.getTime() <= now.getTime() + 5 * 60000) continue;
       const hh = Math.floor(startMin / 60);
       const mm = startMin % 60;
       const h12 = ((hh + 11) % 12) + 1;
       const ap = hh >= 12 ? 'PM' : 'AM';
       const timeStr = `${h12}:${String(mm).padStart(2, '0')} ${ap}`;
+      const subj = byCourse.get(slot.courseCode);
+      const name = subj?.courseTitle || slot.courseTitle || slot.courseCode;
+      const pctStr = subj ? ` · ${subj.percentage.toFixed(1)}%` : '';
       out.push({
         id: id++,
-        title: `Attend ${s.courseCode} — ${s.percentage.toFixed(1)}%`,
-        body: `${s.courseTitle} at ${timeStr} (${doName}) today. You're below 75% — ${s.mustAttend} more class${s.mustAttend === 1 ? '' : 'es'} needed. Don't skip this one!`,
+        title: `${name} in 10 min — ${timeStr}`,
+        body: `${slot.courseCode} at ${timeStr}${pctStr}. ${marginHint(subj)}`,
         at: trigger,
       });
     }
@@ -323,24 +338,23 @@ async function scheduleWeeklyReport(
   ];
 }
 
-export async function refreshNotifications(
+export interface ScheduledAlert {
+  id: number;
+  title: string;
+  body: string;
+  at: Date;
+}
+
+// Pure: every alert the user's prefs call for, at `now`. Shared by the native
+// (Android alarm) and web (in-page) schedulers so both produce identical alerts.
+export async function buildScheduledAlerts(
   subjects: NotifSubject[],
   exams: ExamEntry[],
   notif: NotifPrefs,
-  meta?: NotifMeta
-): Promise<void> {
-  try {
-    await LocalNotifications.cancelAll();
-  } catch {
-    return; // not on a device / permission missing — nothing to do
-  }
-  if (!notif.enabled) return;
-
-  const granted = await ensurePerm();
-  if (!granted) return;
-
-  const now = new Date();
-  const toSchedule: Array<{ id: number; title: string; body: string; at: Date }> = [];
+  meta: NotifMeta | undefined,
+  now: Date,
+): Promise<ScheduledAlert[]> {
+  const toSchedule: ScheduledAlert[] = [];
 
   // ── "Attend this class" alerts for subjects below 75% ──────────────
   if (notif.classAlerts) {
@@ -424,10 +438,40 @@ export async function refreshNotifications(
     toSchedule.push(...scheduleClassTypeAlerts(aptClasses, 'Aptitude', now, 7000));
   }
 
-  if (toSchedule.length === 0) return;
+  return toSchedule;
+}
+
+export async function refreshNotifications(
+  subjects: NotifSubject[],
+  exams: ExamEntry[],
+  notif: NotifPrefs,
+  meta?: NotifMeta
+): Promise<void> {
+  if (!notif.enabled) return;
+
+  const now = new Date();
+  const alerts = await buildScheduledAlerts(subjects, exams, notif, meta, now);
+
+  // Website: browsers can't fire alarms while the tab is closed (that needs
+  // the Push API + a server), so we run in-page timers while the site is open
+  // and catch up missed alerts on the next visit. Same alert set as native.
+  if (!isNativePlatform()) {
+    refreshWebNotifications(alerts, now);
+    return;
+  }
+
+  try {
+    await LocalNotifications.cancelAll();
+  } catch {
+    return; // not on a device / permission missing — nothing to do
+  }
+
+  const granted = await ensurePerm();
+  if (!granted || alerts.length === 0) return;
+
   try {
     await LocalNotifications.schedule({
-      notifications: toSchedule.map((n) => ({
+      notifications: alerts.map((n) => ({
         id: n.id,
         title: n.title,
         body: n.body,
