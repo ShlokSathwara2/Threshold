@@ -20,6 +20,7 @@ import { computeDayRecommendations, slotKey } from '@/lib/bunk-planner';
 import { loadOptionalHours, toggleOptionalHour } from '@/lib/optional-hours';
 import { loadExams, nextExamDate, daysUntil, type ExamEntry } from '@/lib/exams';
 import { resolveTodayDayOrder } from '@/lib/day-order';
+import { scopedKey } from '@/lib/user-scope';
 
 const CACHE_PREFIX = 'threshold_timetable_cache';
 
@@ -31,8 +32,11 @@ interface TimetableCache {
 
 const DAYS = ['DO-1', 'DO-2', 'DO-3', 'DO-4', 'DO-5'];
 
-function cacheKey(username: string | null): string {
-  return `${CACHE_PREFIX}__${username || 'anon'}`;
+// Login-scoped (hashes the signed-in user, not the device) so the timetable
+// belongs to the student who fetched it — a friend signing in on the same
+// phone never sees (or overwrites) it.
+function cacheKey(_username?: string | null): string {
+  return scopedKey(CACHE_PREFIX);
 }
 
 function loadCache(username: string | null): TimetableCache | null {

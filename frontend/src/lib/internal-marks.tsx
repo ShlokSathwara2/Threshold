@@ -115,6 +115,16 @@ export function mergeInternalMarks(
     });
   }
 
+  // 5) Some courses (labs, projects, F-courses) carry a component breakdown
+  //    but no `overall` total — the portal returns "0 / 0" for them. Derive
+  //    the subject total from its components so it never shows "0.0 / 0".
+  for (const m of byCode.values()) {
+    if (m.maxMark <= 0 && m.tests.length > 0) {
+      m.scored = m.tests.reduce((acc, t) => acc + num(t.marks.scored), 0);
+      m.maxMark = m.tests.reduce((acc, t) => acc + num(t.marks.total), 0);
+    }
+  }
+
   return [...byCode.values()];
 }
 

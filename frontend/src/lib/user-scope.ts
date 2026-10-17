@@ -25,6 +25,9 @@ const SCOPED_PREFIXES = [
   'threshold_delta_raw',
   'threshold_sync_log',
   'threshold_timetable_cache',
+  // Academia (IAM) session — scoped to the login so a friend signing in on the
+  // same phone never inherits the previous student's Academia session/data.
+  'threshold_academia_session',
 ];
 
 // Hard wipe of every user-scoped key on this device — used on explicit logout

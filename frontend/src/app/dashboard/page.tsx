@@ -7,7 +7,6 @@ import {
   isSpLoggedIn,
   isCampusWebSession,
   isAcademiaLoggedIn,
-  getAcademiaUsername,
   fetchCalendar,
   fetchTimetable,
   fetchSpProfile,
@@ -25,6 +24,7 @@ import {
 } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import { getCached, setCached } from '@/lib/cache';
+import { scopedKey } from '@/lib/user-scope';
 import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
 import { loadStepClasses, loadAptitudeClasses, getTodayClasses as getTodayScheduleClasses, formatTime, parseTime } from '@/lib/schedule-classes';
@@ -413,7 +413,17 @@ export default function DashboardPage() {
 
       try {
         const tt: TimetableResponse = await fetchTimetable();
-        if (tt.schedule?.length) setTodayClasses(tt.schedule);
+        if (tt.schedule?.length) {
+          setTodayClasses(tt.schedule);
+          // Persist (login-scoped) so the timetable — and the class reminders
+          // built from it — survive offline / a dead session.
+          try {
+            localStorage.setItem(
+              scopedKey('threshold_timetable_cache'),
+              JSON.stringify({ batch: tt.batch || '', savedAt: Date.now(), schedule: tt.schedule })
+            );
+          } catch { /* ignore */ }
+        }
       } catch {
         // Keep cached timetable
       }
@@ -440,10 +450,7 @@ export default function DashboardPage() {
 
     // Load timetable from cache so the dashboard shows classes even if live fetch fails
     try {
-      const cacheUser = isAcademiaLoggedIn()
-        ? getAcademiaUsername()
-        : JSON.parse(localStorage.getItem('threshold_session') || '{}')?.user || 'anon';
-      const raw = localStorage.getItem(`threshold_timetable_cache__${cacheUser}`);
+      const raw = localStorage.getItem(scopedKey('threshold_timetable_cache'));
       if (raw) {
         const cached = JSON.parse(raw);
         if (cached?.schedule?.length) setTodayClasses(cached.schedule);
@@ -538,6 +545,13 @@ export default function DashboardPage() {
       t.setDate(t.getDate() + 1);
       return d.date === toDateStr(t);
     });
+  // A holiday legitimately has no day order — never flag that as a failure.
+  const todayIsHoliday = (calendar?.calendar ?? [])
+    .flatMap((m) => m.days)
+    .some(
+      (d) =>
+        d.date === toDateStr(todayD) && (d.isHoliday === true || /holiday|break/i.test(d.event || '')),
+    );
   type Brief = {
     icon: string;
     tone: 'danger' | 'warn' | 'good' | 'info';
@@ -1779,7 +1793,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {(isAcademiaLoggedIn() || isCampusWebSession()) && !todayDO && (
+        {(isAcademiaLoggedIn() || isCampusWebSession()) && !todayDO && !todayIsHoliday && (
           <p style={{
             padding: '16px',
             margin: 0,

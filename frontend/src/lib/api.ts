@@ -1,6 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://threshold-1-ly01.onrender.com';
 
-import { userHash, isPlaceholderUser, migrateLegacyIdentity } from './user-scope';
+import { userHash, isPlaceholderUser, migrateLegacyIdentity, scopedKey } from './user-scope';
 
 export interface Session {
   cookies: string;
@@ -13,21 +13,44 @@ export interface Session {
   academiaToken?: string;
 }
 
-// Academia session is kept in sessionStorage — persists across page refreshes
-// within the same tab but clears when the tab closes. Each user on a shared
-// device must enter their own academia credentials per browser session.
+// Academia session — persisted in localStorage (scoped per login) so a student
+// signs in to Academia ONCE and the timetable / calendar / component-wise marks
+// keep working across app restarts without another Academia login. The legacy
+// per-tab sessionStorage copy is migrated on first load.
 const ACADEMIA_STORAGE_KEY = 'threshold_academia_session';
 let academiaCookie: string | null = null;
 let academiaUsername: string | null = null;
 
-// Restore from sessionStorage on module load (survives page refresh)
+function academiaStorageKey(): string {
+  try {
+    return scopedKey(ACADEMIA_STORAGE_KEY);
+  } catch {
+    return ACADEMIA_STORAGE_KEY;
+  }
+}
+
+function persistAcademia() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      academiaStorageKey(),
+      JSON.stringify({ cookie: academiaCookie, username: academiaUsername })
+    );
+  } catch { /* non-fatal */ }
+}
+
+// Restore on module load so a cold app start already has the Academia session.
 if (typeof window !== 'undefined') {
   try {
-    const stored = sessionStorage.getItem(ACADEMIA_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
+    const raw =
+      localStorage.getItem(academiaStorageKey()) ||
+      sessionStorage.getItem(ACADEMIA_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
       academiaCookie = parsed.cookie || null;
       academiaUsername = parsed.username || null;
+      // Migrate the legacy per-tab copy into persistent, user-scoped storage.
+      if (academiaCookie && !localStorage.getItem(academiaStorageKey())) persistAcademia();
     }
   } catch { /* corrupted — ignore */ }
 }
@@ -43,19 +66,19 @@ export function getAcademiaUsername(): string | null {
 export function setAcademiaCookies(cookies: string, username?: string) {
   academiaCookie = cookies;
   if (username) academiaUsername = username;
-  // Persist to sessionStorage so enrichment survives page refresh
-  if (typeof window !== 'undefined') {
-    try {
-      sessionStorage.setItem(ACADEMIA_STORAGE_KEY, JSON.stringify({ cookie: cookies, username: academiaUsername }));
-    } catch { /* non-fatal */ }
-  }
+  // Persist to localStorage so the Academia session (and every feature it
+  // unlocks) survives app restarts and session expiry.
+  persistAcademia();
 }
 
 export function clearAcademiaCookies() {
   academiaCookie = null;
   academiaUsername = null;
   if (typeof window !== 'undefined') {
-    try { sessionStorage.removeItem(ACADEMIA_STORAGE_KEY); } catch { /* non-fatal */ }
+    try {
+      localStorage.removeItem(academiaStorageKey());
+      sessionStorage.removeItem(ACADEMIA_STORAGE_KEY);
+    } catch { /* non-fatal */ }
   }
 }
 

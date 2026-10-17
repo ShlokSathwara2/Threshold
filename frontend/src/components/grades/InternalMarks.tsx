@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpInternalMarks, fetchAcademiaMarks, isAcademiaLoggedIn, type Mark } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
@@ -15,11 +15,22 @@ import {
   type MergedSubjectMark,
 } from '@/lib/internal-marks';
 
+function fmtPct(v: string | number): string {
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  if (isNaN(n)) return String(v);
+  return n.toFixed(1).replace(/\.0$/, '');
+}
+
+const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F'];
+const gradeColor = (g: string): string =>
+  g === 'O' || g === 'A+' || g === 'A' ? '#34d399' : g === 'D' || g === 'F' ? '#f87171' : '#facc15';
+
 export default function InternalMarks({
   refreshKey = 0,
   subjects = [],
   externalMarks,
   externalMarksRaw,
+  charts = false,
 }: {
   refreshKey?: number;
   subjects?: SubjectAttendance[];
@@ -30,6 +41,8 @@ export default function InternalMarks({
    * Campus Web site shows it.
    */
   externalMarksRaw?: Mark[] | null;
+  /** Show the analysis charts (Internal Marks page only — never the home card). */
+  charts?: boolean;
 }) {
   const [marks, setMarks] = useState<MergedSubjectMark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +149,15 @@ export default function InternalMarks({
   const best = sorted[0] ?? null;
   const worst = sorted[sorted.length - 1] ?? null;
 
+  const gradeCounts = GRADES.map((g) => ({
+    g,
+    n: marks.filter((m) => {
+      const p = subjectPct(m);
+      return p !== null && gradeFor(p / 100) === g;
+    }).length,
+  }));
+  const gradeMax = Math.max(1, ...gradeCounts.map((x) => x.n));
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -204,13 +226,115 @@ export default function InternalMarks({
         </div>
       </div>
 
+      {/* ── Analysis charts (Internal Marks page only) ── */}
+      {charts && (
+        <>
+          {/* Subject-wise % */}
+          <div
+            className="thr-gradient-border"
+            style={{
+              padding: '16px 18px',
+              borderRadius: '16px',
+              background: 'var(--threshold-surface)',
+              border: `1px solid ${WB(0.06)}`,
+              marginBottom: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.62rem', fontWeight: 800, color: W(0.45), letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                Subject-wise %
+              </span>
+              <span style={{ fontSize: '0.55rem', color: W(0.3) }}>scored / max</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+              {sorted.map((m, i) => {
+                const p = subjectPct(m);
+                const clr = pctColor(p);
+                const widthPct = p === null ? 0 : Math.max(2, Math.min(100, p));
+                return (
+                  <div key={`bar-${m.code}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span
+                      title={m.description}
+                      style={{
+                        width: '74px',
+                        flexShrink: 0,
+                        fontSize: '0.62rem',
+                        fontWeight: 700,
+                        color: W(0.55),
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {m.code}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0, height: '14px', borderRadius: '5px', background: WB(0.06), overflow: 'hidden' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${widthPct}%` }}
+                        transition={{ duration: 0.7, delay: 0.15 + i * 0.04, ease: 'easeOut' }}
+                        style={{ height: '100%', borderRadius: '5px', background: `linear-gradient(90deg, ${clr}aa, ${clr})` }}
+                      />
+                    </div>
+                    <span style={{ width: '92px', flexShrink: 0, textAlign: 'right', fontSize: '0.6rem', color: W(0.45), fontVariantNumeric: 'tabular-nums' }}>
+                      {p !== null ? `${p.toFixed(1)}%` : '—'}
+                      <span style={{ color: W(0.28) }}> · {m.scored.toFixed(0)}/{m.maxMark.toFixed(0)}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
+              {[['#34d399', '≥80%'], ['#facc15', '60–79%'], ['#f87171', '<60%']].map(([c, l]) => (
+                <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.55rem', color: W(0.35) }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '2px', background: c }} />
+                  {l}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Grade distribution */}
+          <div
+            className="thr-gradient-border"
+            style={{
+              padding: '16px 18px',
+              borderRadius: '16px',
+              background: 'var(--threshold-surface)',
+              border: `1px solid ${WB(0.06)}`,
+              marginBottom: '12px',
+            }}
+          >
+            <span style={{ fontSize: '0.62rem', fontWeight: 800, color: W(0.45), letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+              Grade distribution
+            </span>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginTop: '12px' }}>
+              {gradeCounts.map(({ g, n }, gi) => (
+                <div key={g} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '0.55rem', color: W(0.45), fontVariantNumeric: 'tabular-nums', height: '12px' }}>{n || ''}</span>
+                  <div style={{ width: '100%', height: '46px', display: 'flex', alignItems: 'flex-end' }}>
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${(n / gradeMax) * 100}%` }}
+                      transition={{ duration: 0.6, delay: 0.1 + gi * 0.05, ease: 'easeOut' }}
+                      style={{ width: '100%', minHeight: n ? '4px' : '0px', borderRadius: '4px 4px 2px 2px', background: gradeColor(g) }}
+                    />
+                  </div>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: W(0.5) }}>{g}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Per-Subject Cards ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {marks.map((m, i) => {
           const pct = subjectPct(m);
           const color = pctColor(pct);
           const att = subjects.find((s) => s.courseCode === m.code);
-          const isExpanded = expanded[m.code] ?? (m.tests.length > 0 && m.tests.length <= 5);
+          const isExpanded = expanded[m.code] ?? (charts ? m.tests.length > 0 : m.tests.length > 0 && m.tests.length <= 5);
 
           return (
             <motion.div
@@ -293,9 +417,6 @@ export default function InternalMarks({
                     </span>
                     <span style={{ fontSize: '0.72rem', color: W(0.35), fontWeight: 500 }}>
                       / {m.maxMark.toFixed(0)}
-                    </span>
-                    <span style={{ fontSize: '0.62rem', color: W(0.3), fontWeight: 400 }}>
-                      {m.source === 'campusweb' ? 'Campus Web' : m.source === 'academia' ? 'Academia' : 'SP total'}
                     </span>
                   </div>
                 </div>
@@ -422,7 +543,7 @@ export default function InternalMarks({
                               )}
                               {t.percentage && (
                                 <span style={{ fontSize: '0.55rem', color: W(0.35) }}>
-                                  {t.percentage}%
+                                  {fmtPct(t.percentage)}%
                                 </span>
                               )}
                               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: tc }}>

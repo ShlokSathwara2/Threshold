@@ -76,9 +76,10 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
         Academia login needed
       </h2>
       <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
-        The timetable lives in academia, not the SP portal — and academia uses its own login
-        (your SP credentials won&apos;t work here). Credentials are never saved on this device —
-        log in whenever you want to load your timetable, and it stays yours only.
+        Your timetable, calendar and component-wise marks come from Academia, not the SP portal —
+        and Academia uses its own login (your SP credentials won&apos;t work here). Sign in once:
+        the session is saved to <em>your</em> login on this phone and keeps working, so you won&apos;t
+        be asked again.
       </p>
       <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <input

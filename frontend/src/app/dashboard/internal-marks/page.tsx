@@ -58,7 +58,7 @@ export default function InternalMarksPage() {
           {!loaded
             ? 'Loading internal marks…'
             : isCampusWebSession()
-              ? 'Component-wise marks (FT-I, FT-II, …) with totals — as Campus Web shows them'
+              ? 'Component-wise marks (FT-I, FT-II, …) with totals'
               : isAcademiaLoggedIn()
                 ? 'Student Portal totals + Academia test-wise breakdowns'
                 : 'Student Portal totals — connect Academia for the per-test breakdown'}
@@ -79,6 +79,7 @@ export default function InternalMarksPage() {
         <InternalMarks
           refreshKey={refreshKey}
           externalMarksRaw={cwMarks}
+          charts
         />
       )}
 
