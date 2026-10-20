@@ -451,3 +451,86 @@ input:focus, button:focus-visible {
   box-shadow: none;
   cursor: not-allowed;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Laptop / desktop layout
+   Phones keep the app shell untouched. At ≥1024px the drawer becomes a
+   permanent sidebar, the bottom pill nav goes away and the content gets
+   the full width of the screen with a comfortable reading measure.
+   ───────────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .thr-app {
+    background-image:
+      radial-gradient(1200px 620px at 16% -12%, rgba(var(--threshold-accent-rgb), 0.12), transparent 62%),
+      radial-gradient(900px 520px at 100% 0%, rgba(59, 130, 246, 0.08), transparent 58%) !important;
+    background-attachment: fixed;
+  }
+
+  .thr-sidebar {
+    left: 0 !important;
+    width: 264px !important;
+    padding: 22px 14px 24px !important;
+    box-shadow: 1px 0 0 rgba(255, 255, 255, 0.02), 24px 0 60px rgba(0, 0, 0, 0.18);
+  }
+
+  .thr-topbar {
+    margin-left: 264px;
+    padding: 12px 32px !important;
+  }
+
+  .thr-main {
+    margin-left: 264px;
+    padding: 26px 36px 64px !important;
+  }
+
+  /* Widen every page's 700px mobile column into a proper desktop measure.
+     The dashboard template adds one motion wrapper, so the page root is
+     .thr-main > div > div. */
+  .thr-main > div > div {
+    max-width: 1180px !important;
+    width: 100%;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .thr-menu-btn,
+  .thr-sidebar-scrim,
+  .thr-bottom-nav {
+    display: none !important;
+  }
+
+  .thr-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .thr-card-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .thr-sidebar-brand {
+    display: flex !important;
+  }
+
+  .thr-session-banner {
+    left: calc(264px + 24px) !important;
+    right: 24px !important;
+    bottom: 24px !important;
+  }
+}
+
+@media (min-width: 1500px) {
+  .thr-main > div > div {
+    max-width: 1320px !important;
+  }
+
+  .thr-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Brand block only makes sense in the permanent desktop rail. */
+.thr-sidebar-brand {
+  display: none;
+}

@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser, adaptCampusWebMarks, type Mark } from '@/lib/api';
+import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser, adaptCampusWebMarks, getAcademiaReloginNotice, type Mark } from '@/lib/api';
 import InternalMarks from '@/components/grades/InternalMarks';
+import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
@@ -64,6 +65,21 @@ export default function InternalMarksPage() {
                 : 'Student Portal totals — connect Academia for the per-test breakdown'}
         </p>
       </motion.div>
+
+      {/* Academia connect — same flow the APK shows: sign in once and every
+          SP total gains its component-wise (FT-1, quizzes, …) breakdown. */}
+      {loaded && !isCampusWebSession() && !isAcademiaLoggedIn() && (
+        <div id="academia-login" style={{ marginBottom: '16px' }}>
+          <AcademiaLoginCard
+            notice={
+              getAcademiaReloginNotice()?.to
+                ? `It's a new semester (Semester ${getAcademiaReloginNotice()?.to}) — sign in again to load this semester's component marks.`
+                : undefined
+            }
+            onSuccess={refresh}
+          />
+        </div>
+      )}
 
       {!loaded ? (
         <div style={{

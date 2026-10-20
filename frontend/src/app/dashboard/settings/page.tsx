@@ -15,6 +15,9 @@ import { CURSOR_OPTIONS, PARTICLE_OPTIONS, getCursorStyle, setCursorStyle, getCu
 import type { CursorStyle, ParticleEffect } from '@/lib/cursor-effects';
 import { exportBackup, importBackup } from '@/lib/backup';
 import { requestWebNotifPermission } from '@/lib/web-notifications';
+import { sendTestNotification } from '@/lib/live-alerts';
+import { canPostLiveUpdates, openLiveUpdateSettings } from '@/lib/class-live';
+import { isNativePlatform } from '@/lib/capacitor';
 import { useRef } from 'react';
 
 function Toggle({ checked, onChange, accent }: { checked: boolean; onChange: () => void; accent: string }) {
@@ -65,6 +68,8 @@ export default function SettingsPage() {
   const [cursorStyle, setCursorStyleState] = useState<CursorStyle>('classic');
   const [particleEffect, setParticleEffectState] = useState<ParticleEffect>('burst');
   const [busy, setBusy] = useState<'export' | null>(null);
+  const [notifMsg, setNotifMsg] = useState('');
+  const [nowBar, setNowBar] = useState<{ supported: boolean; allowed: boolean } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -88,6 +93,27 @@ export default function SettingsPage() {
       });
     return () => {
       mounted = false;
+    };
+  }, []);
+
+  // Live updates (Android 16 / Samsung Now Bar) capability. Re-check when the
+  // student comes back from the system settings screen.
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    let mounted = true;
+    const refresh = () => {
+      canPostLiveUpdates().then((r) => {
+        if (mounted) setNowBar(r);
+      });
+    };
+    refresh();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      mounted = false;
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
@@ -255,6 +281,8 @@ export default function SettingsPage() {
           </div>
 
           {[
+            { key: 'attendanceUpdates' as const, label: 'Attendance updates', desc: 'New attendance or corrections published on the portal' },
+            { key: 'marksUpdates' as const, label: 'Marks updates', desc: 'New or corrected internal marks' },
             { key: 'attendanceRisk' as const, label: 'Attendance-risk alerts', desc: 'Subjects below 75% — shown in dashboard alerts' },
             { key: 'examDates' as const, label: 'Exam-date reminders', desc: 'Exams within the next few days' },
             { key: 'examDayBefore' as const, label: 'Exam day-before alert', desc: 'Reminder the evening before each exam' },
@@ -262,6 +290,7 @@ export default function SettingsPage() {
             { key: 'bunkAlerts' as const, label: 'Bunk-window alerts', desc: 'Tell you when today\u2019s remaining class is safe to skip' },
             { key: 'stepClasses' as const, label: 'STEP class reminders', desc: '15 min before each STEP class' },
             { key: 'aptitudeClasses' as const, label: 'Aptitude class reminders', desc: '15 min before each Aptitude class' },
+            { key: 'liveClass' as const, label: 'Live class activity', desc: 'Ongoing class on your lock screen & Now Bar (Android)' },
             { key: 'weeklyReport' as const, label: 'Weekly report card', desc: 'Sunday summary of attendance, misses and next week' },
           ].map((c) => (
             <div
@@ -296,6 +325,95 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+
+        <button
+          onClick={async () => {
+            const ok = await sendTestNotification();
+            setNotifMsg(
+              ok
+                ? 'Test notification sent ✓ — check your notification shade'
+                : 'Allow notifications in your device settings first',
+            );
+            window.setTimeout(() => setNotifMsg(''), 3500);
+          }}
+          style={{
+            marginTop: '14px',
+            width: '100%',
+            padding: '11px',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            color: theme.accentText,
+            background: 'rgba(var(--threshold-accent-rgb),0.1)',
+            border: '1px solid rgba(var(--threshold-accent-rgb),0.28)',
+          }}
+        >
+          Send a test notification
+        </button>
+        {notifMsg && (
+          <p
+            style={{
+              margin: '8px 0 0',
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: W(0.5),
+              textAlign: 'center',
+            }}
+          >
+            {notifMsg}
+          </p>
+        )}
+
+        {isNativePlatform() && (
+          <div style={{
+            marginTop: '12px',
+            padding: '12px 14px',
+            borderRadius: '12px',
+            background: WB(0.02),
+            border: `1px solid ${WB(0.05)}`,
+            opacity: notif.enabled && notif.liveClass ? 1 : 0.5,
+            transition: 'opacity 0.2s',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+              <div>
+                <p style={{ fontSize: '0.78rem', fontWeight: 700, color: theme.text, margin: 0 }}>
+                  Live updates on the lock screen
+                </p>
+                <p style={{ fontSize: '0.66rem', color: W(0.35), margin: '2px 0 0' }}>
+                  {nowBar === null
+                    ? 'Checking your device…'
+                    : !nowBar.supported
+                      ? 'Needs Android 16 (One UI 8)'
+                      : nowBar.allowed
+                        ? 'On — the class in progress shows in your Now Bar'
+                        : 'Off — tap Allow to show the class in your Now Bar'}
+                </p>
+              </div>
+              {nowBar?.supported && !nowBar.allowed && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await openLiveUpdateSettings();
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: theme.accentText,
+                    background: 'rgba(var(--threshold-accent-rgb),0.1)',
+                    border: '1px solid rgba(var(--threshold-accent-rgb),0.28)',
+                  }}
+                >
+                  Allow
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </motion.section>
 
       {/* Sound & haptics */}

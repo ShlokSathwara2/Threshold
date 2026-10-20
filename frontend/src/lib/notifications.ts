@@ -1,6 +1,7 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { NotifPrefs } from './theme';
 import { isNativePlatform } from './capacitor';
+import { ensureNotificationChannels, THRESHOLD_CHANNEL_ID } from './attendance-background';
 import { refreshWebNotifications } from './web-notifications';
 import { nextExamDate, type ExamEntry } from './exams';
 import { buildDayOrderLookup } from './day-order';
@@ -45,6 +46,25 @@ async function ensurePerm(): Promise<boolean> {
     return r.display === 'granted';
   } catch {
     return false;
+  }
+}
+
+// Android 12+ defers exact alarms unless the app holds the "Alarms &
+// reminders" permission. Ask for it (best-effort) so class reminders fire at
+// the right minute instead of being batched by the OS. No-ops on older
+// Android and on the web.
+async function ensureExactAlarms(): Promise<void> {
+  try {
+    const ln = LocalNotifications as unknown as {
+      checkExactNotificationSetting?: () => Promise<{ exact_alarm?: string }>;
+      changeExactNotificationSetting?: () => Promise<{ exact_alarm?: string }>;
+    };
+    if (!ln.checkExactNotificationSetting) return;
+    const s = await ln.checkExactNotificationSetting();
+    if (s?.exact_alarm === 'granted') return;
+    await ln.changeExactNotificationSetting?.();
+  } catch {
+    /* unsupported — non-fatal */
   }
 }
 
@@ -461,13 +481,31 @@ export async function refreshNotifications(
   }
 
   try {
-    await LocalNotifications.cancelAll();
+    // Only clear the reminder IDs this module owns. cancelAll() would also
+    // wipe rich alerts that are already sitting in the notification shade.
+    const pending = await LocalNotifications.getPending();
+    const stale = pending.notifications.filter(
+      (n) => n.id === BRIEF_ID || (n.id >= 1000 && n.id < 8000),
+    );
+    if (stale.length > 0) {
+      await LocalNotifications.cancel({
+        notifications: stale.map((n) => ({ id: n.id })),
+      });
+    }
   } catch {
     return; // not on a device / permission missing — nothing to do
   }
 
   const granted = await ensurePerm();
   if (!granted || alerts.length === 0) return;
+
+  // Android 12+ only fires our timers exactly if it holds the exact-alarm
+  // permission; ask best-effort before scheduling.
+  await ensureExactAlarms();
+
+  // Every reminder rides the shared lively channel (custom chime + vibration),
+  // so class/exam/brief alerts match the live-alert notifications.
+  const rich = await ensureNotificationChannels();
 
   try {
     await LocalNotifications.schedule({
@@ -476,8 +514,12 @@ export async function refreshNotifications(
         title: n.title,
         body: n.body,
         schedule: { at: n.at, allowWhileIdle: true },
-        sound: 'default',
-        smallIcon: 'ic_launcher',
+        sound: 'threshold_ping',
+        smallIcon: 'ic_launcher_foreground',
+        iconColor: '#22C55E',
+        largeBody: n.body,
+        summaryText: 'Threshold',
+        ...(rich ? { channelId: THRESHOLD_CHANNEL_ID } : {}),
       })),
     });
   } catch {

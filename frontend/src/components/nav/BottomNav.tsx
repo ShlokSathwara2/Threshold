@@ -88,6 +88,7 @@ export default function BottomNav() {
     <>
     <FeatureLockModal show={lockModal.show} feature={lockModal.feature} onClose={() => setLockModal({ show: false })} />
     <div
+      className="thr-bottom-nav"
       style={{
         position: 'fixed',
         bottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',

@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { fetchSpInternalMarks, fetchAcademiaMarks, isAcademiaLoggedIn, type Mark } from '@/lib/api';
+import { fetchSpInternalMarks, fetchSpInternalMarksDetail, fetchAcademiaMarks, isAcademiaLoggedIn, type Mark, type InternalMark, type InternalMarkComponent } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import {
@@ -14,6 +14,8 @@ import {
   pctColor,
   type MergedSubjectMark,
 } from '@/lib/internal-marks';
+import MarksDonut from '@/components/grades/MarksDonut';
+import ComponentGraph from '@/components/grades/ComponentGraph';
 
 function fmtPct(v: string | number): string {
   const n = typeof v === 'number' ? v : parseFloat(v);
@@ -24,98 +26,6 @@ function fmtPct(v: string | number): string {
 const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F'];
 const gradeColor = (g: string): string =>
   g === 'O' || g === 'A+' || g === 'A' ? '#34d399' : g === 'F' ? '#f87171' : '#facc15';
-
-// Per-subject component chart: one bar per component (height = %) with a
-// trend line across the bar tops. Shown on the Internal Marks page (charts
-// mode) so the APK and the website share the same per-subject breakdown.
-function ComponentChart({
-  tests,
-  accent,
-  W,
-  WB,
-}: {
-  tests: MergedSubjectMark['tests'];
-  accent: string;
-  W: (a: number) => string;
-  WB: (a: number) => string;
-}) {
-  const WIDTH = 320;
-  const HEIGHT = 122;
-  const PAD_X = 12;
-  const PAD_TOP = 18;
-  const PAD_BOTTOM = 30;
-  const n = tests.length;
-  if (n === 0) return null;
-
-  const plotW = WIDTH - PAD_X * 2;
-  const plotH = HEIGHT - PAD_TOP - PAD_BOTTOM;
-  const step = plotW / n;
-  const barW = Math.min(30, step * 0.5);
-
-  const pts = tests.map((t, i) => {
-    const s = parseFloat(t.marks.scored) || 0;
-    const mx = parseFloat(t.marks.total) || 0;
-    const pct = mx > 0 ? (s / mx) * 100 : 0;
-    return { cx: PAD_X + step * i + step / 2, pct, label: t.test };
-  });
-
-  const yOf = (pct: number) => PAD_TOP + plotH * (1 - Math.min(100, Math.max(0, pct)) / 100);
-  const line = pts.map((p) => `${p.cx},${yOf(p.pct)}`).join(' ');
-  const short = (s: string) => (s.length > 8 ? `${s.slice(0, 7)}…` : s);
-
-  return (
-    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
-      {[0, 50, 100].map((g) => (
-        <line
-          key={g}
-          x1={PAD_X}
-          x2={WIDTH - PAD_X}
-          y1={yOf(g)}
-          y2={yOf(g)}
-          stroke={WB(0.08)}
-          strokeWidth={1}
-          strokeDasharray={g === 0 ? undefined : '3 4'}
-        />
-      ))}
-      {pts.map((p, i) => {
-        const h = Math.max(0, plotH - (yOf(p.pct) - PAD_TOP));
-        const color = pctColor(p.pct);
-        return (
-          <g key={i}>
-            <motion.rect
-              x={p.cx - barW / 2}
-              width={barW}
-              rx={3}
-              fill={color}
-              initial={{ height: 0, y: PAD_TOP + plotH }}
-              animate={{ height: h, y: yOf(p.pct) }}
-              transition={{ duration: 0.6, delay: 0.1 + i * 0.06, ease: 'easeOut' }}
-            />
-            <text x={p.cx} y={yOf(p.pct) - 4} textAnchor="middle" fontSize="8" fontWeight={700} fill={W(0.6)}>
-              {Math.round(p.pct)}%
-            </text>
-            <text x={p.cx} y={HEIGHT - 12} textAnchor="middle" fontSize="7" fill={W(0.35)}>
-              {short(p.label)}
-            </text>
-          </g>
-        );
-      })}
-      {n > 1 && (
-        <motion.polyline
-          fill="none"
-          stroke={accent}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          points={line}
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 0.9 }}
-          transition={{ duration: 0.9, delay: 0.35, ease: 'easeOut' }}
-        />
-      )}
-    </svg>
-  );
-}
 
 export default function InternalMarks({
   refreshKey = 0,
@@ -141,6 +51,13 @@ export default function InternalMarks({
   const [error, setError] = useState<string | null>(null);
   const [academiaOn, setAcademiaOn] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // The Student Portal exposes a per-subject component split behind its
+  // "View Details" button. We keep the SP rows (which carry subjectId +
+  // status) and lazily load the breakdown on demand.
+  const [spRows, setSpRows] = useState<Record<string, InternalMark>>({});
+  const [details, setDetails] = useState<
+    Record<string, { loading: boolean; error?: string; components: InternalMarkComponent[]; attempts?: string[] }>
+  >({});
 
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -174,6 +91,9 @@ export default function InternalMarks({
             // the newer data.
             if (cancelled) return;
           }
+          if (spMarks.length) {
+            setSpRows(Object.fromEntries(spMarks.map((m) => [m.code, m])));
+          }
           setMarks(mergeInternalMarks(spMarks, acOut?.marks || []));
         }
       } catch (e: unknown) {
@@ -187,6 +107,43 @@ export default function InternalMarks({
 
   const toggleExpand = (code: string) => {
     setExpanded((prev) => ({ ...prev, [code]: !prev[code] }));
+  };
+
+  const loadDetail = useCallback(async (code: string) => {
+    const src = spRows[code];
+    if (!src?.subjectId) return;
+    setDetails((d) => ({ ...d, [code]: { loading: true, components: d[code]?.components ?? [] } }));
+    try {
+      const res = await fetchSpInternalMarksDetail(
+        src.subjectId,
+        src.status || '',
+        src.code || '',
+        src.description || ''
+      );
+      setDetails((d) => ({
+        ...d,
+        [code]: { loading: false, components: res.components || [], attempts: res.attempts },
+      }));
+    } catch (e) {
+      setDetails((d) => ({
+        ...d,
+        [code]: {
+          loading: false,
+          error: e instanceof Error ? e.message : 'Failed to load components',
+          components: [],
+        },
+      }));
+    }
+  }, [spRows]);
+
+  // A subject is drillable when the Student Portal gave us its id. This works
+  // on the website too — the backend proxies the portal request for both the
+  // APK and the web app.
+  const canViewDetail = (code: string) => !!spRows[code]?.subjectId;
+
+  const openDetail = (code: string) => {
+    setExpanded((prev) => ({ ...prev, [code]: !prev[code] }));
+    if (!details[code]) void loadDetail(code);
   };
 
 
@@ -321,70 +278,15 @@ export default function InternalMarks({
       {/* ── Analysis charts (Internal Marks page only) ── */}
       {charts && (
         <>
-          {/* Subject-wise % */}
-          <div
-            className="thr-gradient-border"
-            style={{
-              padding: '16px 18px',
-              borderRadius: '16px',
-              background: 'var(--threshold-surface)',
-              border: `1px solid ${WB(0.06)}`,
-              marginBottom: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ fontSize: '0.62rem', fontWeight: 800, color: W(0.45), letterSpacing: '0.4px', textTransform: 'uppercase' }}>
-                Subject-wise %
-              </span>
-              <span style={{ fontSize: '0.55rem', color: W(0.3) }}>scored / max</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-              {sorted.map((m, i) => {
-                const p = subjectPct(m);
-                const clr = pctColor(p);
-                const widthPct = p === null ? 0 : Math.max(2, Math.min(100, p));
-                return (
-                  <div key={`bar-${m.code}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span
-                      title={m.description}
-                      style={{
-                        width: '74px',
-                        flexShrink: 0,
-                        fontSize: '0.62rem',
-                        fontWeight: 700,
-                        color: W(0.55),
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {m.code}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0, height: '14px', borderRadius: '5px', background: WB(0.06), overflow: 'hidden' }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${widthPct}%` }}
-                        transition={{ duration: 0.7, delay: 0.15 + i * 0.04, ease: 'easeOut' }}
-                        style={{ height: '100%', borderRadius: '5px', background: `linear-gradient(90deg, ${clr}aa, ${clr})` }}
-                      />
-                    </div>
-                    <span style={{ width: '92px', flexShrink: 0, textAlign: 'right', fontSize: '0.6rem', color: W(0.45), fontVariantNumeric: 'tabular-nums' }}>
-                      {p !== null ? `${p.toFixed(1)}%` : '—'}
-                      <span style={{ color: W(0.28) }}> · {m.scored.toFixed(0)}/{m.maxMark.toFixed(0)}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
-              {[['#34d399', '≥80%'], ['#facc15', '60–79%'], ['#f87171', '<60%']].map(([c, l]) => (
-                <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.55rem', color: W(0.35) }}>
-                  <span style={{ width: '7px', height: '7px', borderRadius: '2px', background: c }} />
-                  {l}
-                </span>
-              ))}
-            </div>
-          </div>
+          {/* Marks overview — animated donut (overall + per-subject focus) */}
+          <MarksDonut
+            marks={sorted}
+            overallScored={totals.scored}
+            overallMax={totals.maxMark}
+            overallPct={overallPct}
+            W={W}
+            WB={WB}
+          />
 
           {/* Grade distribution */}
           <div
@@ -421,12 +323,13 @@ export default function InternalMarks({
       )}
 
       {/* ── Per-Subject Cards ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="thr-card-grid" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {marks.map((m, i) => {
           const pct = subjectPct(m);
           const color = pctColor(pct);
           const att = subjects.find((s) => s.courseCode === m.code);
           const isExpanded = expanded[m.code] ?? (charts ? m.tests.length > 0 : m.tests.length > 0 && m.tests.length <= 5);
+          const detail = details[m.code];
 
           return (
             <motion.div
@@ -448,11 +351,14 @@ export default function InternalMarks({
                   if (m.tests.length > 0) {
                     e.stopPropagation();
                     toggleExpand(m.code);
+                  } else if (canViewDetail(m.code)) {
+                    e.stopPropagation();
+                    openDetail(m.code);
                   }
                 }}
                 style={{
                   padding: '14px 16px',
-                  cursor: m.tests.length > 0 ? 'pointer' : 'default',
+                  cursor: m.tests.length > 0 || canViewDetail(m.code) ? 'pointer' : 'default',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
@@ -492,6 +398,18 @@ export default function InternalMarks({
                         {m.tests.length} component{m.tests.length === 1 ? '' : 's'}
                       </span>
                     )}
+                    {m.tests.length === 0 && canViewDetail(m.code) && (
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '5px',
+                        fontSize: '0.58rem',
+                        fontWeight: 700,
+                        background: 'rgba(96,165,250,0.14)',
+                        color: '#60a5fa',
+                      }}>
+                        View Details
+                      </span>
+                    )}
                   </div>
                   <p style={{
                     fontSize: '0.72rem',
@@ -512,7 +430,7 @@ export default function InternalMarks({
                     </span>
                   </div>
                 </div>
-                {m.tests.length > 0 && (
+                {(m.tests.length > 0 || canViewDetail(m.code)) && (
                   <motion.span
                     animate={{ rotate: isExpanded ? 180 : 0 }}
                     transition={{ duration: 0.2 }}
@@ -608,7 +526,17 @@ export default function InternalMarks({
                   </p>
                   {charts && (
                     <div style={{ margin: '0 0 12px' }}>
-                      <ComponentChart tests={m.tests} accent={color} W={W} WB={WB} />
+                      <ComponentGraph
+                        points={m.tests.map((t) => ({
+                          label: t.test,
+                          scored: parseFloat(t.marks.scored) || 0,
+                          max: parseFloat(t.marks.total) || 0,
+                          weightage: t.weightage,
+                        }))}
+                        accent={color}
+                        W={W}
+                        WB={WB}
+                      />
                     </div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -695,6 +623,148 @@ export default function InternalMarks({
                       )}
                     </span>
                   </div>
+                </motion.div>
+              )}
+
+              {/* SP component split — "View Details" */}
+              {m.tests.length === 0 && canViewDetail(m.code) && isExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  transition={{ duration: 0.25 }}
+                  style={{
+                    borderTop: `1px solid ${WB(0.06)}`,
+                    padding: '12px 16px',
+                    background: WB(0.02),
+                  }}
+                >
+                  {!detail || detail.loading ? (
+                    <p style={{ fontSize: '0.68rem', color: W(0.4), margin: 0 }}>
+                      Loading components…
+                    </p>
+                  ) : detail.error ? (
+                    <p style={{ fontSize: '0.68rem', color: '#f87171', margin: 0 }}>
+                      {detail.error}
+                    </p>
+                  ) : detail.components.length === 0 ? (
+                    <div>
+                      <p style={{ fontSize: '0.68rem', color: W(0.4), margin: 0 }}>
+                        No component marks published yet.
+                      </p>
+                      {detail.attempts && detail.attempts.length > 0 && (
+                        <p style={{ fontSize: '0.55rem', color: W(0.25), margin: '6px 0 0', lineHeight: 1.5 }}>
+                          {detail.attempts.join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <p style={{
+                        fontSize: '0.6rem',
+                        fontWeight: 700,
+                        color: W(0.35),
+                        margin: '0 0 8px',
+                        letterSpacing: '0.4px',
+                        textTransform: 'uppercase',
+                      }}>
+                        Components · Student Portal
+                      </p>
+                      {charts && (
+                        <div style={{ margin: '0 0 12px' }}>
+                          <ComponentGraph
+                            points={detail.components.map((c) => ({
+                              label: c.component,
+                              scored: parseFloat(c.scored) || 0,
+                              max: parseFloat(c.maxMark) || 0,
+                            }))}
+                            accent={color}
+                            W={W}
+                            WB={WB}
+                          />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {detail.components.map((c, ci) => {
+                          const s = parseFloat(c.scored) || 0;
+                          const mx = parseFloat(c.maxMark) || 0;
+                          const tp = mx > 0 ? (s / mx) * 100 : 0;
+                          const tc = pctColor(tp);
+                          return (
+                            <div key={`${c.component}-${ci}`}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '3px' }}>
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  color: W(0.5),
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}>
+                                  {c.component}
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexShrink: 0 }}>
+                                  {c.enteredOn && (
+                                    <span style={{ fontSize: '0.55rem', color: W(0.3) }}>
+                                      {c.enteredOn}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: tc }}>
+                                    {s}
+                                    <span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.65rem' }}>/{mx}</span>
+                                  </span>
+                                </span>
+                              </div>
+                              <div style={{ height: '5px', borderRadius: '3px', background: WB(0.06), overflow: 'hidden' }}>
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${tp}%` }}
+                                  transition={{ duration: 0.6, delay: 0.1 + ci * 0.05 }}
+                                  style={{ height: '100%', borderRadius: '3px', background: tc }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Total row — mirrors the portal's Total */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          marginTop: '10px',
+                          paddingTop: '8px',
+                          borderTop: `1px dashed ${WB(0.1)}`,
+                        }}
+                      >
+                        <span style={{
+                          fontSize: '0.6rem',
+                          fontWeight: 800,
+                          color: W(0.45),
+                          letterSpacing: '0.4px',
+                          textTransform: 'uppercase',
+                        }}>
+                          Total
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color }}>
+                            {detail.components
+                              .reduce((sum, c) => sum + (parseFloat(c.scored) || 0), 0)
+                              .toFixed(1)}
+                            <span style={{ color: W(0.3), fontWeight: 400, fontSize: '0.68rem' }}>
+                              {' / '}
+                              {detail.components
+                                .reduce((sum, c) => sum + (parseFloat(c.maxMark) || 0), 0)
+                                .toFixed(0)}
+                            </span>
+                          </span>
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               )}
             </motion.div>

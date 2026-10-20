@@ -9,7 +9,17 @@ import {
 } from '@/lib/api';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
-export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => void }) {
+export default function AcademiaLoginCard({
+  onSuccess,
+  semester,
+  notice,
+}: {
+  onSuccess?: () => void;
+  /** Current semester, if known — stamped onto the saved session. */
+  semester?: number | null;
+  /** Extra line shown when we deliberately signed the student out (e.g. a new semester). */
+  notice?: string;
+}) {
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
@@ -49,7 +59,7 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
         setLoginError('Login succeeded but no session was returned — try again');
         return;
       }
-      setAcademiaCookies(res.cookies, username.trim());
+      setAcademiaCookies(res.cookies, username.trim(), semester ?? null);
       setCaptcha(null);
       setLoginError('');
       onSuccess?.();
@@ -73,14 +83,27 @@ export default function AcademiaLoginCard({ onSuccess }: { onSuccess?: () => voi
       }}
     >
       <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
-        Academia login needed
+        {notice ? 'Sign in to Academia again' : 'Academia login needed'}
       </h2>
       <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
-        Your timetable, calendar and component-wise marks come from Academia, not the SP portal —
-        and Academia uses its own login (your SP credentials won&apos;t work here). Sign in once:
-        the session is saved to <em>your</em> login on this phone and keeps working, so you won&apos;t
-        be asked again.
+        {notice ? (
+          notice
+        ) : (
+          <>
+            Your timetable, calendar and component-wise marks come from Academia, not the SP portal —
+            and Academia uses its own login (your SP credentials won&apos;t work here). Sign in once:
+            the session is saved to <em>your</em> login on this phone and keeps working, so you won&apos;t
+            be asked again.
+          </>
+        )}
       </p>
+      {notice && (
+        <p style={{ color: W(0.4), fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '14px' }}>
+          Your previous session was for the last semester, so the saved timetable was cleared.
+          Academia uses its own login — your SP credentials won&apos;t work here. Sign in once and
+          the new timetable loads.
+        </p>
+      )}
       <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <input
           value={username}

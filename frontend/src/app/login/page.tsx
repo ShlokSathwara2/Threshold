@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform } from '@/lib/capacitor';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
-import { saveSession, campusWebLogin, saveCampusSession, isCampusWebSession } from '@/lib/api';
+import { saveSessionFast, warmUpBackend, campusWebLogin, saveCampusSession, isCampusWebSession } from '@/lib/api';
 import { ToolBarType } from '@capgo/capacitor-inappbrowser';
 import LoginRedirect from '@/components/ui/LoginRedirect';
 
@@ -44,17 +44,15 @@ export default function LoginPage() {
     setIsNative(isNativePlatform());
   }, []);
 
-  const storeSession = useCallback(async (cookieStr: string) => {
-    // Keyed by the REAL identity (SP reg number, resolved from the profile),
-    // so a friend logging in on this phone never sees your exams/OPT marks.
-    await saveSession(cookieStr);
-  }, []);
-
-  const storeAndNavigate = useCallback(async (cookieStr: string) => {
-    await storeSession(cookieStr);
+  const storeAndNavigate = useCallback((cookieStr: string) => {
+    // Post-CAPTCHA speed-up (APK): save the session synchronously and go
+    // straight to the dashboard. The real identity is resolved in the
+    // background and the per-login scoped keys are upgraded when it lands,
+    // so we no longer block the navigation on a profile round-trip.
+    saveSessionFast(cookieStr);
     setShowRedirect(true);
-    setTimeout(() => router.push('/dashboard'), 600);
-  }, [storeSession, router]);
+    router.push('/dashboard');
+  }, [router]);
 
   const handleNativeLogin = useCallback(async () => {
     setNativeLoginLoading(true);
@@ -63,6 +61,10 @@ export default function LoginPage() {
       const { InAppBrowser } = await import('@capgo/capacitor-inappbrowser');
       const { CapacitorCookies } = await import('@capacitor/core');
       await CapacitorCookies.clearAllCookies();
+
+      // Warm the (free-tier) backend while the student solves the CAPTCHA so
+      // the first data call after login doesn't hit a cold start.
+      warmUpBackend();
 
       const { id } = await InAppBrowser.openWebView({
         url: SP_LOGIN_URL,

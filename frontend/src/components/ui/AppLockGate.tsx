@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { App } from '@capacitor/app';
 import { BiometricLock, appLockEnabled } from '@/lib/applock';
@@ -14,6 +14,28 @@ export default function AppLockGate() {
   const WB = (a: number) => overlayBg(theme, a);
   const [state, setState] = useState<GateState>('idle');
   const [error, setError] = useState('');
+  // One automatic prompt per lock session: cancelling does not re-open it in a
+  // loop, but the next time the app locks it fires again.
+  const autoPrompted = useRef(false);
+
+  const attemptUnlock = useCallback(async () => {
+    if (state === 'unlocking') return;
+    setState('unlocking');
+    setError('');
+    try {
+      await BiometricLock.authenticate({ reason: 'Unlock your semester data' });
+      setState('idle');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'cancelled';
+      if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('not available')) {
+        setState('locked');
+        setError('Use the fingerprint, face or PIN you set up on this device.');
+      } else {
+        setState('locked');
+        setError('Could not unlock right now — try again.');
+      }
+    }
+  }, [state]);
 
   // Gate on launch: if the user enabled app lock, the app starts locked.
   useEffect(() => {
@@ -40,24 +62,18 @@ export default function AppLockGate() {
     };
   }, []);
 
-  const attemptUnlock = async () => {
-    if (state === 'unlocking') return;
-    setState('unlocking');
-    setError('');
-    try {
-      await BiometricLock.authenticate({ reason: 'Unlock your semester data' });
-      setState('idle');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'cancelled';
-      if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('not available')) {
-        setState('locked');
-        setError('Use the fingerprint, face or PIN you set up on this device.');
-      } else {
-        setState('locked');
-        setError('Could not unlock right now — try again.');
-      }
-    }
-  };
+  // Re-arm the auto prompt once we're back inside the app.
+  useEffect(() => {
+    if (state === 'idle') autoPrompted.current = false;
+  }, [state]);
+
+  // Fire the system fingerprint / face prompt the moment the gate appears —
+  // no "Unlock" tap needed. The button below stays as a manual fallback.
+  useEffect(() => {
+    if (state !== 'locked' || autoPrompted.current) return;
+    autoPrompted.current = true;
+    void attemptUnlock();
+  }, [state, attemptUnlock]);
 
   return (
     <AnimatePresence>

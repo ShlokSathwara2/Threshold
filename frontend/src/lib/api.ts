@@ -18,6 +18,14 @@ export interface Session {
 // keep working across app restarts without another Academia login. The legacy
 // per-tab sessionStorage copy is migrated on first load.
 const ACADEMIA_STORAGE_KEY = 'threshold_academia_session';
+// The semester the saved Academia session was captured in. An Academia session
+// outlives a semester, so when the portal rolls over to the next one the saved
+// timetable (and day order) go stale. Stamping the semester lets us notice the
+// rollover and ask the student to sign in again.
+const ACADEMIA_SEMESTER_KEY = 'threshold_academia_semester';
+// Set when we sign the student out *because of* a semester rollover, so any
+// page that renders the Academia login card can explain why.
+const ACADEMIA_RELOGIN_KEY = 'threshold_academia_relogin';
 let academiaCookie: string | null = null;
 let academiaUsername: string | null = null;
 
@@ -26,6 +34,22 @@ function academiaStorageKey(): string {
     return scopedKey(ACADEMIA_STORAGE_KEY);
   } catch {
     return ACADEMIA_STORAGE_KEY;
+  }
+}
+
+function academiaSemesterKey(): string {
+  try {
+    return scopedKey(ACADEMIA_SEMESTER_KEY);
+  } catch {
+    return ACADEMIA_SEMESTER_KEY;
+  }
+}
+
+function academiaReloginKey(): string {
+  try {
+    return scopedKey(ACADEMIA_RELOGIN_KEY);
+  } catch {
+    return ACADEMIA_RELOGIN_KEY;
   }
 }
 
@@ -84,12 +108,19 @@ export function getAcademiaUsername(): string | null {
   return readAcademiaStored().username;
 }
 
-export function setAcademiaCookies(cookies: string, username?: string) {
+export function setAcademiaCookies(cookies: string, username?: string, semester?: number | null) {
   academiaCookie = cookies;
   if (username) academiaUsername = username;
   // Persist to localStorage so the Academia session (and every feature it
   // unlocks) survives app restarts and session expiry.
   persistAcademia();
+  // Stamp the semester we logged in for, when we already know it. On a later
+  // app launch the rollover check compares against this.
+  if (semester !== undefined && semester !== null && Number.isFinite(semester)) {
+    setAcademiaSemester(semester);
+  }
+  // Signing in again resolves the rollover — drop any "please sign in again" note.
+  clearAcademiaReloginNotice();
 }
 
 export function clearAcademiaCookies() {
@@ -98,9 +129,118 @@ export function clearAcademiaCookies() {
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(academiaStorageKey());
+      localStorage.removeItem(academiaSemesterKey());
+      localStorage.removeItem(academiaReloginKey());
       sessionStorage.removeItem(ACADEMIA_STORAGE_KEY);
     } catch { /* non-fatal */ }
   }
+}
+
+// ── Semester rollover ───────────────────────────────────────────────────────
+
+/** The semester the saved Academia session was captured in (if known). */
+export function getAcademiaSemester(): number | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(academiaSemesterKey());
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAcademiaSemester(semester: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(academiaSemesterKey(), String(semester));
+  } catch { /* non-fatal */ }
+}
+
+export interface AcademiaReloginNotice {
+  from?: number;
+  to?: number;
+  at: number;
+}
+
+/** Why we signed the student out of Academia, if it was a semester rollover. */
+export function getAcademiaReloginNotice(): AcademiaReloginNotice | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(academiaReloginKey());
+    return raw ? (JSON.parse(raw) as AcademiaReloginNotice) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setAcademiaReloginNotice(notice: AcademiaReloginNotice): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(academiaReloginKey(), JSON.stringify(notice));
+  } catch { /* non-fatal */ }
+}
+
+export function clearAcademiaReloginNotice(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(academiaReloginKey());
+  } catch { /* non-fatal */ }
+}
+
+// Drop every cached timetable / calendar so the fresh semester's data is
+// fetched after the student signs in again. Caches live under
+// `threshold_cache__<scope>__<namespace>`, plus the login-scoped timetable key.
+function clearTimetableCaches(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(scopedKey('threshold_timetable_cache'));
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('threshold_cache__')) continue;
+      if (key.endsWith('__timetable') || key.endsWith('__calendar')) doomed.push(key);
+    }
+    for (const key of doomed) localStorage.removeItem(key);
+  } catch { /* non-fatal */ }
+}
+
+export interface AcademiaSemesterCheck {
+  changed: boolean;
+  previous?: number;
+  current?: number;
+}
+
+/**
+ * Keep the saved Academia session in step with the portal's current semester.
+ *
+ * - No saved Academia session → nothing to do.
+ * - Session saved but no semester stamp yet (an install from before this
+ *   feature, or a login where the semester wasn't known) → adopt the current
+ *   semester without forcing another login.
+ * - Stamp differs from the current semester → the timetable / day order belong
+ *   to the previous semester. Clear the Academia session and cached timetable
+ *   and report `changed: true` so the UI asks the student to sign in again.
+ */
+export function syncAcademiaSemester(current?: number | null): AcademiaSemesterCheck {
+  if (current === undefined || current === null || !Number.isFinite(current)) {
+    return { changed: false };
+  }
+  if (!isAcademiaLoggedIn()) return { changed: false };
+
+  const previous = getAcademiaSemester();
+  if (previous === null) {
+    setAcademiaSemester(current);
+    return { changed: false };
+  }
+  if (previous !== current) {
+    clearAcademiaCookies();
+    clearTimetableCaches();
+    setAcademiaReloginNotice({ from: previous, to: current, at: Date.now() });
+    return { changed: true, previous, current };
+  }
+  return { changed: false };
 }
 
 export function isAcademiaLoggedIn(): boolean {
@@ -165,11 +305,50 @@ export function upgradeSessionUser(regNumber: string): boolean {
   session.user = regNumber;
   localStorage.setItem('threshold_session', JSON.stringify(session));
   migrateLegacyIdentity();
+  // Let any mounted view re-read identity-scoped data without a reload — this
+  // is how a preserved Academia session reappears the moment the fast-login
+  // identity resolves (instead of the user being asked to log in again).
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('threshold:identity-changed'));
+    }
+  } catch {
+    /* ignore */
+  }
   return true;
 }
 
 export function isLoggedIn(): boolean {
   return getSession() !== null;
+}
+
+// Wake the backend (Render free tier cold-starts) while the student is still
+// answering the CAPTCHA, so the first real data call after login is warm.
+export function warmUpBackend(): void {
+  try {
+    void fetch(`${API_BASE}/hello`, { method: 'GET', cache: 'no-store' }).catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+
+// Save the session immediately and let the caller navigate right away: the
+// profile round-trip that resolves the real identity runs in the background
+// and upgrades the per-login scoped keys when it lands. This removes a full
+// backend round-trip from the post-CAPTCHA login path.
+export function saveSessionFast(cookies: string, fallbackUser = ''): string {
+  const user = fallbackUser || 'student';
+  try {
+    localStorage.setItem('threshold_session', JSON.stringify({ cookies, user, timestamp: Date.now() }));
+  } catch {
+    /* ignore */
+  }
+  void resolveSessionUser(cookies)
+    .then((identity) => {
+      if (identity) upgradeSessionUser(identity);
+    })
+    .catch(() => {});
+  return user;
 }
 
 export function isCampusWebSession(): boolean {
@@ -542,6 +721,16 @@ export interface InternalMark {
   description: string;
   scored: string;
   maxMark: string;
+  /** Student-Portal subject id + status — needed for the component drill-down. */
+  subjectId?: string;
+  status?: string;
+}
+
+export interface InternalMarkComponent {
+  component: string;
+  scored: string;
+  maxMark: string;
+  enteredOn?: string;
 }
 
 export interface InternalMarksResponse {
@@ -551,6 +740,32 @@ export interface InternalMarksResponse {
 
 export async function fetchSpInternalMarks(): Promise<InternalMarksResponse> {
   return apiFetch('/sp/internal-marks');
+}
+
+/**
+ * Component-wise breakdown for one subject ("View Details" on the SRM portal).
+ * The ids come from the marks row itself (subjectId + status + code + desc).
+ */
+export async function fetchSpInternalMarksDetail(
+  subjectId: string,
+  status: string,
+  code = '',
+  desc = ''
+): Promise<{ components: InternalMarkComponent[]; attempts?: string[] }> {
+  const res = await apiFetch<{
+    components?: InternalMarkComponent[];
+    error?: string;
+    attempts?: string[];
+  }>('/sp/internal-marks-detail', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject_id: subjectId, status, code, desc }),
+  });
+  // The backend answers HTTP 200 even for its own failures, so a body-level
+  // `error` has to become a real throw — otherwise the UI shows the
+  // misleading "no component marks published yet" empty state.
+  if (res?.error) throw new Error(res.error);
+  return { components: res?.components || [], attempts: res?.attempts };
 }
 
 export interface SpProfile {

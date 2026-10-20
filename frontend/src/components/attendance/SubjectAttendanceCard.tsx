@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
-import { displayDate, type LeaveProjection, type ReachPlan } from '@/lib/day-order';
+import { displayDate, type LeaveProjection, type MarginPlan, type ReachPlan } from '@/lib/day-order';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   reachPlan?: ReachPlan | null;
   projection?: LeaveProjection | null;
   projectedReachPlan?: ReachPlan | null;
+  /** Computes the margin-getter plan for a requested buffer of skippable classes. */
+  marginPlanFor?: (goal: number) => MarginPlan;
 }
 
 const statusColors: Record<SubjectAttendance['status'], { bg: string; border: string; text: string; accent: string }> = {
@@ -72,8 +74,9 @@ function StatPill({ label, value, color }: { label: string; value: number | stri
   );
 }
 
-export default function SubjectAttendanceCard({ subject, index, dayOrders, reachPlan, projection, projectedReachPlan }: Props) {
+export default function SubjectAttendanceCard({ subject, index, dayOrders, reachPlan, projection, projectedReachPlan, marginPlanFor }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [marginGoal, setMarginGoal] = useState(3);
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
@@ -305,6 +308,165 @@ export default function SubjectAttendanceCard({ subject, index, dayOrders, reach
                   </p>
                 </div>
               )}
+
+              {/* Bunk budget — pick a buffer of skippable classes and see the
+                  exact number of classes + date needed to build it. */}
+              {marginPlanFor && (() => {
+                const plan = marginPlanFor(marginGoal);
+                const goalLabel = `${marginGoal} class${marginGoal === 1 ? '' : 'es'}`;
+                const tone = plan.alreadyThere
+                  ? '#86efac'
+                  : plan.reachable
+                    ? '#c4b5fd'
+                    : '#fca5a5';
+                return (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(34,197,94,0.06))',
+                      border: '1px solid rgba(139,92,246,0.3)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '0.6rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.7px',
+                          textTransform: 'uppercase',
+                          color: 'var(--threshold-accent-text)',
+                        }}>
+                          Bunk budget
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: W(0.42) }}>
+                          Stock up on safe skips
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          aria-label="Decrease margin goal"
+                          onClick={() => setMarginGoal((g) => Math.max(1, g - 1))}
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: '8px',
+                            border: `1px solid ${WB(0.14)}`,
+                            background: WB(0.06),
+                            color: theme.text,
+                            fontSize: '0.95rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            lineHeight: 1,
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{
+                          minWidth: '26px',
+                          textAlign: 'center',
+                          fontSize: '0.9rem',
+                          fontWeight: 800,
+                          color: theme.text,
+                        }}>
+                          {marginGoal}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Increase margin goal"
+                          onClick={() => setMarginGoal((g) => Math.min(20, g + 1))}
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: '8px',
+                            border: `1px solid ${WB(0.14)}`,
+                            background: WB(0.06),
+                            color: theme.text,
+                            fontSize: '0.95rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            lineHeight: 1,
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      marginTop: '9px',
+                      padding: '8px 10px',
+                      borderRadius: '9px',
+                      background: WB(0.05),
+                    }}>
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.p
+                          key={`${marginGoal}-${plan.needed}-${plan.reachDate ?? 'none'}-${plan.alreadyThere}`}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          transition={{ duration: 0.18 }}
+                          style={{
+                            margin: 0,
+                            fontSize: '0.78rem',
+                            lineHeight: 1.45,
+                            color: tone,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {plan.alreadyThere ? (
+                            <>
+                              Goal reached — you can already skip{' '}
+                              <b>{Math.max(plan.currentMargin, marginGoal)}</b> class
+                              {Math.max(plan.currentMargin, marginGoal) === 1 ? '' : 'es'} and stay above 75%.
+                            </>
+                          ) : !plan.hasSchedule ? (
+                            <>
+                              Attend <b>{plan.needed}</b> consecutive class{plan.needed === 1 ? '' : 'es'} to build a{' '}
+                              {goalLabel} margin. <span style={{ color: W(0.4) }}>No timetable data for a date yet.</span>
+                            </>
+                          ) : plan.reachable && plan.reachDate ? (
+                            <>
+                              Attend <b>{plan.needed}</b> class{plan.needed === 1 ? '' : 'es'} straight — by{' '}
+                              <b>{displayDate(plan.reachDate)}</b> you can skip {goalLabel} and stay above 75%.
+                            </>
+                          ) : (
+                            <>
+                              Only <b>{plan.futureClasses}</b> classes left on the schedule — a {goalLabel} margin
+                              isn&apos;t reachable this semester.
+                            </>
+                          )}
+                        </motion.p>
+                      </AnimatePresence>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      marginTop: '7px',
+                      fontSize: '0.65rem',
+                      color: W(0.38),
+                      flexWrap: 'wrap',
+                    }}>
+                      <span>
+                        Now:{' '}
+                        {plan.currentMargin > 0
+                          ? `+${plan.currentMargin} skippable`
+                          : subject.isBelowThreshold
+                            ? `−${subject.mustAttend} to reach 75%`
+                            : '0 skippable'}
+                      </span>
+                      {plan.hasSchedule && (
+                        <span>· {plan.futureClasses} classes left on schedule</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Recovery plan — reach 75% by a concrete date */}
               {subject.isBelowThreshold && reachPlan && (

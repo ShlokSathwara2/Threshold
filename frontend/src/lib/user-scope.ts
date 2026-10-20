@@ -28,14 +28,23 @@ const SCOPED_PREFIXES = [
   // Academia (IAM) session — scoped to the login so a friend signing in on the
   // same phone never inherits the previous student's Academia session/data.
   'threshold_academia_session',
+  // Semester the Academia session was captured in + a "sign in again" reason,
+  // both tied to that same saved session.
+  'threshold_academia_semester',
+  'threshold_academia_relogin',
 ];
 
 // Scoped keys that are NOT erased on an explicit logout. The Academia (IAM)
 // session is a ONE-TIME login per student: it stays scoped to that student's
 // own key, so the next time THAT student signs in it is picked up again and
 // they are never asked for their Academia password twice — while a different
-// login (its own hash) still starts clean and gets prompted.
-const PRESERVE_ON_LOGOUT = ['threshold_academia_session'];
+// login (its own hash) still starts clean and gets prompted. The semester
+// stamp rides along so a semester rollover is still detected after a logout.
+const PRESERVE_ON_LOGOUT = [
+  'threshold_academia_session',
+  'threshold_academia_semester',
+  'threshold_academia_relogin',
+];
 
 // Hard wipe of every user-scoped key on this device — used on explicit logout
 // so the next person signing in (e.g. a friend on the same phone) starts with

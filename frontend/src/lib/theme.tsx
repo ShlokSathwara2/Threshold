@@ -136,6 +136,8 @@ export const THEMES: ThemePalette[] = [
 export interface NotifPrefs {
   enabled: boolean;
   attendanceRisk: boolean;
+  attendanceUpdates: boolean;
+  marksUpdates: boolean;
   examDates: boolean;
   classAlerts: boolean;
   bunkAlerts: boolean;
@@ -143,11 +145,15 @@ export interface NotifPrefs {
   stepClasses: boolean;
   aptitudeClasses: boolean;
   examDayBefore: boolean;
+  /** Ongoing class card on the lock screen / Now Bar (Android). */
+  liveClass: boolean;
 }
 
 export const DEFAULT_NOTIF: NotifPrefs = {
   enabled: true,
   attendanceRisk: true,
+  attendanceUpdates: true,
+  marksUpdates: true,
   examDates: true,
   classAlerts: true,
   bunkAlerts: true,
@@ -155,6 +161,7 @@ export const DEFAULT_NOTIF: NotifPrefs = {
   stepClasses: true,
   aptitudeClasses: true,
   examDayBefore: true,
+  liveClass: true,
 };
 
 const THEME_KEY = 'threshold_theme';

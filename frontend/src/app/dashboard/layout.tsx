@@ -151,12 +151,43 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const WB = (a: number) => overlayBg(theme, a);
   const [user, setUser] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [examOpen, setExamOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [lockModal, setLockModal] = useState<{ show: boolean; feature?: string }>({ show: false });
+  // Bumped when the fast-login session identity resolves (placeholder ->
+  // reg number). Remounting the page below re-reads every per-login key —
+  // including a preserved Academia session — so the student is not asked to
+  // sign in to Academia again after a normal logout/login.
+  const [identityTick, setIdentityTick] = useState(0);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const navScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onIdentity = () => setIdentityTick((t) => t + 1);
+    window.addEventListener('threshold:identity-changed', onIdentity);
+    return () => window.removeEventListener('threshold:identity-changed', onIdentity);
+  }, []);
+
+  // Laptop / desktop: the drawer becomes a permanent rail and the phone
+  // bottom nav is hidden by CSS. Keep the state in sync so the nav items
+  // animate in and the hamburger never opens an empty drawer on resize.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const apply = () => {
+      setIsDesktop(mq.matches);
+      setSidebarOpen(mq.matches);
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  const closeDrawer = () => {
+    if (!isDesktop) closeDrawer();
+  };
 
   // In-app update check: runs on every dashboard page, re-checks every few
   // minutes, on app resume and when the app returns to the foreground, so
@@ -356,7 +387,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div style={{
+    <div
+      className="thr-app"
+      style={{
       height: '100dvh',
       overflow: 'hidden',
       background: theme.bg,
@@ -366,7 +399,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <NoiseOverlay />
 
       {/* Top Bar */}
-      <header style={{
+      <header
+        className="thr-topbar"
+        style={{
         zIndex: 50,
         display: 'flex',
         alignItems: 'center',
@@ -380,6 +415,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
           <button
+            className="thr-menu-btn"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label="Menu"
             style={{
@@ -401,7 +437,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <h1 style={{
             fontSize: '1.05rem',
             fontWeight: 700,
-            color: pathname === '/dashboard' || pathname === '/dashboard/' ? 'transparent' : theme.text,
+            color: (pathname === '/dashboard' || pathname === '/dashboard/') && !isDesktop ? 'transparent' : theme.text,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -409,7 +445,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             flex: 1,
           }}>
             {(pathname === '/dashboard' || pathname === '/dashboard/') ? (
-              <BrandWord text="THRESHOLD" fontSize="1.2rem" />
+              isDesktop ? 'Dashboard' : <BrandWord text="THRESHOLD" fontSize="1.2rem" />
             ) : (
               pageTitles[pathname] || 'Threshold'
             )}
@@ -453,6 +489,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <motion.div
+          className="thr-sidebar-scrim"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -467,7 +504,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Sidebar */}
-      <nav style={{
+      <nav
+        className="thr-sidebar"
+        style={{
         position: 'fixed',
         top: 0,
         left: sidebarOpen ? 0 : '-280px',
@@ -483,6 +522,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         overflow: 'hidden',
         transition: 'left 0.3s cubic-bezier(0.23, 1, 0.32, 1)',
       }}>
+        <div className="thr-sidebar-brand" style={{ alignItems: 'center', padding: '0 12px 16px' }}>
+          <BrandWord text="THRESHOLD" fontSize="1.15rem" />
+        </div>
+
         {/* Signed-in user chip */}
         <motion.div
           variants={navItemAnim}
@@ -631,7 +674,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                             return;
                           }
                           router.push(item.path);
-                          setSidebarOpen(false);
+                          closeDrawer();
                         }}
                         data-active={isActive ? 'true' : undefined}
                         style={{
@@ -678,7 +721,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                           return;
                         }
                         router.push(item.path);
-                        setSidebarOpen(false);
+                        closeDrawer();
                       }}
                       data-active={isActive ? 'true' : undefined}
                       style={{
@@ -723,6 +766,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <SubjectRegistryProvider>
           <main
             ref={mainRef}
+            key={identityTick}
+            className="thr-main"
             style={{
               flex: 1,
               minHeight: 0,
@@ -758,6 +803,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Session timeout popup — keeps last screen/data visible, tap to re-sign-in */}
       {sessionExpired && (
         <motion.button
+          className="thr-session-banner"
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={handleSessionExpiredTap}

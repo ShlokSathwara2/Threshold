@@ -7,6 +7,7 @@ import {
   isSpLoggedIn,
   isCampusWebSession,
   isAcademiaLoggedIn,
+  syncAcademiaSemester,
   fetchCalendar,
   fetchTimetable,
   fetchSpProfile,
@@ -15,6 +16,9 @@ import {
   fetchUser,
   fetchCampusWebUser,
   getCampusAcademiaToken,
+  getSession,
+  resolveSessionUser,
+  upgradeSessionUser,
   type CalendarResponse,
   type TimetableResponse,
   type TimetableSlot,
@@ -28,6 +32,7 @@ import { scopedKey } from '@/lib/user-scope';
 import { useTheme, hexToRgba, overlay, overlayBg } from '@/lib/theme';
 import { loadExams, nextExamDate, daysUntil, formatExamDate, syncExamsFromCloud, type ExamEntry } from '@/lib/exams';
 import { loadStepClasses, loadAptitudeClasses, getTodayClasses as getTodayScheduleClasses, formatTime, parseTime } from '@/lib/schedule-classes';
+import { syncLiveClasses, clearLiveClasses } from '@/lib/class-live';
 import { lastSyncTime } from '@/lib/api';
 import { refreshNotifications } from '@/lib/notifications';
 import GradesSummary from '@/components/grades/GradesSummary';
@@ -35,6 +40,7 @@ import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import HappyUpdates from '@/components/dashboard/HappyUpdates';
 import AttendanceChanges from '@/components/dashboard/AttendanceChanges';
+import LiveAlertsFeed from '@/components/dashboard/LiveAlertsFeed';
 import AttendanceUpdateBanner from '@/components/dashboard/AttendanceUpdateBanner';
 import NotificationPermissionBanner from '@/components/ui/NotificationPermissionBanner';
 import Announcements from '@/components/dashboard/Announcements';
@@ -43,9 +49,9 @@ import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { loadOptionalHours, slotKey } from '@/lib/optional-hours';
 import { recordAttendanceSnapshot, loadSnapshot, detectAttendanceChanges, type AttendanceChange } from '@/lib/habits';
 import { useAttendanceUpdates } from '@/hooks/useAttendanceUpdates';
-import { useWebAttendancePoll } from '@/hooks/useWebAttendancePoll';
+import { useLiveAlerts } from '@/hooks/useLiveAlerts';
 import { syncDeltaHash } from '@/lib/attendance-background';
-import { toDate, toDateStr, resolveTodayDayOrder } from '@/lib/day-order';
+import { toDate, toDateStr, resolveTodayDayOrder, buildDayOrderLookup } from '@/lib/day-order';
 import { syncWidget } from '@/lib/widget-sync';
 
 function greeting(): string {
@@ -91,7 +97,7 @@ export default function DashboardPage() {
   const WB = (a: number) => overlayBg(theme, a);
   const { subjects, overall, loading, stale, refetch: refetchAttendance } = useAttendance();
   const { changes: bgUpdates, hasUpdates, refresh: refreshUpdates } = useAttendanceUpdates();
-  const { changes: webPollChanges } = useWebAttendancePoll();
+  const { alerts: liveAlerts, clear: clearLiveAlerts } = useLiveAlerts(notif);
   const [gradesKey, setGradesKey] = useState(0);
   usePullToRefresh(async () => {
     await refetchAttendance();
@@ -118,11 +124,17 @@ export default function DashboardPage() {
   // names and totals that Campus Web itself displays).
   const [cwMarks, setCwMarks] = useState<Mark[] | null>(null);
   const [academiaKey, setAcademiaKey] = useState(0);
+  // Set when we deliberately signed the student out of Academia because the
+  // portal rolled over to a new semester. Drives the re-login notice on the
+  // Academia card.
+  const [academiaRelogin, setAcademiaRelogin] = useState<{ from?: number; to?: number } | null>(null);
   const [staleAsOf, setStaleAsOf] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [exams, setExams] = useState<ExamEntry[]>([]);
   const [optedOut, setOptedOut] = useState<Set<string>>(new Set());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  // Ticking clock so the "in class" card's countdown stays live.
+  const [clock, setClock] = useState(() => new Date());
   const [attendanceChanges, setAttendanceChanges] = useState<AttendanceChange[]>([]);
   const [showFeatureBrief, setShowFeatureBrief] = useState(() => {
     try {
@@ -152,11 +164,30 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     setExams(loadExams());
     setOptedOut(loadOptionalHours());
     syncExamsFromCloud().then((cloud) => {
       if (cloud) setExams(cloud);
     });
+  }, []);
+
+  // Fast-login identity upgrade: the login path saves the session immediately
+  // (user='student') and resolves the real identity in the background. If the
+  // app was closed before that landed, resolve it here so the per-login scoped
+  // caches are keyed to the right student.
+  useEffect(() => {
+    const s = getSession();
+    if (!s?.cookies || (s.user && s.user !== 'student')) return;
+    void resolveSessionUser(s.cookies)
+      .then((id) => {
+        if (id) upgradeSessionUser(id);
+      })
+      .catch(() => {});
   }, []);
 
   // Smart local notifications: morning brief + exam reminders + per-class
@@ -188,12 +219,13 @@ export default function DashboardPage() {
     void syncDeltaHash();
   }, [subjects]);
 
-  // When web poll detects new changes, refresh the updates display
+  // Native background checker may have recorded changes while the app was
+  // closed — reload them whenever a fresh live-alert poll completes.
   useEffect(() => {
-    if (webPollChanges.length > 0) {
+    if (liveAlerts.length > 0) {
       void refreshUpdates();
     }
-  }, [webPollChanges, refreshUpdates]);
+  }, [liveAlerts, refreshUpdates]);
 
   const loadTimetable = async () => {
     if (!isAcademiaLoggedIn() && !isCampusWebSession()) return;
@@ -206,6 +238,7 @@ export default function DashboardPage() {
   };
 
   const handleAcademiaLogin = () => {
+    setAcademiaRelogin(null);
     setAcademiaKey((k) => k + 1);
     loadTimetable();
   };
@@ -241,6 +274,19 @@ export default function DashboardPage() {
   };
 
   const fetchAll = useCallback(async () => {
+    // A saved Academia session outlives a semester: when the portal rolls over
+    // the timetable / day order are stale. Compare the live semester against
+    // the one we logged in for and, if it changed, drop the session so the
+    // student is asked to sign in again and the new timetable is fetched.
+    const applySemester = (sem?: number | null) => {
+      const res = syncAcademiaSemester(sem);
+      if (res.changed) {
+        setAcademiaRelogin({ from: res.previous, to: res.current });
+        setAcademiaKey((k) => k + 1);
+        setTodayClasses(null);
+      }
+    };
+
     if (isCampusWebSession()) {
       try {
         const user = await fetchCampusWebUser();
@@ -252,6 +298,7 @@ export default function DashboardPage() {
         if (profileResp.profile) {
           setProfile(profileResp.profile);
           setCached<SpProfile>('profile', { ...profileResp.profile, photo: undefined });
+          applySemester(profileResp.profile.semester);
         }
 
         const marksResp = adaptCampusWebMarks(user);
@@ -343,6 +390,7 @@ export default function DashboardPage() {
         const p = pRes.value.profile;
         setProfile(p);
         setCached<SpProfile>('profile', { ...p, photo: undefined });
+        applySemester(p.semester);
       }
       if (calRes.status === 'fulfilled') {
         const cal: CalendarResponse = calRes.value;
@@ -412,6 +460,7 @@ export default function DashboardPage() {
             section: u.section || '',
             photo: undefined,
           });
+          applySemester(u.semester);
         }
       } catch {
         // Academic-only — keep cached data
@@ -479,11 +528,82 @@ export default function DashboardPage() {
     syncWidget(overall, subjects, todayClasses, isSpLoggedIn());
   }, [overall, subjects, todayClasses]);
 
+  // ── Live class (Android 16 Live Update / Samsung Now Bar) ──
+  // Push today's timeline + each subject's attendance to the native scheduler.
+  // It arms exact start/end alarms, so the card appears and disappears even
+  // when the app is closed. A JSON signature keeps this from re-running on
+  // every render.
+  const liveDayStart = new Date();
+  liveDayStart.setHours(0, 0, 0, 0);
+  const liveClasses: Array<{
+    code: string;
+    title: string;
+    room: string;
+    slot: string;
+    start: number;
+    end: number;
+    percentage?: number;
+    margin?: number;
+  }> = [];
+
+  if (todayClasses && todayClasses.length > 0) {
+    // Arm the next two weeks from the academic calendar, so the live card
+    // works even on days the app isn't opened. Falls back to today only.
+    const liveDays: Array<{ ms: number; doName: string | null }> = [];
+    if (calendar) {
+      const lookup = buildDayOrderLookup(calendar.calendar);
+      const todayMs = liveDayStart.getTime();
+      for (const [date, doName] of lookup) {
+        const ms = toDate(date)?.getTime() ?? 0;
+        if (ms >= todayMs && doName) liveDays.push({ ms, doName });
+      }
+      liveDays.sort((a, b) => a.ms - b.ms);
+      liveDays.splice(14);
+    }
+    if (liveDays.length === 0 && todayDO) {
+      liveDays.push({ ms: liveDayStart.getTime(), doName: todayDO });
+    }
+
+    for (const day of liveDays) {
+      for (const s of todayClasses) {
+        if (s.day !== day.doName) continue;
+        if (optedOut.has(slotKey(s))) continue;
+        const w = slotWindow(s);
+        const att = subjects.find((x) => x.courseCode === s.courseCode);
+        liveClasses.push({
+          code: s.courseCode,
+          title: s.courseTitle,
+          room: s.room,
+          slot: s.slot,
+          start: day.ms + w.start * 60000,
+          end: day.ms + w.end * 60000,
+          percentage: att ? Math.round(att.percentage * 10) / 10 : undefined,
+          margin: att ? (att.isBelowThreshold ? -att.mustAttend : att.canBunk) : undefined,
+        });
+      }
+    }
+  }
+
+  const liveClassesKey = JSON.stringify(liveClasses);
+  const liveClassOn = notif.enabled && notif.liveClass;
+
+  useEffect(() => {
+    if (!liveClassOn) {
+      void clearLiveClasses();
+      return;
+    }
+    try {
+      void syncLiveClasses(JSON.parse(liveClassesKey), true);
+    } catch {
+      /* malformed snapshot — keep the previous schedule */
+    }
+  }, [liveClassesKey, liveClassOn]);
+
   // Timeline geometry: classes positioned between day start and day end
   const dayStart = todaysSlots.length ? Math.min(...todaysSlots.map((s) => slotWindow(s).start)) : 0;
   const dayEnd = todaysSlots.length ? Math.max(...todaysSlots.map((s) => slotWindow(s).end)) : 0;
   const span = dayEnd - dayStart;
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowMin = clock.getHours() * 60 + clock.getMinutes();
   const progress = span > 0 ? Math.min(1, Math.max(0, (nowMin - dayStart) / span)) : 0;
   const positionPct = (s: TimetableSlot) =>
     span > 0 ? Math.min(100, Math.max(0, ((slotWindow(s).start - dayStart) / span) * 100)) : 0;
@@ -521,6 +641,11 @@ export default function DashboardPage() {
     return nowMin >= w.start && nowMin < w.end;
   });
   const nextClass = todaysSlots.find((s) => slotWindow(s).start > nowMin);
+  const currentAtt = currentClass
+    ? subjects.find((s) => s.courseCode === currentClass.courseCode) ?? null
+    : null;
+  const minutesLeft = currentClass ? Math.max(0, slotWindow(currentClass).end - nowMin) : 0;
+  const startsIn = nextClass ? Math.max(0, slotWindow(nextClass).start - nowMin) : 0;
 
   // ── Bunk planner data (used by Happy Updates) ──
   const futureToday = todaysSlots.filter((s) => slotWindow(s).end > nowMin);
@@ -1236,6 +1361,15 @@ export default function DashboardPage() {
         onTap={(code) => router.push(`/dashboard/attendance?code=${code}`)}
       />
 
+      {/* Live alerts feed (attendance + internal marks changes today) */}
+      <LiveAlertsFeed
+        alerts={liveAlerts}
+        onClear={clearLiveAlerts}
+        onTap={(alert) => {
+          if (alert.href) router.push(alert.href);
+        }}
+      />
+
       {/* Notification permission prompt (web only) */}
       <NotificationPermissionBanner />
 
@@ -1246,7 +1380,7 @@ export default function DashboardPage() {
       />
 
       {/* ── Quick Stats Grid ── */}
-      <motion.div style={{
+      <motion.div className="thr-stats-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
         gap: '12px',
@@ -1738,31 +1872,108 @@ export default function DashboardPage() {
         </div>
 
         {(isAcademiaLoggedIn() || isCampusWebSession()) && todayDO && (currentClass || nextClass) && (
-          <div style={{
-            margin: '14px 16px',
-            padding: '15px 16px',
-            borderRadius: '16px',
-            background: currentClass
-              ? 'linear-gradient(135deg, rgba(232,121,249,0.18), rgba(var(--threshold-accent-rgb),0.08))'
-              : 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.15), rgba(59,130,246,0.06))',
-            border: currentClass
-              ? '1px solid rgba(232,121,249,0.45)'
-              : '1px solid rgba(var(--threshold-accent-rgb),0.35)',
-            boxShadow: currentClass
-              ? '0 0 24px rgba(232,121,249,0.18)'
-              : '0 0 20px rgba(var(--threshold-accent-rgb),0.12)',
-          }}>
-            <p style={{
-              margin: 0,
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={currentClass ? {
+              opacity: 1,
+              y: 0,
+              boxShadow: [
+                '0 0 18px rgba(232,121,249,0.14)',
+                '0 0 36px rgba(232,121,249,0.36)',
+                '0 0 18px rgba(232,121,249,0.14)',
+              ],
+            } : {
+              opacity: 1,
+              y: 0,
+              boxShadow: '0 0 20px rgba(var(--threshold-accent-rgb),0.12)',
+            }}
+            transition={currentClass ? {
+              boxShadow: { duration: 2.6, repeat: Infinity, ease: 'easeInOut' },
+              opacity: { duration: 0.3 },
+              y: { duration: 0.3 },
+            } : { duration: 0.3 }}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              margin: '14px 16px',
+              padding: '15px 16px',
+              borderRadius: '16px',
+              background: currentClass
+                ? 'linear-gradient(135deg, rgba(232,121,249,0.18), rgba(var(--threshold-accent-rgb),0.08))'
+                : 'linear-gradient(135deg, rgba(var(--threshold-accent-rgb),0.15), rgba(59,130,246,0.06))',
+              border: currentClass
+                ? '1px solid rgba(232,121,249,0.45)'
+                : '1px solid rgba(var(--threshold-accent-rgb),0.35)',
+            }}
+          >
+            {/* Lively shine sweep while the class is live */}
+            {currentClass && (
+              <motion.div
+                aria-hidden
+                initial={{ x: '-130%' }}
+                animate={{ x: '240%' }}
+                transition={{ duration: 2.6, repeat: Infinity, repeatDelay: 1.8, ease: 'easeInOut' }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  width: '38%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.13), transparent)',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
               marginBottom: '6px',
-              fontSize: '0.62rem',
-              fontWeight: 800,
-              letterSpacing: '0.6px',
-              color: currentClass ? (theme.isLight ? '#d946ef' : '#f0abfc') : 'var(--threshold-accent-text)',
-              textTransform: 'uppercase',
+              position: 'relative',
             }}>
-              {currentClass ? '● In class now' : nextClass ? 'Up next' : ''}
-            </p>
+              <p style={{
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                letterSpacing: '0.6px',
+                color: currentClass ? (theme.isLight ? '#d946ef' : '#f0abfc') : 'var(--threshold-accent-text)',
+                textTransform: 'uppercase',
+              }}>
+                {currentClass && (
+                  <motion.span
+                    animate={{ opacity: [1, 0.25, 1], scale: [1, 0.72, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: '#f0abfc',
+                      boxShadow: '0 0 10px #e879f9',
+                      display: 'inline-block',
+                    }}
+                  />
+                )}
+                {currentClass ? 'In class now' : 'Up next'}
+              </p>
+              <span style={{
+                flexShrink: 0,
+                padding: '3px 8px',
+                borderRadius: '999px',
+                fontSize: '0.61rem',
+                fontWeight: 800,
+                letterSpacing: '0.3px',
+                color: currentClass ? '#f5d0fe' : 'var(--threshold-accent-text)',
+                background: currentClass ? 'rgba(232,121,249,0.18)' : 'rgba(var(--threshold-accent-rgb),0.12)',
+                border: currentClass ? '1px solid rgba(232,121,249,0.4)' : '1px solid rgba(var(--threshold-accent-rgb),0.28)',
+              }}>
+                {currentClass ? `LIVE · ${minutesLeft} min left` : `starts in ${startsIn} min`}
+              </span>
+            </div>
+
             {(currentClass || nextClass) && (
               <>
                 <p style={{
@@ -1773,6 +1984,7 @@ export default function DashboardPage() {
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  position: 'relative',
                 }}>
                   {(currentClass || nextClass)!.courseTitle}
                 </p>
@@ -1780,6 +1992,7 @@ export default function DashboardPage() {
                   margin: '4px 0 0',
                   fontSize: '0.72rem',
                   color: 'var(--threshold-text-dim)',
+                  position: 'relative',
                 }}>
                   {(currentClass || nextClass)!.courseCode}
                   {(currentClass || nextClass)!.slot ? ` · ${(currentClass || nextClass)!.slot}` : ''}
@@ -1788,14 +2001,68 @@ export default function DashboardPage() {
                     ? ` · ${(currentClass || nextClass)!.room}`
                     : ''}
                 </p>
+                {(() => {
+                  const focus = currentClass ?? nextClass;
+                  if (!focus) return null;
+                  const att = currentClass
+                    ? currentAtt
+                    : subjects.find((s) => s.courseCode === focus.courseCode) ?? null;
+                  if (!att) return null;
+                  const pctColor = att.percentage >= 75 ? '#22c55e' : att.percentage >= 60 ? '#f97316' : '#ef4444';
+                  const marginLabel = att.isBelowThreshold
+                    ? `attend ${att.mustAttend} to reach 75%`
+                    : att.canBunk > 0
+                      ? `+${att.canBunk} skippable`
+                      : '0 margin';
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      gap: '6px',
+                      marginTop: '9px',
+                      flexWrap: 'wrap',
+                      position: 'relative',
+                    }}>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
+                        color: pctColor,
+                        background: `${pctColor}1a`,
+                        border: `1px solid ${pctColor}33`,
+                        padding: '3px 8px',
+                        borderRadius: '999px',
+                      }}>
+                        {att.percentage.toFixed(1)}% attendance
+                      </span>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        color: 'var(--threshold-text-dim)',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        padding: '3px 8px',
+                        borderRadius: '999px',
+                      }}>
+                        {marginLabel}
+                      </span>
+                    </div>
+                  );
+                })()}
               </>
             )}
-          </div>
+          </motion.div>
         )}
 
       {!isAcademiaLoggedIn() && (
           <div id="academia-login" style={{ padding: '16px' }}>
-            <AcademiaLoginCard onSuccess={handleAcademiaLogin} />
+            <AcademiaLoginCard
+              semester={profile?.semester ?? null}
+              notice={
+                academiaRelogin
+                  ? `It's a new semester${academiaRelogin.to ? ` (Semester ${academiaRelogin.to})` : ''} — sign in again to load your new timetable.`
+                  : undefined
+              }
+              onSuccess={handleAcademiaLogin}
+            />
           </div>
         )}
 

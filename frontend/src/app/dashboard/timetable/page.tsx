@@ -7,6 +7,7 @@ import {
   isLoggedIn,
   isAcademiaLoggedIn,
   getAcademiaUsername,
+  getAcademiaReloginNotice,
   fetchTimetable,
   fetchCalendar,
   type TimetableSlot,
@@ -165,6 +166,8 @@ export default function TimetablePage() {
   });
 
   const needsLogin = !isAcademiaLoggedIn();
+  // Explains the sign-out when the portal rolled over to a new semester.
+  const reloginNotice = needsLogin ? getAcademiaReloginNotice() : null;
 
   // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
@@ -262,7 +265,14 @@ export default function TimetablePage() {
             exit={{ opacity: 0, scale: 0.97 }}
             style={{ marginBottom: '16px' }}
           >
-            <AcademiaLoginCard onSuccess={fetchLive} />
+            <AcademiaLoginCard
+              notice={
+                reloginNotice
+                  ? `It's a new semester${reloginNotice.to ? ` (Semester ${reloginNotice.to})` : ''} — sign in again to load your new timetable.`
+                  : undefined
+              }
+              onSuccess={fetchLive}
+            />
           </motion.div>
         )}
       </AnimatePresence>

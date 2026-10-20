@@ -9,6 +9,8 @@ interface AttendanceCheckApi {
   getChanges(): Promise<{ hasUpdates: boolean; changes: AttendanceUpdate[]; lastCheck: number }>;
   clearOld(): Promise<{ cleared: boolean }>;
   isRunning(): Promise<{ running: boolean }>;
+  notify(options: { title: string; body: string; kind?: string; id?: number }): Promise<{ shown: boolean }>;
+  ensureNotificationChannels(): Promise<{ ready: boolean }>;
 }
 
 export interface AttendanceUpdate {
@@ -94,5 +96,59 @@ export async function clearOldChanges(): Promise<void> {
     await AttendanceCheck.clearOld();
   } catch {
     /* non-fatal */
+  }
+}
+
+/** Shared Android channel every Threshold notification rides on. */
+export const THRESHOLD_CHANNEL_ID = 'threshold_lively_v2';
+
+/**
+ * Make sure the lively Threshold channel exists (custom chime + vibration +
+ * lights). Prefers the native builder, and falls back to Capacitor's channel
+ * API so scheduled notifications can still target it.
+ */
+export async function ensureNotificationChannels(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    await AttendanceCheck.ensureNotificationChannels();
+    return true;
+  } catch {
+    /* plugin not present in this build — fall through */
+  }
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await LocalNotifications.createChannel({
+      id: THRESHOLD_CHANNEL_ID,
+      name: 'Threshold alerts',
+      description: 'Attendance, marks, class and exam updates',
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+      lights: true,
+      lightColor: '#22C55E',
+      sound: 'threshold_ping',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Post an immediate, fully-styled Threshold notification (custom layout,
+ * category accent, chime, vibration). Returns false when it isn't possible so
+ * callers can fall back to a plain notification.
+ */
+export async function showRichNotification(
+  title: string,
+  body: string,
+  kind: string = 'default',
+): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    await AttendanceCheck.notify({ title, body, kind });
+    return true;
+  } catch {
+    return false;
   }
 }

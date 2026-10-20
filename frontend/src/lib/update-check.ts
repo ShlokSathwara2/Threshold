@@ -2,6 +2,7 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Preferences } from '@capacitor/preferences';
 import { isNativePlatform } from './capacitor';
+import { ensureNotificationChannels, THRESHOLD_CHANNEL_ID } from './attendance-background';
 
 // Version manifest lives next to the APK on GitHub so every installed app
 // can check for new releases without any server involvement.
@@ -14,7 +15,9 @@ export interface UpdateInfo {
 }
 
 // Notification id for "new version available" alerts.
-const UPDATE_NOTIF_ID = 5000;
+// Kept outside the reminder ID ranges (1, 1000–7999) so refreshing reminders
+// never cancels a queued update prompt.
+const UPDATE_NOTIF_ID = 9001;
 
 export async function getInstalledVersion(): Promise<string> {
   try {
@@ -78,6 +81,7 @@ export async function notifyUpdate(info: UpdateInfo): Promise<void> {
   try {
     const sent = await Preferences.get({ key: `threshold_update_notified_${info.version}` });
     if (sent.value === '1') return;
+    const rich = await ensureNotificationChannels();
     await LocalNotifications.schedule({
       notifications: [
         {
@@ -85,8 +89,12 @@ export async function notifyUpdate(info: UpdateInfo): Promise<void> {
           title: 'Threshold update available',
           body: `v${info.version} is out${info.note ? ` — ${info.note}` : ''}. Open the app to update.`,
           schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
-          sound: 'default',
-          smallIcon: 'ic_launcher',
+          sound: 'threshold_ping',
+          smallIcon: 'ic_launcher_foreground',
+          iconColor: '#22C55E',
+          largeBody: `v${info.version} is out${info.note ? ` — ${info.note}` : ''}. Open the app to update.`,
+          summaryText: 'Threshold',
+          ...(rich ? { channelId: THRESHOLD_CHANNEL_ID } : {}),
         },
       ],
     });

@@ -37,6 +37,10 @@ export default function PullRefresh({ mainRef, children }: PullRefreshProps) {
   const startY = useRef(0);
   const pointerDown = useRef(false);
   const timersRef = useRef<number[]>([]);
+  // Mirror of `progress` for the (long-lived) touch handlers, so the listeners
+  // don't have to be torn down and re-added on every progress tick.
+  const progressRef = useRef(0);
+  useEffect(() => { progressRef.current = progress; }, [progress]);
 
   const later = useCallback((fn: () => void, ms: number) => {
     timersRef.current.push(window.setTimeout(fn, ms));
@@ -52,21 +56,29 @@ export default function PullRefresh({ mainRef, children }: PullRefreshProps) {
   }, []);
 
   useEffect(() => {
-    const el = mainRef.current;
-    if (!el) return;
-
-    const atTop = () => el.scrollTop <= 2;
+    // Listen on the document, not on `mainRef.current`: the dashboard re-keys
+    // <main> when the session identity resolves (placeholder → reg number), so
+    // the element the listeners were bound to gets replaced. Bound at document
+    // level, the handlers always resolve the *current* scroller.
+    const atTop = () => {
+      const el = mainRef.current;
+      return !!el && el.scrollTop <= 2;
+    };
+    const insideMain = (target: EventTarget | null) => {
+      const el = mainRef.current;
+      return !!el && target instanceof Node && el.contains(target);
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       pointerDown.current = true;
-      if (atTop() && handlerRef.current) {
+      if (atTop() && handlerRef.current && insideMain(e.target)) {
         startY.current = e.touches[0].clientY;
       }
     };
 
     const onTouchMove = (e: TouchEvent) => {
       if (!pointerDown.current || !handlerRef.current) return;
-      if (!atTop()) {
+      if (!insideMain(e.target) || !atTop()) {
         setPhase('idle');
         setProgress(0);
         return;
@@ -88,7 +100,7 @@ export default function PullRefresh({ mainRef, children }: PullRefreshProps) {
         setProgress(0);
         return;
       }
-      if (progress >= 1) {
+      if (progressRef.current >= 1) {
         setPhase('refreshing');
         try {
           await handlerRef.current();
@@ -105,15 +117,15 @@ export default function PullRefresh({ mainRef, children }: PullRefreshProps) {
       }
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
     };
-  }, [mainRef, progress, later]);
+  }, [mainRef, later]);
 
   const showIndicator = phase !== 'idle';
   const radius = 14;

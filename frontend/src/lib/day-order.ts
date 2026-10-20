@@ -212,6 +212,82 @@ export function computeReachPlan(
   return { hasSchedule: true, reachable: false, reachDate: null, futureClasses, needed: subject.mustAttend };
 }
 
+export interface MarginPlan {
+  hasSchedule: boolean;
+  reachable: boolean;
+  reachDate: string | null;
+  futureClasses: number;
+  /** Consecutive classes to attend from today to build the requested margin. */
+  needed: number;
+  /** Classes the student can skip right now and stay at/above 75%. */
+  currentMargin: number;
+  /** True when the requested margin is already covered today. */
+  alreadyThere: boolean;
+}
+
+// "Margin" = how many classes you can skip and still stay at 75%.
+//
+// Current margin:  floor(P / t - (P + A))        (t = 0.75)
+// After attending x consecutive classes the margin becomes
+//   floor((P + x) / t - (P + A + x))
+// so to reach a margin of M we need
+//   x = ceil((M + A) * t / (1 - t) - P)
+// which is the inverse the UI uses to say "attend N classes to build M skips".
+export function computeMarginPlan(
+  subject: SubjectAttendance,
+  targetMargin: number,
+  scheduleByCourse: DayOrderSchedule,
+  lookup: Map<string, string | null>,
+  fromDate: string
+): MarginPlan {
+  const T = 0.75;
+  const goal = Math.max(0, Math.floor(targetMargin));
+  const currentMargin = Math.max(0, subject.canBunk);
+  const rawNeeded = Math.ceil(((goal + subject.absent) * T) / (1 - T) - subject.present);
+  const needed = Math.max(0, rawNeeded);
+  const alreadyThere = needed === 0;
+
+  const base: MarginPlan = {
+    hasSchedule: false,
+    reachable: alreadyThere,
+    reachDate: alreadyThere ? fromDate : null,
+    futureClasses: 0,
+    needed,
+    currentMargin,
+    alreadyThere,
+  };
+  if (alreadyThere) return base;
+
+  const per = scheduleByCourse.get(subject.courseCode);
+  if (!per || per.size === 0) return base;
+
+  const from = toDate(fromDate);
+  const dates = [...lookup.keys()]
+    .filter((d) => {
+      const date = toDate(d);
+      return date && from && date.getTime() >= from.getTime() && lookup.get(d) !== null;
+    })
+    .sort((a, b) => (toDate(a)?.getTime() ?? 0) - (toDate(b)?.getTime() ?? 0));
+
+  let count = 0;
+  let futureClasses = 0;
+  for (const d of dates) {
+    const classes = classesOnDayOrder(scheduleByCourse, subject.courseCode, lookup.get(d) ?? null);
+    futureClasses += classes;
+    count += classes;
+    if (count >= needed) {
+      return {
+        ...base,
+        hasSchedule: true,
+        reachable: true,
+        reachDate: d,
+        futureClasses,
+      };
+    }
+  }
+  return { ...base, hasSchedule: true, futureClasses };
+}
+
 export interface OverallReachPlan {
   hasSchedule: boolean;
   mode: 'recover' | 'spare' | 'impossible';

@@ -17,6 +17,7 @@ import {
   buildDayOrderSchedule,
   buildDayOrderLookup,
   computeReachPlan,
+  computeMarginPlan,
   computeLeaveImpact,
   computeOverallReachPlan,
   projectSubject,
@@ -471,7 +472,7 @@ export default function AttendancePage() {
       )}
 
       {/* Subject Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="thr-card-grid" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {subjects.map((subject, i) => (
           <div
             key={subject.courseCode}
@@ -489,6 +490,9 @@ export default function AttendancePage() {
               reachPlan={reachPlans.get(subject.courseCode) ?? null}
               projection={projection?.perSubject.get(subject.courseCode) ?? null}
               projectedReachPlan={projectedReachPlans.get(subject.courseCode) ?? null}
+              marginPlanFor={(goal) =>
+                computeMarginPlan(subject, goal, scheduleByCourse, dayOrderLookup, todayStr)
+              }
             />
           </div>
         ))}
