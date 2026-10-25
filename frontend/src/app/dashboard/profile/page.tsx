@@ -13,6 +13,7 @@ import {
   type PersonalDetailsResponse,
   type User,
 } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 
@@ -51,6 +52,15 @@ export default function ProfilePage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Paint the saved identity immediately so an expired session can never
+    // turn the profile into a blank page.
+    const cachedProfile = getCached<SpProfile>('profile');
+    if (cachedProfile?.data) setProfile(cachedProfile.data);
+    const cachedPersonal = getCached<PersonalDetailsResponse>('personalDetails');
+    if (cachedPersonal?.data?.sections?.length) {
+      setPersonal(cachedPersonal.data);
+      setLoading(false);
+    }
     try {
       const [spRes, acaRes, pdRes] = await Promise.allSettled([
         fetchSpProfile(),
@@ -61,21 +71,40 @@ export default function ProfilePage() {
       ]);
       if (spRes.status === 'fulfilled' && spRes.value.profile) {
         setProfile(spRes.value.profile);
+        setCached('profile', spRes.value.profile);
       }
-      if (acaRes.status === 'fulfilled' && acaRes.value) {
+      // An empty /user answer means the Academia session expired — keep the
+      // saved identity instead of replacing it with an empty object.
+      if (
+        acaRes.status === 'fulfilled' &&
+        acaRes.value &&
+        (acaRes.value.name || acaRes.value.regNumber)
+      ) {
         setAcademia(acaRes.value);
       }
       if (pdRes.status === 'fulfilled' && !pdRes.value.error) {
-        setPersonal(pdRes.value);
+        const sections = pdRes.value.sections || [];
+        if (sections.length) {
+          setPersonal(pdRes.value);
+          setCached('personalDetails', pdRes.value);
+        } else if (!cachedPersonal?.data?.sections?.length) {
+          setPersonal(pdRes.value);
+        }
       }
       if (spRes.status === 'rejected' && acaRes.status === 'rejected') {
         throw new Error('Could not load profile data');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load profile');
+      // Never blank an already-visible profile because a refresh failed.
+      if (!cachedProfile?.data && !profile) {
+        setError(e instanceof Error ? e.message : 'Failed to load profile');
+      }
     } finally {
       setLoading(false);
     }
+    // `profile` intentionally left out: this is a mount / pull-to-refresh
+    // loader and reading it would restart the fetch on every state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

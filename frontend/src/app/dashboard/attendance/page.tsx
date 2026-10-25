@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, fetchTimetable, fetchCalendar } from '@/lib/api';
+import { isLoggedIn, fetchTimetable, fetchCalendar, getCachedTimetable } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useAttendanceUpdates } from '@/hooks/useAttendanceUpdates';
 import AttendanceSummary from '@/components/attendance/AttendanceSummary';
@@ -46,10 +46,21 @@ export default function AttendancePage() {
   const fetchMeta = useCallback(async () => {
     try {
       const [tt, cal] = await Promise.all([fetchTimetable(), fetchCalendar()]);
-      setScheduleByCourse(buildDayOrderSchedule(tt.schedule || []));
+      // An empty timetable answer usually means the Academia session expired —
+      // keep the saved schedule so leave projections stay accurate instead of
+      // silently dropping every day order.
+      const liveSchedule = tt.schedule || [];
+      const schedule = liveSchedule.length
+        ? liveSchedule
+        : getCachedTimetable()?.schedule || [];
+      setScheduleByCourse(buildDayOrderSchedule(schedule));
       setDayOrderLookup(buildDayOrderLookup(cal.calendar || []));
     } catch (e) {
       console.warn('Meta fetch (timetable/calendar) failed:', e);
+      const cached = getCachedTimetable();
+      if (cached?.schedule.length) {
+        setScheduleByCourse(buildDayOrderSchedule(cached.schedule));
+      }
     } finally {
       setMetaReady(true);
     }

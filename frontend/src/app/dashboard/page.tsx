@@ -7,6 +7,7 @@ import {
   isSpLoggedIn,
   isCampusWebSession,
   isAcademiaLoggedIn,
+  clearAcademiaCookies,
   syncAcademiaSemester,
   fetchCalendar,
   fetchTimetable,
@@ -231,9 +232,20 @@ export default function DashboardPage() {
     if (!isAcademiaLoggedIn() && !isCampusWebSession()) return;
     try {
       const tt: TimetableResponse = await fetchTimetable();
-      setTodayClasses(tt.schedule?.length ? tt.schedule : null);
+      if (tt.schedule?.length) {
+        setTodayClasses(tt.schedule);
+        return;
+      }
+      // An expired Academia cookie is answered exactly like an empty
+      // timetable. Keep the cached classes and bring the login card back
+      // instead of silently losing the schedule.
+      if (!tt.regNumber && !tt.batch && isAcademiaLoggedIn()) {
+        clearAcademiaCookies();
+        setAcademiaRelogin(null);
+        setAcademiaKey((k) => k + 1);
+      }
     } catch {
-      setTodayClasses(null);
+      // Keep cached timetable — don't clear on failure
     }
   };
 
@@ -309,6 +321,7 @@ export default function DashboardPage() {
         // never blank the card — last-known values stay until logout.
         if (marksResp.marks.length) {
           setCwMarks(marksResp.marks);
+          setCached<Mark[]>('campusWebMarks', marksResp.marks);
           // One flattened row PER SUBJECT for search/analytics. (A row per
           // component used to create duplicate subjects whose "total" was
           // just the last component's score.)
@@ -342,14 +355,16 @@ export default function DashboardPage() {
           try {
             const planner: any = await import('@/lib/api').then((m) => m.fetchCampusWebPlanner());
             const cal = adaptCampusWebPlanner(planner);
-            setCalendar(cal);
-            setCached<CalendarResponse>('calendar', cal);
-            applyToday(cal);
+            // An empty planner is a glitch, not a reason to forget the saved
+            // day order — only replace the cache with real data.
+            if (cal.calendar?.length) {
+              setCalendar(cal);
+              setCached<CalendarResponse>('calendar', cal);
+              applyToday(cal);
+            }
             setStaleAsOf(null);
           } catch {
-            // Planner unavailable — show no day order rather than a false
-            // "you're offline" warning.
-            applyToday(null);
+            // Planner unavailable — keep the cached day order.
           }
         } else {
           applyToday(null);
@@ -394,11 +409,17 @@ export default function DashboardPage() {
       }
       if (calRes.status === 'fulfilled') {
         const cal: CalendarResponse = calRes.value;
-        setCalendar(cal);
-        setCached<CalendarResponse>('calendar', cal);
-        applyToday(cal);
-        setStaleAsOf(null);
-        setOffline(false);
+        if (cal.calendar?.length) {
+          setCalendar(cal);
+          setCached<CalendarResponse>('calendar', cal);
+          applyToday(cal);
+          setStaleAsOf(null);
+          setOffline(false);
+        } else {
+          // An empty calendar is a glitch (expired session / portal change) —
+          // keep the cached day order instead of replacing it with nothing.
+          setOffline(true);
+        }
       } else {
         // Keep the cached day order; a failed calendar fetch must not wipe it.
         setOffline(true);
@@ -452,14 +473,24 @@ export default function DashboardPage() {
 
         if (userRes.status === 'fulfilled') {
           const u = userRes.value;
-          setProfile({
-            name: u.name || '',
-            reg_number: u.regNumber || '',
-            program: u.program || '',
-            semester: u.semester ?? undefined,
-            section: u.section || '',
-            photo: undefined,
-          });
+          if (u.name || u.regNumber) {
+            const nextProfile: SpProfile = {
+              name: u.name || '',
+              reg_number: u.regNumber || '',
+              program: u.program || '',
+              semester: u.semester ?? undefined,
+              section: u.section || '',
+              photo: undefined,
+            };
+            setProfile(nextProfile);
+            setCached<SpProfile>('profile', nextProfile);
+          } else if (isAcademiaLoggedIn()) {
+            // The portal cannot identify the student: the saved Academia
+            // cookie has expired. Keep everything cached and ask for the
+            // password again instead of silently showing nothing.
+            clearAcademiaCookies();
+            setAcademiaKey((k) => k + 1);
+          }
           applySemester(u.semester);
         }
       } catch {
@@ -478,6 +509,11 @@ export default function DashboardPage() {
               JSON.stringify({ batch: tt.batch || '', savedAt: Date.now(), schedule: tt.schedule })
             );
           } catch { /* ignore */ }
+        } else if (!tt.regNumber && !tt.batch && isAcademiaLoggedIn()) {
+          // Empty response + no identity = the saved cookie expired. Keep
+          // the cached timetable and ask for the password again.
+          clearAcademiaCookies();
+          setAcademiaKey((k) => k + 1);
         }
       } catch {
         // Keep cached timetable
@@ -500,6 +536,10 @@ export default function DashboardPage() {
     }
     const cachedIM = getCached<InternalMark[]>('internalMarks');
     if (cachedIM) setInternalMarks(cachedIM.data);
+    // Full Campus Web marks carry the per-test (FT-I, FT-II …) breakdown, so
+    // keep them too — the component tabs must survive an expired session.
+    const cachedCW = getCached<Mark[]>('campusWebMarks');
+    if (cachedCW?.data?.length) setCwMarks(cachedCW.data);
     const cachedProfile = getCached<SpProfile>('profile');
     if (cachedProfile?.data) setProfile({ ...cachedProfile.data, photo: undefined });
 
@@ -540,10 +580,14 @@ export default function DashboardPage() {
     title: string;
     room: string;
     slot: string;
+    faculty: string;
     start: number;
     end: number;
     percentage?: number;
     margin?: number;
+    present?: number;
+    absent?: number;
+    total?: number;
   }> = [];
 
   if (todayClasses && todayClasses.length > 0) {
@@ -575,10 +619,14 @@ export default function DashboardPage() {
           title: s.courseTitle,
           room: s.room,
           slot: s.slot,
+          faculty: s.faculty,
           start: day.ms + w.start * 60000,
           end: day.ms + w.end * 60000,
           percentage: att ? Math.round(att.percentage * 10) / 10 : undefined,
           margin: att ? (att.isBelowThreshold ? -att.mustAttend : att.canBunk) : undefined,
+          present: att?.present,
+          absent: att?.absent,
+          total: att?.total,
         });
       }
     }

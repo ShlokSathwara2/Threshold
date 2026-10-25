@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { fetchSpInternalMarks, fetchSpInternalMarksDetail, fetchAcademiaMarks, isAcademiaLoggedIn, type Mark, type InternalMark, type InternalMarkComponent } from '@/lib/api';
 import type { SubjectAttendance } from '@/lib/attendance-calculator';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import {
   mergeInternalMarks,
@@ -27,6 +28,20 @@ const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F'];
 const gradeColor = (g: string): string =>
   g === 'O' || g === 'A+' || g === 'A' ? '#34d399' : g === 'F' ? '#f87171' : '#facc15';
 
+// Saved copies so a slow / expired portal never blanks the marks. All three
+// are session-scoped by lib/cache, so a friend signing in on the same phone
+// never sees (or overwrites) this student's marks.
+const MARKS_CACHE = 'internalMarksMerged';
+const SP_ROWS_CACHE = 'internalMarksSpRows';
+const DETAILS_CACHE = 'internalMarksDetails';
+
+type CachedDetail = {
+  loading: boolean;
+  error?: string;
+  components: InternalMarkComponent[];
+  attempts?: string[];
+};
+
 export default function InternalMarks({
   refreshKey = 0,
   subjects = [],
@@ -49,15 +64,14 @@ export default function InternalMarks({
   const [marks, setMarks] = useState<MergedSubjectMark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [academiaOn, setAcademiaOn] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // The Student Portal exposes a per-subject component split behind its
   // "View Details" button. We keep the SP rows (which carry subjectId +
   // status) and lazily load the breakdown on demand.
   const [spRows, setSpRows] = useState<Record<string, InternalMark>>({});
-  const [details, setDetails] = useState<
-    Record<string, { loading: boolean; error?: string; components: InternalMarkComponent[]; attempts?: string[] }>
-  >({});
+  const [details, setDetails] = useState<Record<string, CachedDetail>>({});
 
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
@@ -65,8 +79,29 @@ export default function InternalMarks({
 
   useEffect(() => {
     let cancelled = false;
+
+    // Paint the last saved copy first so marks stay visible while the portal
+    // is slow, offline, or the Academia/SP session has expired.
+    const savedMarks = getCached<MergedSubjectMark[]>(MARKS_CACHE);
+    const savedSpRows = getCached<Record<string, InternalMark>>(SP_ROWS_CACHE);
+    const savedDetails = getCached<Record<string, CachedDetail>>(DETAILS_CACHE);
+    if (savedMarks?.data.length) {
+      setMarks(savedMarks.data);
+      setLoading(false);
+    }
+    if (savedSpRows?.data) setSpRows(savedSpRows.data);
+    if (savedDetails?.data) {
+      setDetails(
+        Object.fromEntries(
+          Object.entries(savedDetails.data).map(([code, d]) => [
+            code,
+            { ...d, loading: false },
+          ])
+        )
+      );
+    }
+
     (async () => {
-      setLoading(true);
       setError(null);
       const academiaOn = isAcademiaLoggedIn();
       setAcademiaOn(academiaOn);
@@ -74,12 +109,14 @@ export default function InternalMarks({
         const acOut = academiaOn ? await fetchAcademiaMarks().catch(() => null) : null;
         if (cancelled) return;
 
-        if (externalMarksRaw) {
+        let nextMarks: MergedSubjectMark[] = [];
+        if (externalMarksRaw && externalMarksRaw.length > 0) {
           // Campus Web session: the component-wise breakdown and totals come
           // straight from /api/auth/user/ — no Student Portal involved.
-          setMarks(mergeInternalMarks([], acOut?.marks || [], externalMarksRaw));
+          nextMarks = mergeInternalMarks([], acOut?.marks || [], externalMarksRaw);
         } else {
-          let spMarks: import('@/lib/api').InternalMark[] | null = externalMarks ?? null;
+          let spMarks: import('@/lib/api').InternalMark[] | null =
+            externalMarks && externalMarks.length > 0 ? externalMarks : null;
           if (!spMarks) {
             try {
               spMarks = (await fetchSpInternalMarks()).internal_marks || [];
@@ -92,18 +129,53 @@ export default function InternalMarks({
             if (cancelled) return;
           }
           if (spMarks.length) {
-            setSpRows(Object.fromEntries(spMarks.map((m) => [m.code, m])));
+            const rows = Object.fromEntries(spMarks.map((m) => [m.code, m]));
+            setSpRows(rows);
+            setCached(SP_ROWS_CACHE, rows);
           }
-          setMarks(mergeInternalMarks(spMarks, acOut?.marks || []));
+          nextMarks = mergeInternalMarks(spMarks ?? [], acOut?.marks || []);
+        }
+
+        if (cancelled) return;
+        if (nextMarks.length > 0) {
+          setMarks(nextMarks);
+          setCached(MARKS_CACHE, nextMarks);
+          setStale(false);
+        } else if (savedMarks?.data.length) {
+          // Empty answer from a dead session / partial parse: keep the saved
+          // marks and flag them instead of showing "no marks published".
+          setStale(true);
+        } else {
+          setMarks([]);
         }
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load internal marks');
+        if (!cancelled) {
+          if (savedMarks?.data.length) {
+            setStale(true);
+          } else {
+            setError(e instanceof Error ? e.message : 'Failed to load internal marks');
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [refreshKey, externalMarks, externalMarksRaw]);
+
+  // Persist the component tabs as they are opened so they too survive an
+  // expired session (only successful, non-empty breakdowns are saved).
+  useEffect(() => {
+    if (loading) return;
+    const clean = Object.fromEntries(
+      Object.entries(details).filter(
+        ([, d]) => d && !d.loading && !d.error && d.components.length > 0
+      )
+    );
+    if (Object.keys(clean).length > 0) {
+      setCached(DETAILS_CACHE, clean);
+    }
+  }, [details, loading]);
 
   const toggleExpand = (code: string) => {
     setExpanded((prev) => ({ ...prev, [code]: !prev[code] }));
@@ -112,7 +184,11 @@ export default function InternalMarks({
   const loadDetail = useCallback(async (code: string) => {
     const src = spRows[code];
     if (!src?.subjectId) return;
-    setDetails((d) => ({ ...d, [code]: { loading: true, components: d[code]?.components ?? [] } }));
+    // Keep the saved component breakdown on screen while refreshing.
+    setDetails((d) => ({
+      ...d,
+      [code]: { loading: true, components: d[code]?.components ?? [] },
+    }));
     try {
       const res = await fetchSpInternalMarksDetail(
         src.subjectId,
@@ -125,12 +201,14 @@ export default function InternalMarks({
         [code]: { loading: false, components: res.components || [], attempts: res.attempts },
       }));
     } catch (e) {
+      // A failed refresh (expired session) must not erase the saved breakdown.
       setDetails((d) => ({
         ...d,
         [code]: {
           loading: false,
           error: e instanceof Error ? e.message : 'Failed to load components',
-          components: [],
+          components: d[code]?.components ?? [],
+          attempts: d[code]?.attempts,
         },
       }));
     }
@@ -143,7 +221,9 @@ export default function InternalMarks({
 
   const openDetail = (code: string) => {
     setExpanded((prev) => ({ ...prev, [code]: !prev[code] }));
-    if (!details[code]) void loadDetail(code);
+    // Refresh from the portal when it is reachable; the saved breakdown stays
+    // visible until (and unless) fresh components arrive.
+    if (spRows[code]?.subjectId) void loadDetail(code);
   };
 
 
@@ -214,6 +294,21 @@ export default function InternalMarks({
       transition={{ duration: 0.5 }}
       style={{ marginBottom: '24px' }}
     >
+      {/* Saved marks are being shown because the portal answer was empty. */}
+      {stale && (
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: '12px',
+          background: 'rgba(234, 179, 8, 0.06)',
+          border: '1px solid rgba(234, 179, 8, 0.16)',
+          marginBottom: '10px',
+        }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', color: '#fcd34d' }}>
+            Showing your saved marks — the portal did not return fresh data this time.
+          </p>
+        </div>
+      )}
+
       {/* ── Combined Total Card ── */}
       <div
         className="thr-gradient-border"
@@ -638,11 +733,11 @@ export default function InternalMarks({
                     background: WB(0.02),
                   }}
                 >
-                  {!detail || detail.loading ? (
+                  {!detail || (detail.loading && detail.components.length === 0) ? (
                     <p style={{ fontSize: '0.68rem', color: W(0.4), margin: 0 }}>
                       Loading components…
                     </p>
-                  ) : detail.error ? (
+                  ) : detail.components.length === 0 && detail.error ? (
                     <p style={{ fontSize: '0.68rem', color: '#f87171', margin: 0 }}>
                       {detail.error}
                     </p>

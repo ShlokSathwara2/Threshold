@@ -11,9 +11,12 @@ import {
   fetchCampusWebExamTimetable,
   type ExamTimetableResponse,
 } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
+
+const EXAM_TIMETABLE_CACHE = 'examTimetable';
 
 export default function ExamTimetablePage() {
   const router = useRouter();
@@ -23,9 +26,12 @@ export default function ExamTimetablePage() {
   const [data, setData] = useState<ExamTimetableResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const saved = getCached<ExamTimetableResponse>(EXAM_TIMETABLE_CACHE);
+    if (saved?.data?.rows?.length) setData(saved.data);
+    setLoading((prev) => !saved?.data?.rows?.length);
     setError(null);
     try {
       // Campus Web (Net ID) logins get the exam timetable from the Campus Web
@@ -38,9 +44,24 @@ export default function ExamTimetablePage() {
         res = await fetchSpExamTimetable();
       }
       if (res.error) throw new Error(res.error);
-      setData(res);
+      if (res.rows?.length) {
+        setData(res);
+        setCached(EXAM_TIMETABLE_CACHE, res);
+        setStale(false);
+      } else if (saved?.data?.rows?.length) {
+        setData(saved.data);
+        setStale(true);
+      } else {
+        setData(res);
+        setStale(false);
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load exam timetable');
+      if (saved?.data?.rows?.length) {
+        setData(saved.data);
+        setStale(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load exam timetable');
+      }
     } finally {
       setLoading(false);
     }
@@ -78,6 +99,20 @@ export default function ExamTimetablePage() {
             : 'Your exam schedule from the Student Portal'}
         </p>
       </motion.div>
+
+      {stale && !loading && (
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: '12px',
+          background: 'rgba(234, 179, 8, 0.06)',
+          border: '1px solid rgba(234, 179, 8, 0.16)',
+          marginBottom: '12px',
+        }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', color: '#fcd34d' }}>
+            Showing your saved exam timetable — the portal did not return fresh data this time.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState label="Fetching exam timetable…" />

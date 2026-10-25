@@ -42,6 +42,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BiometricLockPlugin.class);
         registerPlugin(FileBridgePlugin.class);
         registerPlugin(WidgetSyncPlugin.class);
+        registerPlugin(AttendanceCheckPlugin.class);
+        registerPlugin(ClassLivePlugin.class);
         super.onCreate(savedInstanceState);
         checkForUpdateNative();
     }
@@ -137,16 +139,11 @@ public class MainActivity extends BridgeActivity {
         container.addView(msg);
 
         Button updateBtn = new Button(this);
-        updateBtn.setText("Download Update");
+        updateBtn.setText("Update now");
         updateBtn.setTextColor(Color.WHITE);
         updateBtn.setTextSize(15);
         updateBtn.setBackgroundColor(Color.parseColor("#8B5CF6"));
         updateBtn.setPadding(dp(0), dp(12), dp(0), dp(12));
-        updateBtn.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl));
-            startActivity(intent);
-            finish();
-        });
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         btnLp.bottomMargin = dp(10);
@@ -154,12 +151,11 @@ public class MainActivity extends BridgeActivity {
         container.addView(updateBtn);
 
         TextView exitText = new TextView(this);
-        exitText.setText("Exit");
+        exitText.setText("Later");
         exitText.setTextSize(13);
         exitText.setTextColor(Color.parseColor("#808090"));
         exitText.setGravity(Gravity.CENTER);
         exitText.setPadding(dp(0), dp(6), dp(0), dp(6));
-        exitText.setOnClickListener(v -> finish());
         container.addView(exitText);
 
         AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog)
@@ -169,6 +165,37 @@ public class MainActivity extends BridgeActivity {
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.parseColor("#0D0E1A")));
         }
+
+        updateBtn.setOnClickListener(v -> {
+            updateBtn.setEnabled(false);
+            updateBtn.setText("Downloading…");
+            ApkUpdateHelper.start(this, apkUrl, version, new ApkUpdateHelper.Listener() {
+                @Override
+                public void onPermissionRequired() {
+                    updateBtn.setEnabled(true);
+                    updateBtn.setText("Allow installs, then tap again");
+                }
+
+                @Override
+                public void onDownloadStarted() {
+                    updateBtn.setText("Downloading…");
+                }
+
+                @Override
+                public void onInstallerOpened() {
+                    dialog.dismiss();
+                }
+
+                @Override
+                public void onFailed(String message) {
+                    updateBtn.setEnabled(true);
+                    updateBtn.setText("Retry update");
+                }
+            });
+        });
+
+        exitText.setOnClickListener(v -> dialog.dismiss());
+
         dialog.show();
     }
 

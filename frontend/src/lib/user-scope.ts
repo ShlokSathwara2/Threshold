@@ -25,6 +25,9 @@ const SCOPED_PREFIXES = [
   'threshold_delta_raw',
   'threshold_sync_log',
   'threshold_timetable_cache',
+  // Last successful payload per portal endpoint — keeps every tab populated
+  // when a session expires or the network is down.
+  'threshold_api_cache',
   // Academia (IAM) session — scoped to the login so a friend signing in on the
   // same phone never inherits the previous student's Academia session/data.
   'threshold_academia_session',

@@ -3,7 +3,8 @@ import { userHash } from './user-scope';
 
 interface FileBridgeApi {
   saveToDownloads(options: { filename: string; mime: string; data: string }): Promise<{ path: string }>;
-  downloadAndInstall(options: { url: string; filename: string }): Promise<{ status: string }>;
+  downloadAndInstall(options: { url: string; filename: string; version?: string }): Promise<{ status: string }>;
+  openInstallSettings(): Promise<{ opened: boolean }>;
 }
 
 export const FileBridge = registerPlugin<FileBridgeApi>('FileBridge');

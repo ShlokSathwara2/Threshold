@@ -199,7 +199,12 @@ function clearTimetableCaches(): void {
     const doomed: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (!key || !key.startsWith('threshold_cache__')) continue;
+      if (!key) continue;
+      if (key.startsWith('threshold_api_cache__')) {
+        doomed.push(key);
+        continue;
+      }
+      if (!key.startsWith('threshold_cache__')) continue;
       if (key.endsWith('__timetable') || key.endsWith('__calendar')) doomed.push(key);
     }
     for (const key of doomed) localStorage.removeItem(key);
@@ -360,6 +365,81 @@ export function isSpLoggedIn(): boolean {
   return session !== null && !!session.cookies;
 }
 
+// ── Persistent GET cache ─────────────────────────────────────────────
+// Every tab reads portal data through apiFetch. Keeping the last successful
+// answer per endpoint means an expired session (the portal often answers 200
+// with an empty body) can never blank a tab. The saved copy is used only when
+// the live answer is missing or empty, and it is scoped per login.
+const API_CACHE_PREFIX = 'threshold_api_cache';
+const NO_API_CACHE = new Set(['/hello', '/sp/check', '/sp/check-session']);
+// The timetable page and the dashboard use the empty response to detect an
+// expired Academia cookie and show the login card, so they must see it.
+const EMPTY_PASSTHROUGH = new Set(['/timetable', '/user']);
+
+function apiCacheKey(path: string): string {
+  return `${API_CACHE_PREFIX}__${userHash()}__${path}`;
+}
+
+function readApiCache<T>(path: string): T | null {
+  try {
+    const raw = getLs(apiCacheKey(path));
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeApiCache(path: string, body: unknown): void {
+  try {
+    setLs(apiCacheKey(path), JSON.stringify(body));
+  } catch {
+    /* ignore */
+  }
+}
+
+const PAYLOAD_META_KEYS = new Set([
+  'status',
+  'delta',
+  'hash',
+  'index',
+  'success',
+  'savedAt',
+]);
+
+function payloadHasData(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  if (obj.error) return false;
+  if (obj.success === false) return false;
+  return Object.entries(obj).some(
+    ([key, v]) => !PAYLOAD_META_KEYS.has(key) && payloadHasData(v)
+  );
+}
+
+/** Last saved timetable for the current login (empty response fallback). */
+export function getCachedTimetable(): TimetableResponse | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(scopedKey('threshold_timetable_cache'));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { batch?: string; schedule?: TimetableSlot[] };
+    if (!cached?.schedule?.length) return null;
+    return {
+      regNumber: '',
+      batch: cached.batch || '',
+      schedule: cached.schedule,
+      status: 200,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -391,13 +471,25 @@ async function apiFetch<T>(
     if (hash) headers['X-Delta-Hash'] = hash;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const canCache = (!options.method || options.method === 'GET') && !NO_API_CACHE.has(path);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (e) {
+    // Offline / DNS / timeout — keep the tab usable from the saved copy.
+    const cached = canCache ? readApiCache<T>(path) : null;
+    if (cached) return cached;
+    throw e;
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    const cached = canCache ? readApiCache<T>(path) : null;
+    if (cached) return cached;
     throw new Error(body.error || body.message || `Request failed (${res.status})`);
   }
 
@@ -425,11 +517,21 @@ async function apiFetch<T>(
         setLs(deltaKeys(ns).raw, JSON.stringify(retryBody));
         recordSync(path);
       }
+      if (canCache && payloadHasData(retryBody)) writeApiCache(path, retryBody);
       return retryBody as T;
     } else {
       setLs(deltaKeys(ns).hash, String(body.hash ?? ''));
       setLs(deltaKeys(ns).raw, JSON.stringify(body));
       recordSync(path);
+    }
+  }
+
+  if (canCache) {
+    if (payloadHasData(body)) {
+      writeApiCache(path, body);
+    } else if (!EMPTY_PASSTHROUGH.has(path)) {
+      const cached = readApiCache<T>(path);
+      if (cached) return cached;
     }
   }
   return body as T;
@@ -862,9 +964,16 @@ export async function fetchCalendar(): Promise<CalendarResponse> {
   if (isCampusWebSession()) {
     try {
       const planner: any = await fetchCampusWebPlanner();
-      return adaptCampusWebPlanner(planner);
+      const adapted = adaptCampusWebPlanner(planner);
+      if (adapted.calendar?.length) {
+        writeApiCache('/sp/calendar', adapted);
+        return adapted;
+      }
+      // Empty planner (expired Academia token / portal glitch) — keep the
+      // saved day orders instead of blanking the calendar.
+      return readApiCache<CalendarResponse>('/sp/calendar') || adapted;
     } catch {
-      return { calendar: [], status: 200 };
+      return readApiCache<CalendarResponse>('/sp/calendar') || { calendar: [], status: 200 };
     }
   }
   return apiFetch('/sp/calendar');

@@ -8,9 +8,12 @@ import {
   isCampusWebSession,
   fetchSpGrades,
   fetchSpInternalMarks,
+  fetchCampusWebUser,
+  adaptCampusWebMarks,
   type GradesResponse,
   type InternalMark,
 } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { LoadingState, ErrorState } from '@/components/ui/States';
@@ -46,13 +49,29 @@ export default function AnalyticsPage() {
     setError(null);
     try {
       if (isCampusWebSession()) {
-        // Campus Web: fetch internal marks from cached data, skip grades
-        const { getCached } = await import('@/lib/cache');
-        const cachedIM = getCached<import('@/lib/api').InternalMark[]>('internalMarks');
-        if (cachedIM?.data?.length) {
-          setInternals(cachedIM.data);
-        } else {
-          setInternals([]);
+        // Campus Web: component-wise marks come from /api/auth/user/. Keep the
+        // last saved copy when the session has expired.
+        try {
+          const user = await fetchCampusWebUser();
+          const cwMarks = adaptCampusWebMarks(user).marks || [];
+          const im: InternalMark[] = cwMarks
+            .map((m) => ({
+              code: m.courseCode,
+              description: m.courseName,
+              scored: m.overall?.scored ?? '',
+              maxMark: m.overall?.total ?? '',
+            }))
+            .filter((m) => m.scored !== '' || m.maxMark !== '');
+          if (im.length) {
+            setInternals(im);
+            setCached<InternalMark[]>('internalMarks', im);
+          } else {
+            const cachedIM = getCached<InternalMark[]>('internalMarks');
+            setInternals(cachedIM?.data?.length ? cachedIM.data : []);
+          }
+        } catch {
+          const cachedIM = getCached<InternalMark[]>('internalMarks');
+          setInternals(cachedIM?.data?.length ? cachedIM.data : []);
         }
         setGrades(null);
       } else {

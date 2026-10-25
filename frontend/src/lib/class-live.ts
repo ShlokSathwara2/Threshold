@@ -10,6 +10,8 @@ export interface LiveClassInfo {
   title: string;
   room?: string;
   slot?: string;
+  /** Faculty handling this class. */
+  faculty?: string;
   /** Epoch millis for the start of this class today. */
   start: number;
   /** Epoch millis for the end of this class today. */
@@ -18,6 +20,12 @@ export interface LiveClassInfo {
   percentage?: number;
   /** Positive = classes you can skip; negative = classes needed for 75%. */
   margin?: number;
+  /** Classes attended so far in this subject. */
+  present?: number;
+  /** Classes missed so far in this subject. */
+  absent?: number;
+  /** Total classes held so far in this subject. */
+  total?: number;
 }
 
 interface ClassLiveApi {

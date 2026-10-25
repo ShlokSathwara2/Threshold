@@ -8,9 +8,12 @@ import {
   fetchSpCourseStatus,
   type CourseStatusResponse,
 } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
+
+const COURSE_STATUS_CACHE = 'courseStatus';
 
 const gradeColors: Record<string, string> = {
   O: '#34d399',
@@ -31,16 +34,38 @@ export default function CourseStatusPage() {
   const [data, setData] = useState<CourseStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Paint the saved copy immediately, then refresh from the portal.
+    const saved = getCached<CourseStatusResponse>(COURSE_STATUS_CACHE);
+    if (saved?.data?.courses?.length) {
+      setData(saved.data);
+      setLoading(false);
+    }
     try {
       const res = await fetchSpCourseStatus();
       if (res.error) throw new Error(res.error);
-      setData(res);
+      if (res.courses?.length) {
+        setData(res);
+        setCached(COURSE_STATUS_CACHE, res);
+        setStale(false);
+      } else if (saved?.data?.courses?.length) {
+        // Expired session / empty scrape — keep the saved completion record.
+        setData(saved.data);
+        setStale(true);
+      } else {
+        setData(res);
+        setStale(false);
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load course status');
+      if (saved?.data?.courses?.length) {
+        setStale(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load course status');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,6 +104,20 @@ export default function CourseStatusPage() {
           Course completion across all semesters • Student Portal
         </p>
       </motion.div>
+
+      {stale && !loading && (
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: '12px',
+          background: 'rgba(234, 179, 8, 0.06)',
+          border: '1px solid rgba(234, 179, 8, 0.16)',
+          marginBottom: '12px',
+        }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', color: '#fcd34d' }}>
+            Showing your saved course status — the portal did not return fresh data this time.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState label="Fetching course status…" />

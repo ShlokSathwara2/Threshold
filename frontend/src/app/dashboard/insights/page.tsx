@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { isLoggedIn, fetchTimetable, fetchCalendar, type TimetableSlot } from '@/lib/api';
+import { isLoggedIn, fetchTimetable, fetchCalendar, getCachedTimetable, type TimetableSlot } from '@/lib/api';
 import { useAttendance } from '@/hooks/useAttendance';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
 import { LoadingState, ErrorState } from '@/components/ui/States';
@@ -31,7 +31,10 @@ export default function InsightsPage() {
     setLoadingMeta(true);
     try {
       const [tt, cal] = await Promise.all([fetchTimetable(), fetchCalendar()]);
-      setSchedule(tt.schedule || []);
+      // An empty timetable answer is usually an expired session — keep the
+      // saved schedule so the day patterns don't disappear.
+      const live = tt.schedule || [];
+      setSchedule(live.length ? live : getCachedTimetable()?.schedule || []);
       setScheduleError(null);
       const m = cal.today?.dayOrder?.match(/Day\s*(\d)/i);
       const doName = m && +m[1] >= 1 && +m[1] <= 5 ? `DO-${m[1]}` : null;

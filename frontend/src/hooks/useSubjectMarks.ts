@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchMarks,
   fetchAcademiaMarks,
@@ -16,6 +16,10 @@ import {
   type MarksResponse,
   type Mark,
 } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
+
+const MARKS_CACHE = 'subjectMarks';
+const SEMESTER_CACHE = 'subjectMarksSemester';
 
 export interface UseSubjectMarksResult {
   marks: Mark[];
@@ -30,9 +34,21 @@ export function useSubjectMarks(): UseSubjectMarksResult {
   const [semester, setSemester] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasData = useRef(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Paint the last saved marks first so a slow / expired portal never blanks
+    // the page (and so CGPA keeps its subject rows).
+    const savedMarks = getCached<Mark[]>(MARKS_CACHE);
+    const savedSemester = getCached<number>(SEMESTER_CACHE);
+    if (savedMarks?.data.length) {
+      hasData.current = true;
+      setMarks((prev) => (prev.length ? prev : savedMarks.data));
+    }
+    if (savedSemester?.data) {
+      setSemester((prev) => prev ?? savedSemester.data);
+    }
+    if (!hasData.current) setLoading(true);
     setError(null);
     try {
       // ── Campus Web path ────────────────────────────────────────────
@@ -45,6 +61,7 @@ export function useSubjectMarks(): UseSubjectMarksResult {
         );
         if (typeof cwProfile.profile?.semester === 'number') {
           setSemester(cwProfile.profile.semester);
+          setCached(SEMESTER_CACHE, cwProfile.profile.semester);
         }
 
         const cwMarksResp = adaptCampusWebMarks(cwUser);
@@ -63,7 +80,17 @@ export function useSubjectMarks(): UseSubjectMarksResult {
           byCode.set(m.courseCode, m);
         }
 
-        setMarks([...byCode.values()]);
+        const next = [...byCode.values()];
+        if (next.length) {
+          setMarks(next);
+          hasData.current = true;
+          setCached(MARKS_CACHE, next);
+        } else if (savedMarks?.data.length) {
+          // Expired session answered with no courses — keep the saved marks.
+          setMarks(savedMarks.data);
+        } else {
+          setMarks([]);
+        }
         setLoading(false);
         return;
       }
@@ -80,6 +107,7 @@ export function useSubjectMarks(): UseSubjectMarksResult {
 
       if (profileRes.status === 'fulfilled' && typeof profileRes.value.profile?.semester === 'number') {
         setSemester(profileRes.value.profile.semester);
+        setCached(SEMESTER_CACHE, profileRes.value.profile.semester);
       }
 
       const rawMarks = marksRes.status === 'fulfilled' ? marksRes.value.marks || [] : [];
@@ -140,9 +168,22 @@ export function useSubjectMarks(): UseSubjectMarksResult {
         }
       }
 
-      setMarks([...byCode.values()]);
+      const next = [...byCode.values()];
+      if (next.length) {
+        setMarks(next);
+        hasData.current = true;
+        setCached(MARKS_CACHE, next);
+      } else if (savedMarks?.data.length) {
+        // Empty scrape from a dead session — keep the last known marks.
+        setMarks(savedMarks.data);
+      } else {
+        setMarks([]);
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch marks');
+      // A failed refresh must never replace marks already on screen.
+      if (!hasData.current) {
+        setError(e instanceof Error ? e.message : 'Failed to fetch marks');
+      }
     } finally {
       setLoading(false);
     }

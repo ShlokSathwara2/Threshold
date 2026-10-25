@@ -10,6 +10,7 @@ import {
   getAcademiaReloginNotice,
   fetchTimetable,
   fetchCalendar,
+  clearAcademiaCookies,
   type TimetableSlot,
   type TimetableResponse,
 } from '@/lib/api';
@@ -89,6 +90,9 @@ export default function TimetablePage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the student asks to reconnect a stale Academia session. While
+  // true the login card is shown even though an (expired) cookie still exists.
+  const [reconnectRequested, setReconnectRequested] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -119,15 +123,16 @@ export default function TimetablePage() {
     return next && daysUntil(next.next, todayD) <= 7 ? next : null;
   }, [exams]);
 
-  // Show a cached timetable for the currently logged-in user (academia or campus web)
+  // Show the timetable saved for the currently logged-in app user. The cache
+  // is login-scoped, so it stays safe even when the Academia cookie is stale
+  // or has just been cleared for a reconnect — the student should still see
+  // their last known schedule instead of an empty page.
   useEffect(() => {
-    if (isAcademiaLoggedIn()) {
-      const cached = loadCache(getAcademiaUsername());
-      if (cached) {
-        setSchedule(cached.schedule);
-        setBatch(cached.batch);
-        setSavedAt(cached.savedAt);
-      }
+    const cached = loadCache(getAcademiaUsername());
+    if (cached && cached.schedule.length > 0) {
+      setSchedule(cached.schedule);
+      setBatch(cached.batch);
+      setSavedAt(cached.savedAt);
     }
   }, []);
 
@@ -138,17 +143,47 @@ export default function TimetablePage() {
       const res: TimetableResponse = await fetchTimetable();
       if (res.error) throw new Error(res.error);
       const next: TimetableSlot[] = res.schedule || [];
+      if (next.length === 0) {
+        // The portal occasionally answers 200 with an empty grid (not
+        // published yet, or a page-name change). Never let that wipe the
+        // schedule we already saved — restore it from cache if needed.
+        const cached = loadCache(getAcademiaUsername());
+        if (cached && cached.schedule.length > 0) {
+          setSchedule(cached.schedule);
+          setBatch(cached.batch || res.batch || '');
+          setSavedAt(cached.savedAt);
+        }
+        // An expired cookie is answered exactly like an empty timetable,
+        // except the portal cannot tell us who the student is. Treat that as
+        // a signed-out session so the Academia login form comes back.
+        if (!res.regNumber && !res.batch) {
+          clearAcademiaCookies();
+          setReconnectRequested(true);
+          setError('Your Academia session expired — sign in again to load the live timetable.');
+        } else if (cached && cached.schedule.length > 0) {
+          setError('The portal returned no classes this time.');
+        } else {
+          setError(
+            'Timetable is empty for your batch — the portal may not have published it yet. If it worked before, reconnect Academia.'
+          );
+        }
+        return;
+      }
+      const now = Date.now();
       setSchedule(next);
       setBatch(res.batch || '');
-      const now = Date.now();
       setSavedAt(now);
       const cacheUser = getAcademiaUsername() || 'anon';
       saveCache(cacheUser, { batch: res.batch || '', savedAt: now, schedule: next });
-      if (next.length === 0) {
-        setError('Timetable is empty for your batch — the portal may not have published it yet.');
-      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load timetable';
+      // A saved cookie that the portal rejects keeps the login card hidden.
+      // Detect it and bring the sign-in form back automatically, while the
+      // saved timetable stays visible.
+      if (/\b40[13]\b|session|expired|log ?in|cookie|unauthori[sz]ed/i.test(msg)) {
+        clearAcademiaCookies();
+        setReconnectRequested(true);
+      }
       setError(msg);
     } finally {
       setLoading(false);
@@ -165,9 +200,23 @@ export default function TimetablePage() {
     return Promise.resolve();
   });
 
-  const needsLogin = !isAcademiaLoggedIn();
+  const needsLogin = reconnectRequested || !isAcademiaLoggedIn();
   // Explains the sign-out when the portal rolled over to a new semester.
   const reloginNotice = needsLogin ? getAcademiaReloginNotice() : null;
+
+  // A cookie can exist but be expired/invalid — the login card was hidden
+  // forever and every refresh failed. Clearing it brings the sign-in form
+  // back; the saved timetable stays on screen behind the card.
+  const handleReconnectAcademia = useCallback(() => {
+    clearAcademiaCookies();
+    setReconnectRequested(true);
+    setError(null);
+  }, []);
+
+  const handleLoginSuccess = useCallback(() => {
+    setReconnectRequested(false);
+    void fetchLive();
+  }, [fetchLive]);
 
   // Today's DO (e.g. DO-3) is not a fixed weekday — derive it from the
   // SP academic calendar's real day order so the highlight stays correct
@@ -269,9 +318,11 @@ export default function TimetablePage() {
               notice={
                 reloginNotice
                   ? `It's a new semester${reloginNotice.to ? ` (Semester ${reloginNotice.to})` : ''} — sign in again to load your new timetable.`
-                  : undefined
+                  : reconnectRequested
+                    ? 'Your saved Academia session stopped working. Sign in again to refresh the timetable — your saved copy stays below.'
+                    : undefined
               }
-              onSuccess={fetchLive}
+              onSuccess={handleLoginSuccess}
             />
           </motion.div>
         )}
@@ -301,6 +352,22 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fca5a5', fontSize: '0.78rem', margin: 0 }}>{error}</p>
+          <button
+            onClick={handleReconnectAcademia}
+            style={{
+              marginTop: '10px',
+              padding: '8px 14px',
+              borderRadius: '999px',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#fecaca',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Reconnect Academia
+          </button>
         </div>
       )}
 
@@ -313,8 +380,26 @@ export default function TimetablePage() {
           marginBottom: '12px',
         }}>
           <p style={{ color: '#fcd34d', fontSize: '0.75rem', margin: 0 }}>
-            Showing saved timetable — {error} Re-log in above to refresh.
+            Showing your saved timetable — {error}
           </p>
+          {!needsLogin && (
+            <button
+              onClick={handleReconnectAcademia}
+              style={{
+                marginTop: '8px',
+                padding: '6px 12px',
+                borderRadius: '999px',
+                border: '1px solid rgba(234, 179, 8, 0.35)',
+                background: 'rgba(234, 179, 8, 0.12)',
+                color: '#fde68a',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Reconnect Academia
+            </button>
+          )}
         </div>
       )}
 

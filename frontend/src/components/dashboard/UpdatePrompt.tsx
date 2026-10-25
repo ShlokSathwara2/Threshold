@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
 import { dismissUpdate, type UpdateInfo } from '@/lib/update-check';
@@ -15,26 +15,49 @@ export default function UpdatePrompt({ info, onClose }: Props) {
   const { theme } = useTheme();
   const W = (a: number) => overlay(theme, a);
   const WB = (a: number) => overlayBg(theme, a);
-  const [status, setStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [status, setStatus] = useState<'idle' | 'downloading' | 'permission' | 'done'>('idle');
+
+  useEffect(() => {
+    // After the user grants "install unknown apps", retry when they return.
+    if (status !== 'permission') return;
+    const onVisible = () => {
+      if (!document.hidden) setStatus('idle');
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [status]);
 
   if (!info) return null;
 
   const handleUpdate = async () => {
+    setStatus('downloading');
     try {
-      setStatus('downloading');
       await FileBridge.downloadAndInstall({
         url: info.apkUrl,
         filename: 'Threshold.apk',
+        version: info.version,
       });
       setStatus('done');
-    } catch {
-      // Native downloader unavailable (e.g. web preview) — open the APK page.
+      onClose();
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      if (err?.code === 'INSTALL_PERMISSION_REQUIRED' || err?.message?.includes('Allow installs')) {
+        setStatus('permission');
+        return;
+      }
+      // Native updater unavailable (e.g. web preview) — fall back to the APK page.
       setStatus('idle');
       window.open(info.apkUrl, '_blank');
       onClose();
-      return;
     }
-    onClose();
+  };
+
+  const handleAllow = async () => {
+    try {
+      await FileBridge.openInstallSettings();
+    } catch {
+      /* settings screen unavailable */
+    }
   };
 
   const handleLater = () => {
@@ -133,14 +156,18 @@ export default function UpdatePrompt({ info, onClose }: Props) {
             lineHeight: 1.5,
           }}>
             {status === 'downloading'
-              ? 'Downloading — Android will install it once it finishes.'
-              : 'Tap update — it downloads and installs on its own.'}
+              ? 'Downloading the update… keep the app open.'
+              : status === 'permission'
+                ? 'Allow “install unknown apps” for Threshold, then come back and tap Update.'
+                : status === 'done'
+                  ? 'Opening the installer…'
+                  : 'Downloads inside the app, then Android asks you to confirm the install.'}
           </p>
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
             <button
               onClick={handleLater}
-              disabled={status === 'downloading'}
+              disabled={status === 'downloading' || status === 'done'}
               style={{
                 flex: 1,
                 padding: '12px 0',
@@ -158,8 +185,8 @@ export default function UpdatePrompt({ info, onClose }: Props) {
             </button>
             <motion.button
               whileTap={{ scale: 0.96 }}
-              onClick={handleUpdate}
-              disabled={status === 'downloading'}
+              onClick={status === 'permission' ? handleAllow : handleUpdate}
+              disabled={status === 'downloading' || status === 'done'}
               style={{
                 flex: 1.4,
                 padding: '12px 0',
@@ -170,11 +197,17 @@ export default function UpdatePrompt({ info, onClose }: Props) {
                 fontSize: '0.8rem',
                 fontWeight: 800,
                 cursor: status === 'downloading' ? 'wait' : 'pointer',
-                opacity: status === 'downloading' ? 0.6 : 1,
+                opacity: status === 'downloading' || status === 'done' ? 0.6 : 1,
                 boxShadow: '0 8px 24px rgba(139,92,246,0.4)',
               }}
             >
-              {status === 'downloading' ? 'Downloading…' : 'Update now'}
+              {status === 'downloading'
+                ? 'Downloading…'
+                : status === 'permission'
+                  ? 'Allow installs'
+                  : status === 'done'
+                    ? 'Opening…'
+                    : 'Update now'}
             </motion.button>
           </div>
         </motion.div>

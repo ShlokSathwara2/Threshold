@@ -310,16 +310,26 @@ function detectAttendance(
 
 function detectMarks(rows: InternalMark[]): LiveAlert[] {
   const previous = readJson<MarksSnapshot | null>(MARKS_KEY(), null);
-  const snapshot: MarksSnapshot = {};
+  // Start from the saved snapshot and only overwrite subjects that actually
+  // returned valid marks. A partial/empty scrape can therefore never zero the
+  // baseline (which used to make the next real fetch look like "new marks").
+  const snapshot: MarksSnapshot = { ...(previous ?? {}) };
   const alerts: LiveAlert[] = [];
   const now = Date.now();
+  let validRows = 0;
 
   for (const row of rows) {
     if (!row.code) continue;
-    const scored = parseFloat(row.scored) || 0;
-    const max = parseFloat(row.maxMark) || 0;
+    const scoredText = typeof row.scored === 'string' ? row.scored.trim() : '';
+    const maxText = typeof row.maxMark === 'string' ? row.maxMark.trim() : '';
+    if (!scoredText || !maxText) continue;
+    const scored = parseFloat(scoredText);
+    const max = parseFloat(maxText);
+    // "-", "--" or a not-yet-published component parses as NaN — skip it.
+    if (!Number.isFinite(scored) || !Number.isFinite(max) || max <= 0) continue;
+    validRows += 1;
+
     snapshot[row.code] = { scored, max, description: row.description || '' };
-    if (max <= 0) continue;
 
     // No baseline at all: this is the first check after installing the
     // feature — record it without firing a burst of old-marks alerts.
@@ -356,7 +366,7 @@ function detectMarks(rows: InternalMark[]): LiveAlert[] {
     }
   }
 
-  writeJson(MARKS_KEY(), snapshot);
+  if (validRows > 0) writeJson(MARKS_KEY(), snapshot);
   return alerts;
 }
 

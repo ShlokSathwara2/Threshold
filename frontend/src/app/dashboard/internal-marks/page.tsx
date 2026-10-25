@@ -7,7 +7,10 @@ import { isLoggedIn, isAcademiaLoggedIn, isCampusWebSession, fetchCampusWebUser,
 import InternalMarks from '@/components/grades/InternalMarks';
 import AcademiaLoginCard from '@/components/academia/AcademiaLoginCard';
 import { usePullToRefresh } from '@/components/ui/PullRefresh';
+import { getCached, setCached } from '@/lib/cache';
 import { useTheme, overlay, overlayBg } from '@/lib/theme';
+
+const CW_MARKS_CACHE = 'campusWebMarks';
 
 export default function InternalMarksPage() {
   const router = useRouter();
@@ -28,10 +31,24 @@ export default function InternalMarksPage() {
       return;
     }
     if (isCampusWebSession()) {
-      setLoaded(false);
+      // Paint the saved complete breakdown first; only a non-empty fresh
+      // answer may replace it.
+      const saved = getCached<Mark[]>(CW_MARKS_CACHE);
+      if (saved?.data?.length) setCwMarks(saved.data);
+      setLoaded(saved?.data?.length ? true : false);
       fetchCampusWebUser()
-        .then((user) => setCwMarks(adaptCampusWebMarks(user).marks))
-        .catch(() => setCwMarks([]))
+        .then((user) => {
+          const marks = adaptCampusWebMarks(user).marks || [];
+          if (marks.length) {
+            setCwMarks(marks);
+            setCached(CW_MARKS_CACHE, marks);
+          } else if (!saved?.data?.length) {
+            setCwMarks([]);
+          }
+        })
+        .catch(() => {
+          if (!saved?.data?.length) setCwMarks([]);
+        })
         .finally(() => setLoaded(true));
     } else {
       setLoaded(true);
