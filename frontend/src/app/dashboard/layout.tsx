@@ -585,7 +585,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           key={sidebarOpen ? 'open' : 'closed'}
           ref={navScrollRef}
           variants={navContainer}
-          initial="hidden"
+          initial={isDesktop ? false : 'hidden'}
           animate={sidebarOpen ? 'show' : 'hidden'}
           style={{
             flex: '1 1 0%',
