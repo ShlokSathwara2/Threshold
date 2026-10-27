@@ -173,9 +173,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   // Laptop / desktop: the drawer becomes a permanent rail and the phone
   // bottom nav is hidden by CSS. Keep the state in sync so the nav items
   // animate in and the hamburger never opens an empty drawer on resize.
+  // The media query mirrors the one in globals.css: full desktop from
+  // 1024px, and from 820px on mouse/trackpad devices so scaled or
+  // non-maximised laptop windows still get the sidebar.
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia('(min-width: 1024px)');
+    const mq = window.matchMedia('(min-width: 1024px), (min-width: 820px) and (pointer: fine)');
     const apply = () => {
       setIsDesktop(mq.matches);
       setSidebarOpen(mq.matches);

@@ -454,11 +454,13 @@ input:focus, button:focus-visible {
 
 /* ─────────────────────────────────────────────────────────────────────
    Laptop / desktop layout
-   Phones keep the app shell untouched. At ≥1024px the drawer becomes a
-   permanent sidebar, the bottom pill nav goes away and the content gets
-   the full width of the screen with a comfortable reading measure.
+   Phones keep the app shell untouched. At ≥1024px — or ≥820px on a
+   mouse/trackpad device (covers scaled / non-maximised laptop windows) —
+   the drawer becomes a permanent sidebar, the bottom pill nav goes away
+   and the content gets the full width of the screen with a comfortable
+   reading measure.
    ───────────────────────────────────────────────────────────────────── */
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 820px) and (pointer: fine) {
   .thr-app {
     background-image:
       radial-gradient(1200px 620px at 16% -12%, rgba(var(--threshold-accent-rgb), 0.12), transparent 62%),
